@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claudia</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <div class="app-container">
+      <header class="app-header">
+        <div class="header-content">
+          <div class="character-display">
+            <div class="avatar-circle"></div>
+            <span id="character-header-name"></span>
+          </div>
+          <div class="character-controls">
+            <div class="select-wrapper">
+              <select id="character-select" class="character-select"></select>
+            </div>
+            <button id="new-character-btn" class="icon-btn" title="New Character">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="header-controls">
+            <button id="clear-btn" class="icon-btn" title="Clear conversation">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M3 4h10M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1M5 4v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+              </svg>
+            </button>
+            <button id="settings-btn" class="icon-btn" title="Settings">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M14 8c0-.5-.1-1-.3-1.4l1.2-.7-1-1.7-1.2.7c-.6-.6-1.3-1-2.1-1.2V2h-2v1.7c-.8.2-1.5.6-2.1 1.2L5.3 4.2l-1 1.7 1.2.7C5.1 7 5 7.5 5 8s.1 1 .3 1.4l-1.2.7 1 1.7 1.2-.7c.6.6 1.3 1 2.1 1.2V14h2v-1.7c.8-.2 1.5-.6 2.1-1.2l1.2.7 1-1.7-1.2-.7c.2-.4.3-.9.3-1.4z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="chat-container" id="chat-view">
+        <div id="messages" class="messages-list">
+          <div class="message assistant">
+            <div class="message-content">
+              <p>Configure API settings to get started.</p>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <div class="settings-panel" id="settings-panel" style="display: none;">
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <button id="close-settings-btn" class="icon-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="settings-tabs">
+          <button class="tab-btn active" data-tab="api">API</button>
+          <button class="tab-btn" data-tab="character">Character</button>
+        </div>
+
+        <div id="api-tab" class="tab-content active">
+          <form id="settings-form" class="settings-form">
+            <div class="form-group">
+              <label for="api-base-url">Base URL</label>
+              <input
+                type="text"
+                id="api-base-url"
+                placeholder="https://api.anthropic.com"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="api-key">API Key</label>
+              <input
+                type="password"
+                id="api-key"
+                placeholder="sk-ant-..."
+                required
+              />
+            </div>
+
+            <button type="button" id="validate-btn" class="btn-secondary">
+              Validate
+            </button>
+
+            <div id="models-group" class="form-group" style="display: none;">
+              <label for="model-select">Model</label>
+              <select id="model-select" required>
+                <option value="">Select a model</option>
+              </select>
+            </div>
+
+            <div id="validation-message" class="validation-message"></div>
+
+            <button type="submit" id="save-settings-btn" class="btn-primary" disabled>
+              Save Configuration
+            </button>
+          </form>
+        </div>
+
+        <div id="character-tab" class="tab-content">
+          <form id="character-form" class="settings-form">
+            <div class="form-group">
+              <label for="character-settings-select">Select Character</label>
+              <select id="character-settings-select"></select>
+            </div>
+            <div class="form-group">
+              <label for="character-name">Character Name</label>
+              <input
+                type="text"
+                id="character-name"
+                placeholder="Assistant"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="character-system-prompt">System Prompt</label>
+              <textarea
+                id="character-system-prompt"
+                placeholder="You are a helpful AI assistant..."
+                rows="6"
+                required
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="character-greeting">Greeting (Optional)</label>
+              <textarea
+                id="character-greeting"
+                placeholder="Hello! How can I help you today?"
+                rows="2"
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="character-personality">Personality Tags (Optional)</label>
+              <input
+                type="text"
+                id="character-personality"
+                placeholder="helpful, friendly, knowledgeable"
+              />
+            </div>
+
+            <div id="character-message" class="validation-message"></div>
+
+            <button type="submit" id="save-character-btn" class="btn-primary">
+              Save Character
+            </button>
+            <button type="button" id="delete-character-btn" class="btn-danger">
+              Delete Character
+            </button>          </form>
+        </div>
+      </div>
+
+      <footer class="input-container">
+        <form id="chat-form" class="chat-form">
+          <textarea
+            id="message-input"
+            placeholder="Ask me anything..."
+            rows="1"
+            autocomplete="off"
+          ></textarea>
+          <button type="submit" id="send-btn" class="send-btn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M3 10L17 3L13 10L17 17L3 10Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </form>
+        <div class="status-bar">
+          <span id="status-text" class="status-text">Ready</span>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>

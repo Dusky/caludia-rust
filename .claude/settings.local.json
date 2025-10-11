@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(npm run tauri:*)",
+      "Bash(cargo build:*)",
+      "Bash(./src-tauri/target/debug/tauri-app:*)",
+      "Bash(echo $XDG_SESSION_TYPE)",
+      "Bash(WAYLAND_DISPLAY=\"\" DISPLAY=:0 ./src-tauri/target/debug/tauri-app:*)",
+      "Bash(ldd:*)",
+      "Read(//home/matt/.config/claudia/**)",
+      "WebFetch(domain:github.com)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
