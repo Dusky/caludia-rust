@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
+use futures::StreamExt;
+use tauri::Emitter;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiConfig {
@@ -10,6 +12,8 @@ struct ApiConfig {
     model: String,
     #[serde(default)]
     active_character_id: Option<String>,
+    #[serde(default)]
+    stream: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +68,30 @@ struct Model {
 #[derive(Debug, Serialize, Deserialize)]
 struct ModelsResponse {
     data: Vec<Model>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StreamChatRequest {
+    model: String,
+    max_tokens: u32,
+    messages: Vec<Message>,
+    stream: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StreamChoice {
+    delta: Delta,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Delta {
+    #[serde(default)]
+    content: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct StreamResponse {
+    choices: Vec<StreamChoice>,
 }
 
 fn get_config_path() -> PathBuf {
@@ -228,7 +256,7 @@ async fn validate_api(base_url: String, api_key: String) -> Result<Vec<String>, 
 }
 
 #[tauri::command]
-async fn save_api_config(base_url: String, api_key: String, model: String) -> Result<(), String> {
+async fn save_api_config(base_url: String, api_key: String, model: String, stream: bool) -> Result<(), String> {
     // Preserve existing active_character_id if it exists
     let active_character_id = load_config().and_then(|c| c.active_character_id);
 
@@ -237,6 +265,7 @@ async fn save_api_config(base_url: String, api_key: String, model: String) -> Re
         api_key,
         model,
         active_character_id,
+        stream,
     };
     save_config(&config)
 }
@@ -314,6 +343,107 @@ async fn chat(message: String) -> Result<String, String> {
     save_history(&character.id, &history).ok();
 
     Ok(assistant_message)
+}
+
+#[tauri::command]
+async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<String, String> {
+    let config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    // Add user message to history
+    history.messages.push(Message {
+        role: "user".to_string(),
+        content: message.clone(),
+    });
+
+    let client = reqwest::Client::new();
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+
+    // Build messages with system prompt first
+    let mut api_messages = vec![Message {
+        role: "system".to_string(),
+        content: character.system_prompt.clone(),
+    }];
+    api_messages.extend(history.messages.clone());
+
+    let request = StreamChatRequest {
+        model: config.model.clone(),
+        max_tokens: 4096,
+        messages: api_messages,
+        stream: true,
+    };
+
+    let response = client
+        .post(&url)
+        .header("authorization", format!("Bearer {}", &config.api_key))
+        .header("content-type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("API error: {}", response.status()));
+    }
+
+    // Process streaming response
+    let mut full_content = String::new();
+    let mut stream = response.bytes_stream();
+
+    let mut buffer = String::new();
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| format!("Stream error: {}", e))?;
+        let chunk_str = String::from_utf8_lossy(&chunk);
+        buffer.push_str(&chunk_str);
+
+        // Process complete lines
+        while let Some(line_end) = buffer.find('\n') {
+            let line = buffer[..line_end].trim().to_string();
+            buffer = buffer[line_end + 1..].to_string();
+
+            // Parse SSE data lines
+            if line.starts_with("data: ") {
+                let data = &line[6..];
+
+                // Check for stream end
+                if data == "[DONE]" {
+                    break;
+                }
+
+                // Parse JSON and extract content
+                if let Ok(stream_response) = serde_json::from_str::<StreamResponse>(data) {
+                    if let Some(choice) = stream_response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            full_content.push_str(content);
+
+                            // Emit token to frontend
+                            let _ = app_handle.emit_to("main", "chat-token", content.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Add assistant message to history
+    history.messages.push(Message {
+        role: "assistant".to_string(),
+        content: full_content.clone(),
+    });
+
+    // Save history
+    save_history(&character.id, &history).ok();
+
+    // Emit completion event
+    let _ = app_handle.emit_to("main", "chat-complete", ());
+
+    Ok(full_content)
 }
 
 #[tauri::command]
@@ -415,6 +545,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             chat,
+            chat_stream,
             validate_api,
             save_api_config,
             get_api_config,

@@ -506,6 +506,20 @@ body {
   color: var(--text-secondary);
 }
 
+.status-text.streaming {
+  color: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* Light mode support */
 @media (prefers-color-scheme: light) {
   :root {

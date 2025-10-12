@@ -162,26 +162,140 @@ async function handleSubmit(e) {
   messageInput.disabled = true;
   setStatus('Thinking...');
 
-  showTypingIndicator();
-
+  // Check if streaming is enabled
+  let streamEnabled = false;
   try {
-    const response = await invoke('chat', { message });
-    removeTypingIndicator();
-    addMessage(response, false);
-    setStatus('Ready');
+    const config = await invoke('get_api_config');
+    streamEnabled = config.stream || false;
   } catch (error) {
-    removeTypingIndicator();
-    if (error.includes('not configured')) {
-      addMessage('API not configured. Please configure your API settings.', false);
-      setTimeout(showSettings, 1000);
-    } else {
-      addMessage(`Error: ${error}`, false);
+    console.error('Failed to get config:', error);
+  }
+
+  if (streamEnabled) {
+    // Use streaming
+    setStatus('Streaming...');
+    statusText.classList.add('streaming');
+
+    let streamingMessageDiv = null;
+    let streamingContentDiv = null;
+    let fullContent = '';
+
+    // Create streaming message container
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar-circle';
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    messagesContainer.appendChild(messageDiv);
+
+    streamingMessageDiv = messageDiv;
+    streamingContentDiv = contentDiv;
+
+    // Set up event listeners for streaming
+    const { listen } = window.__TAURI__.event;
+
+    const tokenUnlisten = await listen('chat-token', (event) => {
+      const token = event.payload;
+      fullContent += token;
+
+      // Update content with markdown rendering
+      streamingContentDiv.innerHTML = marked.parse(fullContent);
+
+      // Apply syntax highlighting
+      streamingContentDiv.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+
+        // Add copy button
+        const pre = block.parentElement;
+        if (!pre.querySelector('.copy-btn')) {
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'copy-btn';
+          copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+            <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          </svg>`;
+          copyBtn.title = 'Copy code';
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(block.textContent);
+            copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+            copyBtn.classList.add('copied');
+            setTimeout(() => {
+              copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+                <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              </svg>`;
+              copyBtn.classList.remove('copied');
+            }, 2000);
+          });
+          pre.style.position = 'relative';
+          pre.appendChild(copyBtn);
+        }
+      });
+
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+
+    const completeUnlisten = await listen('chat-complete', () => {
+      setStatus('Ready');
+      statusText.classList.remove('streaming');
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
+      tokenUnlisten();
+      completeUnlisten();
+    });
+
+    try {
+      await invoke('chat_stream', { message });
+    } catch (error) {
+      tokenUnlisten();
+      completeUnlisten();
+      statusText.classList.remove('streaming');
+      if (streamingMessageDiv) {
+        streamingMessageDiv.remove();
+      }
+      if (error.includes('not configured')) {
+        addMessage('API not configured. Please configure your API settings.', false);
+        setTimeout(showSettings, 1000);
+      } else {
+        addMessage(`Error: ${error}`, false);
+      }
+      setStatus('Error');
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
     }
-    setStatus('Error');
-  } finally {
-    sendBtn.disabled = false;
-    messageInput.disabled = false;
-    messageInput.focus();
+  } else {
+    // Use non-streaming
+    showTypingIndicator();
+
+    try {
+      const response = await invoke('chat', { message });
+      removeTypingIndicator();
+      addMessage(response, false);
+      setStatus('Ready');
+    } catch (error) {
+      removeTypingIndicator();
+      if (error.includes('not configured')) {
+        addMessage('API not configured. Please configure your API settings.', false);
+        setTimeout(showSettings, 1000);
+      } else {
+        addMessage(`Error: ${error}`, false);
+      }
+      setStatus('Error');
+    } finally {
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
+    }
   }
 }
 
@@ -238,6 +352,7 @@ async function handleSaveSettings(e) {
   const baseUrl = document.getElementById('api-base-url').value.trim();
   const apiKey = document.getElementById('api-key').value.trim();
   const model = document.getElementById('model-select').value;
+  const stream = document.getElementById('stream-toggle').checked;
   const saveBtn = document.getElementById('save-settings-btn');
   const validationMsg = document.getElementById('validation-message');
 
@@ -251,7 +366,7 @@ async function handleSaveSettings(e) {
   saveBtn.textContent = 'Saving...';
 
   try {
-    await invoke('save_api_config', { baseUrl, apiKey, model });
+    await invoke('save_api_config', { baseUrl, apiKey, model, stream });
     validationMsg.textContent = 'Configuration saved successfully';
     validationMsg.className = 'validation-message success';
 
@@ -465,7 +580,7 @@ async function handleSaveCharacter(e) {
   try {
     await invoke('update_character', {
       name,
-      system_prompt: systemPrompt,
+      systemPrompt,
       greeting,
       personality
     });
@@ -494,6 +609,7 @@ async function loadExistingConfig() {
     console.log('Loaded config:', config);
     document.getElementById('api-base-url').value = config.base_url;
     document.getElementById('api-key').value = config.api_key;
+    document.getElementById('stream-toggle').checked = config.stream || false;
 
     const modelSelect = document.getElementById('model-select');
     modelSelect.innerHTML = ''; // Clear existing options
