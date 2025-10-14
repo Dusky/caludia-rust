@@ -1324,6 +1324,128 @@ body {
   cursor: pointer;
 }
 
+/* View Mode Styles */
+
+/* Compact Mode */
+body.view-compact .messages-list {
+  gap: 10px;
+  padding: 16px;
+}
+
+body.view-compact .message-content {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  border-radius: 10px;
+}
+
+body.view-compact .avatar-circle {
+  width: 24px;
+  height: 24px;
+}
+
+body.view-compact .character-name-indicator {
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+body.view-compact .message-timestamp {
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+body.view-compact .swipe-controls {
+  margin-top: 6px;
+  padding: 3px 6px;
+}
+
+body.view-compact .message-content h1 {
+  font-size: 1.3em;
+}
+
+body.view-compact .message-content h2 {
+  font-size: 1.2em;
+}
+
+body.view-compact .message-content h3 {
+  font-size: 1.05em;
+}
+
+body.view-compact .message-content code {
+  font-size: 0.85em;
+}
+
+/* Cozy Mode (Default) - Already defined in base styles */
+body.view-cozy .messages-list {
+  gap: 16px;
+  padding: 20px;
+}
+
+/* Comfortable Mode */
+body.view-comfortable .messages-list {
+  gap: 24px;
+  padding: 24px;
+}
+
+body.view-comfortable .message-content {
+  padding: 16px 20px;
+  font-size: 15px;
+  line-height: 1.7;
+  border-radius: 14px;
+}
+
+body.view-comfortable .avatar-circle {
+  width: 32px;
+  height: 32px;
+}
+
+body.view-comfortable .character-name-indicator {
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+body.view-comfortable .message-timestamp {
+  font-size: 11px;
+  margin-top: 6px;
+}
+
+body.view-comfortable .swipe-controls {
+  margin-top: 10px;
+  padding: 5px 10px;
+}
+
+body.view-comfortable .message-content h1 {
+  font-size: 1.6em;
+  margin-top: 20px;
+  margin-bottom: 12px;
+}
+
+body.view-comfortable .message-content h2 {
+  font-size: 1.4em;
+  margin-top: 18px;
+  margin-bottom: 10px;
+}
+
+body.view-comfortable .message-content h3 {
+  font-size: 1.2em;
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+body.view-comfortable .message-content p + p {
+  margin-top: 16px;
+}
+
+body.view-comfortable .message-content code {
+  font-size: 0.95em;
+  padding: 3px 8px;
+}
+
+body.view-comfortable .message-content pre {
+  padding: 16px;
+  margin: 12px 0;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .messages-list {

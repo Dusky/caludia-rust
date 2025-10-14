@@ -146,6 +146,30 @@ function loadSavedTheme() {
   applyTheme(savedTheme);
 }
 
+// Apply view mode
+function applyViewMode(mode) {
+  const body = document.body;
+
+  // Remove all view mode classes
+  body.classList.remove('view-compact', 'view-cozy', 'view-comfortable');
+
+  // Add the selected mode
+  body.classList.add(`view-${mode}`);
+
+  // Store preference
+  localStorage.setItem('claudia-view-mode', mode);
+}
+
+// Load saved view mode
+function loadSavedViewMode() {
+  const savedMode = localStorage.getItem('claudia-view-mode') || 'cozy';
+  const viewModeSelect = document.getElementById('view-mode-select');
+  if (viewModeSelect) {
+    viewModeSelect.value = savedMode;
+  }
+  applyViewMode(savedMode);
+}
+
 // Helper function to get avatar URL
 async function getAvatarUrl(avatarFilename) {
   if (!avatarFilename) return null;
@@ -1179,6 +1203,14 @@ function setupAppControls() {
       applyTheme(e.target.value);
     });
   }
+
+  // Setup view mode selector
+  const viewModeSelect = document.getElementById('view-mode-select');
+  if (viewModeSelect) {
+    viewModeSelect.addEventListener('change', (e) => {
+      applyViewMode(e.target.value);
+    });
+  }
 }
 
 // Keyboard shortcuts
@@ -1573,8 +1605,9 @@ window.addEventListener('DOMContentLoaded', () => {
   messageInput.focus();
   setStatus('Ready');
 
-  // Load saved theme before anything else
+  // Load saved preferences before anything else
   loadSavedTheme();
+  loadSavedViewMode();
 
   loadExistingConfig();
 });
