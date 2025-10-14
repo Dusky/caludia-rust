@@ -53,12 +53,61 @@ struct Character {
     extensions: serde_json::Value,
 }
 
-// V2 character card specification structs
+// V2/V3 character card specification structs
 #[derive(Debug, Serialize, Deserialize)]
 struct CharacterCardV2 {
     spec: String,
     spec_version: String,
     data: CharacterCardV2Data,
+}
+
+// V3 card format (fields at top level + data object)
+#[derive(Debug, Serialize, Deserialize)]
+struct CharacterCardV3 {
+    spec: String,
+    spec_version: String,
+    name: String,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    personality: Option<String>,
+    #[serde(default)]
+    scenario: Option<String>,
+    #[serde(default)]
+    first_mes: Option<String>,
+    #[serde(default)]
+    mes_example: Option<String>,
+    #[serde(default)]
+    data: serde_json::Value,  // V3 has additional data nested here
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    extensions: serde_json::Value,
+}
+
+impl From<CharacterCardV3> for CharacterCardV2Data {
+    fn from(v3: CharacterCardV3) -> Self {
+        Self {
+            name: v3.name,
+            description: v3.description,
+            personality: v3.personality,
+            scenario: v3.scenario,
+            first_mes: v3.first_mes,
+            mes_example: v3.mes_example,
+            system_prompt: v3.data.get("system_prompt").and_then(|v| v.as_str()).map(String::from),
+            post_history_instructions: v3.data.get("post_history_instructions").and_then(|v| v.as_str()).map(String::from),
+            alternate_greetings: v3.data.get("alternate_greetings")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default(),
+            character_book: v3.data.get("character_book").cloned(),
+            tags: v3.tags,
+            creator: v3.data.get("creator").and_then(|v| v.as_str()).map(String::from),
+            character_version: v3.data.get("character_version").and_then(|v| v.as_str()).map(String::from),
+            creator_notes: v3.data.get("creator_notes").and_then(|v| v.as_str()).map(String::from),
+            extensions: v3.extensions,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -314,16 +363,29 @@ fn read_character_card_from_png(png_path: &PathBuf) -> Result<CharacterCardV2Dat
     let json_str = String::from_utf8(json_bytes)
         .map_err(|e| format!("Invalid UTF-8 in character data: {}", e))?;
 
-    // Parse as V2 card
-    let card: CharacterCardV2 = serde_json::from_str(&json_str)
+    // First try to parse as generic value to check spec version
+    let generic: serde_json::Value = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse character card JSON: {}", e))?;
 
-    // Validate spec
-    if card.spec != "chara_card_v2" {
-        return Err(format!("Unsupported character card spec: {}", card.spec));
-    }
+    let spec = generic.get("spec")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "No spec field in character card".to_string())?;
 
-    Ok(card.data)
+    match spec {
+        "chara_card_v2" => {
+            // Parse as V2 card
+            let card: CharacterCardV2 = serde_json::from_value(generic)
+                .map_err(|e| format!("Failed to parse V2 card: {}", e))?;
+            Ok(card.data)
+        }
+        "chara_card_v3" => {
+            // Parse as V3 card and convert to V2Data
+            let card: CharacterCardV3 = serde_json::from_value(generic)
+                .map_err(|e| format!("Failed to parse V3 card: {}", e))?;
+            Ok(CharacterCardV2Data::from(card))
+        }
+        _ => Err(format!("Unsupported character card spec: {}", spec))
+    }
 }
 
 fn write_character_card_to_png(
