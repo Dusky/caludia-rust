@@ -317,43 +317,83 @@ fn get_avatar_path(filename: &str) -> PathBuf {
 }
 
 // PNG Character Card Utilities
-fn read_character_card_from_png(png_path: &PathBuf) -> Result<CharacterCardV2Data, String> {
-    use png::Decoder;
-    use std::io::BufReader;
 
-    // Open and decode PNG
-    let file = fs::File::open(png_path)
+// Manual PNG chunk parser - more reliable than relying on png crate's text chunk exposure
+fn read_png_text_chunks(png_path: &PathBuf) -> Result<std::collections::HashMap<String, String>, String> {
+    use std::io::Read;
+
+    let mut file = fs::File::open(png_path)
         .map_err(|e| format!("Failed to open PNG file: {}", e))?;
-    let decoder = Decoder::new(BufReader::new(file));
-    let reader = decoder.read_info()
-        .map_err(|e| format!("Failed to read PNG info: {}", e))?;
 
-    // Get metadata
-    let info = reader.info();
+    // Read and verify PNG signature
+    let mut signature = [0u8; 8];
+    file.read_exact(&mut signature)
+        .map_err(|e| format!("Failed to read PNG signature: {}", e))?;
 
-    // Look for "chara" tEXt chunk
-    let mut chara_data = None;
-    for text_chunk in &info.uncompressed_latin1_text {
-        if text_chunk.keyword == "chara" {
-            chara_data = Some(text_chunk.text.clone());
+    if &signature != b"\x89PNG\r\n\x1a\n" {
+        return Err("Not a valid PNG file".to_string());
+    }
+
+    let mut text_chunks = std::collections::HashMap::new();
+    let mut chunk_buffer = Vec::new();
+
+    loop {
+        // Read chunk length (4 bytes, big-endian)
+        let mut length_bytes = [0u8; 4];
+        if file.read_exact(&mut length_bytes).is_err() {
+            break; // End of file
+        }
+        let length = u32::from_be_bytes(length_bytes) as usize;
+
+        // Read chunk type (4 bytes)
+        let mut chunk_type = [0u8; 4];
+        file.read_exact(&mut chunk_type)
+            .map_err(|e| format!("Failed to read chunk type: {}", e))?;
+
+        // Read chunk data
+        chunk_buffer.clear();
+        chunk_buffer.resize(length, 0);
+        file.read_exact(&mut chunk_buffer)
+            .map_err(|e| format!("Failed to read chunk data: {}", e))?;
+
+        // Read CRC (4 bytes, we don't verify it)
+        let mut crc = [0u8; 4];
+        file.read_exact(&mut crc)
+            .map_err(|e| format!("Failed to read CRC: {}", e))?;
+
+        // Process tEXt chunks
+        if &chunk_type == b"tEXt" {
+            // tEXt format: keyword\0text
+            if let Some(null_pos) = chunk_buffer.iter().position(|&b| b == 0) {
+                let keyword = String::from_utf8_lossy(&chunk_buffer[..null_pos]).to_string();
+                let text = String::from_utf8_lossy(&chunk_buffer[null_pos + 1..]).to_string();
+                eprintln!("Found tEXt chunk: keyword='{}', text_len={}", keyword, text.len());
+                text_chunks.insert(keyword, text);
+            }
+        }
+
+        // Stop at IEND chunk
+        if &chunk_type == b"IEND" {
             break;
         }
     }
 
-    // Also check UTF-8 text chunks (iTXt)
-    if chara_data.is_none() {
-        for text_chunk in &info.utf8_text {
-            if text_chunk.keyword == "chara" {
-                let text = text_chunk.get_text()
-                    .map_err(|e| format!("Failed to read UTF-8 text chunk: {}", e))?;
-                chara_data = Some(text);
-                break;
-            }
-        }
-    }
+    eprintln!("Total tEXt chunks found: {}", text_chunks.len());
+    Ok(text_chunks)
+}
 
-    let chara_text = chara_data
-        .ok_or_else(|| "No character card data found in PNG (missing 'chara' chunk)".to_string())?;
+fn read_character_card_from_png(png_path: &PathBuf) -> Result<CharacterCardV2Data, String> {
+    eprintln!("Reading character card from: {}", png_path.display());
+
+    // Use manual chunk parser - more reliable than png crate
+    let text_chunks = read_png_text_chunks(png_path)?;
+
+    // Look for "chara" chunk
+    let chara_text = text_chunks.get("chara")
+        .ok_or_else(|| {
+            eprintln!("Available chunks: {:?}", text_chunks.keys().collect::<Vec<_>>());
+            "No character card data found in PNG (missing 'chara' chunk)".to_string()
+        })?;
 
     // Base64 decode
     let json_bytes = base64::engine::general_purpose::STANDARD.decode(&chara_text)
