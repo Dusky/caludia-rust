@@ -120,6 +120,33 @@ function autoResize(textarea) {
   textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
 }
 
+// Helper function to render assistant message content with character name
+function renderAssistantContent(contentDiv, messageText) {
+  // Clear existing content
+  contentDiv.innerHTML = '';
+
+  // Add character name indicator
+  if (currentCharacter && currentCharacter.name) {
+    const nameIndicator = document.createElement('div');
+    nameIndicator.className = 'character-name-indicator';
+    nameIndicator.textContent = currentCharacter.name;
+    contentDiv.appendChild(nameIndicator);
+  }
+
+  // Add message content
+  const messageContent = document.createElement('div');
+  messageContent.innerHTML = marked.parse(messageText);
+  contentDiv.appendChild(messageContent);
+
+  // Apply syntax highlighting to code blocks
+  messageContent.querySelectorAll('pre code').forEach((block) => {
+    hljs.highlightElement(block);
+    addCopyButtonToCode(block);
+  });
+
+  return messageContent;
+}
+
 // Add message to chat
 function addMessage(content, isUser = false, skipActions = false, timestamp = null) {
   const messageDiv = document.createElement('div');
@@ -156,10 +183,20 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
     }
   } else {
     // Assistant messages: render as markdown
-    contentDiv.innerHTML = marked.parse(content);
+    // Add character name indicator if character exists
+    if (currentCharacter && currentCharacter.name) {
+      const nameIndicator = document.createElement('div');
+      nameIndicator.className = 'character-name-indicator';
+      nameIndicator.textContent = currentCharacter.name;
+      contentDiv.appendChild(nameIndicator);
+    }
+
+    const messageContent = document.createElement('div');
+    messageContent.innerHTML = marked.parse(content);
+    contentDiv.appendChild(messageContent);
 
     // Apply syntax highlighting to code blocks
-    contentDiv.querySelectorAll('pre code').forEach((block) => {
+    messageContent.querySelectorAll('pre code').forEach((block) => {
       hljs.highlightElement(block);
 
       // Add copy button to code blocks
@@ -326,40 +363,7 @@ async function handleSwipeNavigation(messageDiv, direction) {
     const contentDiv = messageDiv.querySelector('.message-content');
     console.log('Found contentDiv:', contentDiv);
     console.log('Setting content to:', swipeInfo.content);
-    contentDiv.innerHTML = marked.parse(swipeInfo.content);
-
-    // Apply syntax highlighting to code blocks
-    contentDiv.querySelectorAll('pre code').forEach((block) => {
-      hljs.highlightElement(block);
-
-      // Add copy button
-      const pre = block.parentElement;
-      if (!pre.querySelector('.copy-btn')) {
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'copy-btn';
-        copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
-          <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-        </svg>`;
-        copyBtn.title = 'Copy code';
-        copyBtn.addEventListener('click', () => {
-          navigator.clipboard.writeText(block.textContent);
-          copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>`;
-          copyBtn.classList.add('copied');
-          setTimeout(() => {
-            copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
-              <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-            </svg>`;
-            copyBtn.classList.remove('copied');
-          }, 2000);
-        });
-        pre.style.position = 'relative';
-        pre.appendChild(copyBtn);
-      }
-    });
+    renderAssistantContent(contentDiv, swipeInfo.content);
 
     // Update swipe controls
     updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
@@ -509,13 +513,7 @@ async function generateSwipeNonStream(messageDiv, userMessage) {
 
     // Update the message content
     const contentDiv = messageDiv.querySelector('.message-content');
-    contentDiv.innerHTML = marked.parse(swipeInfo.content);
-
-    // Apply syntax highlighting
-    contentDiv.querySelectorAll('pre code').forEach((block) => {
-      hljs.highlightElement(block);
-      addCopyButtonToCode(block);
-    });
+    renderAssistantContent(contentDiv, swipeInfo.content);
 
     // Update swipe controls
     updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
@@ -547,13 +545,7 @@ async function generateSwipeStream(messageDiv, userMessage) {
     fullContent += token;
 
     // Update content with markdown rendering
-    contentDiv.innerHTML = marked.parse(fullContent);
-
-    // Apply syntax highlighting
-    contentDiv.querySelectorAll('pre code').forEach((block) => {
-      hljs.highlightElement(block);
-      addCopyButtonToCode(block);
-    });
+    renderAssistantContent(contentDiv, fullContent);
 
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   });
@@ -692,40 +684,7 @@ async function sendMessage(message, isRegenerate = false) {
       fullContent += token;
 
       // Update content with markdown rendering
-      streamingContentDiv.innerHTML = marked.parse(fullContent);
-
-      // Apply syntax highlighting
-      streamingContentDiv.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-
-        // Add copy button
-        const pre = block.parentElement;
-        if (!pre.querySelector('.copy-btn')) {
-          const copyBtn = document.createElement('button');
-          copyBtn.className = 'copy-btn';
-          copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
-            <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-          </svg>`;
-          copyBtn.title = 'Copy code';
-          copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(block.textContent);
-            copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>`;
-            copyBtn.classList.add('copied');
-            setTimeout(() => {
-              copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
-                <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-              </svg>`;
-              copyBtn.classList.remove('copied');
-            }, 2000);
-          });
-          pre.style.position = 'relative';
-          pre.appendChild(copyBtn);
-        }
-      });
+      renderAssistantContent(streamingContentDiv, fullContent);
 
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     });

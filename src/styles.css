@@ -306,6 +306,16 @@ body {
   margin-left: 4px;
 }
 
+/* Character name indicator */
+.character-name-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+  opacity: 0.9;
+  user-select: none;
+}
+
 /* Message action buttons */
 .message-actions {
   position: absolute;
