@@ -80,7 +80,7 @@ function autoResize(textarea) {
 }
 
 // Add message to chat
-function addMessage(content, isUser = false) {
+function addMessage(content, isUser = false, skipActions = false) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
 
@@ -143,12 +143,605 @@ function addMessage(content, isUser = false) {
     });
   }
 
-  if (!isUser) {
-    messageDiv.appendChild(avatar);
+  // Build message structure
+  if (!skipActions) {
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'message-actions';
+
+    if (isUser) {
+      // User message: simple structure with edit button
+      const editBtn = document.createElement('button');
+      editBtn.className = 'message-action-btn';
+      editBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M10 1L13 4L5 12H2V9L10 1Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      editBtn.title = 'Edit message';
+      editBtn.addEventListener('click', () => handleEditMessage(messageDiv, content));
+      actionsDiv.appendChild(editBtn);
+
+      messageDiv.appendChild(contentDiv);
+      messageDiv.appendChild(actionsDiv);
+    } else {
+      // Assistant message: structure with swipe controls
+      const regenerateBtn = document.createElement('button');
+      regenerateBtn.className = 'message-action-btn';
+      regenerateBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 7C1 3.68629 3.68629 1 7 1C10.3137 1 13 3.68629 13 7C13 10.3137 10.3137 13 7 13C5.5 13 4.16667 12.3333 3 11.3333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M1 10V7H4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      regenerateBtn.title = 'Regenerate response';
+      regenerateBtn.addEventListener('click', () => handleRegenerateMessage(messageDiv));
+      actionsDiv.appendChild(regenerateBtn);
+
+      // Create swipe wrapper
+      const swipeWrapper = document.createElement('div');
+      swipeWrapper.style.display = 'flex';
+      swipeWrapper.style.flexDirection = 'column';
+      swipeWrapper.appendChild(contentDiv);
+
+      const swipeControls = createSwipeControls(messageDiv);
+      swipeWrapper.appendChild(swipeControls);
+
+      messageDiv.appendChild(swipeWrapper);
+      messageDiv.appendChild(actionsDiv);
+    }
+  } else {
+    messageDiv.appendChild(contentDiv);
   }
-  messageDiv.appendChild(contentDiv);
+
+  if (!isUser) {
+    messageDiv.insertBefore(avatar, messageDiv.firstChild);
+  }
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+  return messageDiv;
+}
+
+// Create swipe controls for assistant messages
+function createSwipeControls(messageDiv) {
+  const swipeControls = document.createElement('div');
+  swipeControls.className = 'swipe-controls';
+
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'swipe-btn swipe-prev';
+  prevBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <path d="M7.5 2L3.5 6L7.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+  prevBtn.title = 'Previous response';
+  prevBtn.addEventListener('click', () => handleSwipeNavigation(messageDiv, -1));
+
+  const counter = document.createElement('span');
+  counter.className = 'swipe-counter';
+  counter.textContent = '1/1';
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'swipe-btn swipe-next';
+  nextBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+    <path d="M4.5 2L8.5 6L4.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+  nextBtn.title = 'Next response';
+  nextBtn.addEventListener('click', () => handleSwipeNavigation(messageDiv, 1));
+
+  swipeControls.appendChild(prevBtn);
+  swipeControls.appendChild(counter);
+  swipeControls.appendChild(nextBtn);
+
+  // Initially hide if only one swipe
+  updateSwipeControls(messageDiv, 0, 1);
+
+  return swipeControls;
+}
+
+// Update swipe controls state
+function updateSwipeControls(messageDiv, current, total) {
+  const swipeControls = messageDiv.querySelector('.swipe-controls');
+  if (!swipeControls) return;
+
+  const counter = swipeControls.querySelector('.swipe-counter');
+  const prevBtn = swipeControls.querySelector('.swipe-prev');
+  const nextBtn = swipeControls.querySelector('.swipe-next');
+
+  counter.textContent = `${current + 1}/${total}`;
+  prevBtn.disabled = current === 0;
+  nextBtn.disabled = current === total - 1;
+
+  // Show controls if more than one swipe
+  if (total > 1) {
+    swipeControls.classList.add('always-visible');
+  } else {
+    swipeControls.classList.remove('always-visible');
+  }
+}
+
+// Handle swipe navigation
+async function handleSwipeNavigation(messageDiv, direction) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  console.log('handleSwipeNavigation called:', { messageIndex, direction });
+
+  try {
+    const swipeInfo = await invoke('navigate_swipe', { messageIndex, direction });
+    console.log('Received swipeInfo:', swipeInfo);
+
+    // Update message content
+    const contentDiv = messageDiv.querySelector('.message-content');
+    console.log('Found contentDiv:', contentDiv);
+    console.log('Setting content to:', swipeInfo.content);
+    contentDiv.innerHTML = marked.parse(swipeInfo.content);
+
+    // Apply syntax highlighting to code blocks
+    contentDiv.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block);
+
+      // Add copy button
+      const pre = block.parentElement;
+      if (!pre.querySelector('.copy-btn')) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-btn';
+        copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+          <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>`;
+        copyBtn.title = 'Copy code';
+        copyBtn.addEventListener('click', () => {
+          navigator.clipboard.writeText(block.textContent);
+          copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>`;
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+              <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            </svg>`;
+            copyBtn.classList.remove('copied');
+          }, 2000);
+        });
+        pre.style.position = 'relative';
+        pre.appendChild(copyBtn);
+      }
+    });
+
+    // Update swipe controls
+    updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
+  } catch (error) {
+    console.error('Failed to navigate swipe:', error);
+  }
+}
+
+// Handle editing a user message
+async function handleEditMessage(messageDiv, originalContent) {
+  const contentDiv = messageDiv.querySelector('.message-content');
+  const actionsDiv = messageDiv.querySelector('.message-actions');
+
+  // Hide action buttons during edit
+  actionsDiv.style.display = 'none';
+
+  // Create edit form
+  const editForm = document.createElement('form');
+  editForm.className = 'message-edit-form';
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'message-edit-textarea';
+  textarea.value = originalContent;
+  textarea.rows = 3;
+  autoResize(textarea);
+
+  const editActions = document.createElement('div');
+  editActions.className = 'message-edit-actions';
+
+  const saveBtn = document.createElement('button');
+  saveBtn.type = 'submit';
+  saveBtn.className = 'message-edit-btn';
+  saveBtn.textContent = 'Save & Resend';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'message-edit-btn';
+  cancelBtn.textContent = 'Cancel';
+
+  editActions.appendChild(saveBtn);
+  editActions.appendChild(cancelBtn);
+  editForm.appendChild(textarea);
+  editForm.appendChild(editActions);
+
+  // Auto-resize on input
+  textarea.addEventListener('input', () => autoResize(textarea));
+
+  // Replace content with edit form
+  const originalHTML = contentDiv.innerHTML;
+  contentDiv.innerHTML = '';
+  contentDiv.appendChild(editForm);
+
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+  // Handle cancel
+  cancelBtn.addEventListener('click', () => {
+    contentDiv.innerHTML = originalHTML;
+    actionsDiv.style.display = 'flex';
+  });
+
+  // Handle save
+  editForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newContent = textarea.value.trim();
+
+    if (!newContent || newContent === originalContent) {
+      contentDiv.innerHTML = originalHTML;
+      actionsDiv.style.display = 'flex';
+      return;
+    }
+
+    // Get the index of this message
+    const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+    const messageIndex = allMessages.indexOf(messageDiv);
+
+    // Disable form
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+
+    try {
+      // Truncate history from this point
+      await invoke('truncate_history_from', { index: messageIndex });
+
+      // Remove all messages from this point forward in UI
+      while (messagesContainer.children[messageIndex]) {
+        messagesContainer.children[messageIndex].remove();
+      }
+
+      // Send the edited message
+      await sendMessage(newContent);
+    } catch (error) {
+      console.error('Failed to edit message:', error);
+      contentDiv.innerHTML = originalHTML;
+      actionsDiv.style.display = 'flex';
+      addMessage(`Error editing message: ${error}`, false);
+    }
+  });
+}
+
+// Handle regenerating an assistant message
+async function handleRegenerateMessage(messageDiv) {
+  const regenerateBtn = messageDiv.querySelector('.message-action-btn');
+  regenerateBtn.disabled = true;
+
+  try {
+    // Get the last user message
+    const lastUserMessage = await invoke('get_last_user_message');
+
+    // Generate new response
+    await generateSwipe(messageDiv, lastUserMessage);
+  } catch (error) {
+    console.error('Failed to regenerate message:', error);
+    regenerateBtn.disabled = false;
+    addMessage(`Error regenerating message: ${error}`, false);
+  }
+}
+
+// Generate a new swipe for an existing assistant message
+async function generateSwipe(messageDiv, userMessage) {
+  setStatus('Regenerating...');
+
+  // Check if streaming is enabled
+  let streamEnabled = false;
+  try {
+    const config = await invoke('get_api_config');
+    streamEnabled = config.stream || false;
+  } catch (error) {
+    console.error('Failed to get config:', error);
+  }
+
+  if (streamEnabled) {
+    await generateSwipeStream(messageDiv, userMessage);
+  } else {
+    await generateSwipeNonStream(messageDiv, userMessage);
+  }
+}
+
+// Generate swipe using non-streaming
+async function generateSwipeNonStream(messageDiv, userMessage) {
+  try {
+    const response = await invoke('generate_response_only');
+
+    // Add as a swipe
+    const swipeInfo = await invoke('add_swipe_to_last_assistant', { content: response });
+
+    // Update the message content
+    const contentDiv = messageDiv.querySelector('.message-content');
+    contentDiv.innerHTML = marked.parse(swipeInfo.content);
+
+    // Apply syntax highlighting
+    contentDiv.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block);
+      addCopyButtonToCode(block);
+    });
+
+    // Update swipe controls
+    updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
+
+    setStatus('Ready');
+    const regenerateBtn = messageDiv.querySelector('.message-action-btn');
+    if (regenerateBtn) regenerateBtn.disabled = false;
+  } catch (error) {
+    setStatus('Error');
+    const regenerateBtn = messageDiv.querySelector('.message-action-btn');
+    if (regenerateBtn) regenerateBtn.disabled = false;
+    addMessage(`Error regenerating message: ${error}`, false);
+  }
+}
+
+// Generate swipe using streaming
+async function generateSwipeStream(messageDiv, userMessage) {
+  setStatus('Streaming...');
+  statusText.classList.add('streaming');
+
+  let fullContent = '';
+  const contentDiv = messageDiv.querySelector('.message-content');
+
+  // Set up event listeners for streaming
+  const { listen } = window.__TAURI__.event;
+
+  const tokenUnlisten = await listen('chat-token', (event) => {
+    const token = event.payload;
+    fullContent += token;
+
+    // Update content with markdown rendering
+    contentDiv.innerHTML = marked.parse(fullContent);
+
+    // Apply syntax highlighting
+    contentDiv.querySelectorAll('pre code').forEach((block) => {
+      hljs.highlightElement(block);
+      addCopyButtonToCode(block);
+    });
+
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  });
+
+  const completeUnlisten = await listen('chat-complete', async () => {
+    // Add as a swipe
+    try {
+      const swipeInfo = await invoke('add_swipe_to_last_assistant', { content: fullContent });
+
+      // Update swipe controls
+      updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
+    } catch (error) {
+      console.error('Failed to add swipe:', error);
+    }
+
+    setStatus('Ready');
+    statusText.classList.remove('streaming');
+    const regenerateBtn = messageDiv.querySelector('.message-action-btn');
+    if (regenerateBtn) regenerateBtn.disabled = false;
+    tokenUnlisten();
+    completeUnlisten();
+  });
+
+  try {
+    await invoke('generate_response_stream');
+  } catch (error) {
+    tokenUnlisten();
+    completeUnlisten();
+    statusText.classList.remove('streaming');
+    setStatus('Error');
+    const regenerateBtn = messageDiv.querySelector('.message-action-btn');
+    if (regenerateBtn) regenerateBtn.disabled = false;
+    addMessage(`Error: ${error}`, false);
+  }
+}
+
+// Helper to add copy button to code blocks
+function addCopyButtonToCode(block) {
+  const pre = block.parentElement;
+  if (pre && !pre.querySelector('.copy-btn')) {
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+      <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+    </svg>`;
+    copyBtn.title = 'Copy code';
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(block.textContent);
+      copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      copyBtn.classList.add('copied');
+      setTimeout(() => {
+        copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+          <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        </svg>`;
+        copyBtn.classList.remove('copied');
+      }, 2000);
+    });
+    pre.style.position = 'relative';
+    pre.appendChild(copyBtn);
+  }
+}
+
+// Extract message sending logic into separate function
+async function sendMessage(message, isRegenerate = false) {
+  if (!isRegenerate) {
+    addMessage(message, true);
+  }
+
+  sendBtn.disabled = true;
+  messageInput.disabled = true;
+  setStatus('Thinking...');
+
+  // Check if streaming is enabled
+  let streamEnabled = false;
+  try {
+    const config = await invoke('get_api_config');
+    streamEnabled = config.stream || false;
+  } catch (error) {
+    console.error('Failed to get config:', error);
+  }
+
+  if (streamEnabled) {
+    // Use streaming
+    setStatus('Streaming...');
+    statusText.classList.add('streaming');
+
+    let streamingMessageDiv = null;
+    let streamingContentDiv = null;
+    let fullContent = '';
+
+    // Create streaming message container
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar-circle';
+
+    // Set avatar image for streaming messages
+    if (currentCharacter && currentCharacter.avatar_path) {
+      getAvatarUrl(currentCharacter.avatar_path).then(url => {
+        if (url) {
+          avatar.style.backgroundImage = `url('${url}')`;
+          makeAvatarClickable(avatar, url);
+        }
+      });
+    }
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+
+    // Create swipe wrapper for assistant messages
+    const swipeWrapper = document.createElement('div');
+    swipeWrapper.style.display = 'flex';
+    swipeWrapper.style.flexDirection = 'column';
+    swipeWrapper.appendChild(contentDiv);
+
+    const swipeControls = createSwipeControls(messageDiv);
+    swipeWrapper.appendChild(swipeControls);
+
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(swipeWrapper);
+    messagesContainer.appendChild(messageDiv);
+
+    streamingMessageDiv = messageDiv;
+    streamingContentDiv = contentDiv;
+
+    // Set up event listeners for streaming
+    const { listen } = window.__TAURI__.event;
+
+    const tokenUnlisten = await listen('chat-token', (event) => {
+      const token = event.payload;
+      fullContent += token;
+
+      // Update content with markdown rendering
+      streamingContentDiv.innerHTML = marked.parse(fullContent);
+
+      // Apply syntax highlighting
+      streamingContentDiv.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+
+        // Add copy button
+        const pre = block.parentElement;
+        if (!pre.querySelector('.copy-btn')) {
+          const copyBtn = document.createElement('button');
+          copyBtn.className = 'copy-btn';
+          copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+            <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          </svg>`;
+          copyBtn.title = 'Copy code';
+          copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(block.textContent);
+            copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+            copyBtn.classList.add('copied');
+            setTimeout(() => {
+              copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
+                <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              </svg>`;
+              copyBtn.classList.remove('copied');
+            }, 2000);
+          });
+          pre.style.position = 'relative';
+          pre.appendChild(copyBtn);
+        }
+      });
+
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    });
+
+    const completeUnlisten = await listen('chat-complete', () => {
+      // Add regenerate button after streaming completes
+      const actionsDiv = document.createElement('div');
+      actionsDiv.className = 'message-actions';
+
+      const regenerateBtn = document.createElement('button');
+      regenerateBtn.className = 'message-action-btn';
+      regenerateBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 7C1 3.68629 3.68629 1 7 1C10.3137 1 13 3.68629 13 7C13 10.3137 10.3137 13 7 13C5.5 13 4.16667 12.3333 3 11.3333" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M1 10V7H4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      regenerateBtn.title = 'Regenerate response';
+      regenerateBtn.addEventListener('click', () => handleRegenerateMessage(streamingMessageDiv));
+      actionsDiv.appendChild(regenerateBtn);
+      streamingMessageDiv.appendChild(actionsDiv);
+
+      setStatus('Ready');
+      statusText.classList.remove('streaming');
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
+      tokenUnlisten();
+      completeUnlisten();
+    });
+
+    try {
+      await invoke('chat_stream', { message });
+    } catch (error) {
+      tokenUnlisten();
+      completeUnlisten();
+      statusText.classList.remove('streaming');
+      if (streamingMessageDiv) {
+        streamingMessageDiv.remove();
+      }
+      if (error.includes('not configured')) {
+        addMessage('API not configured. Please configure your API settings.', false);
+        setTimeout(showSettings, 1000);
+      } else {
+        addMessage(`Error: ${error}`, false);
+      }
+      setStatus('Error');
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
+    }
+  } else {
+    // Use non-streaming
+    showTypingIndicator();
+
+    try {
+      const response = await invoke('chat', { message });
+      removeTypingIndicator();
+      addMessage(response, false);
+      setStatus('Ready');
+    } catch (error) {
+      removeTypingIndicator();
+      if (error.includes('not configured')) {
+        addMessage('API not configured. Please configure your API settings.', false);
+        setTimeout(showSettings, 1000);
+      } else {
+        addMessage(`Error: ${error}`, false);
+      }
+      setStatus('Error');
+    } finally {
+      sendBtn.disabled = false;
+      messageInput.disabled = false;
+      messageInput.focus();
+    }
+  }
 }
 
 // Show typing indicator
@@ -223,159 +816,10 @@ async function handleSubmit(e) {
   const message = messageInput.value.trim();
   if (!message) return;
 
-  addMessage(message, true);
   messageInput.value = '';
   autoResize(messageInput);
 
-  sendBtn.disabled = true;
-  messageInput.disabled = true;
-  setStatus('Thinking...');
-
-  // Check if streaming is enabled
-  let streamEnabled = false;
-  try {
-    const config = await invoke('get_api_config');
-    streamEnabled = config.stream || false;
-  } catch (error) {
-    console.error('Failed to get config:', error);
-  }
-
-  if (streamEnabled) {
-    // Use streaming
-    setStatus('Streaming...');
-    statusText.classList.add('streaming');
-
-    let streamingMessageDiv = null;
-    let streamingContentDiv = null;
-    let fullContent = '';
-
-    // Create streaming message container
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message assistant';
-
-    const avatar = document.createElement('div');
-    avatar.className = 'avatar-circle';
-
-    // Set avatar image for streaming messages
-    if (currentCharacter && currentCharacter.avatar_path) {
-      getAvatarUrl(currentCharacter.avatar_path).then(url => {
-        if (url) {
-          avatar.style.backgroundImage = `url('${url}')`;
-          makeAvatarClickable(avatar, url);
-        }
-      });
-    }
-
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
-    messagesContainer.appendChild(messageDiv);
-
-    streamingMessageDiv = messageDiv;
-    streamingContentDiv = contentDiv;
-
-    // Set up event listeners for streaming
-    const { listen } = window.__TAURI__.event;
-
-    const tokenUnlisten = await listen('chat-token', (event) => {
-      const token = event.payload;
-      fullContent += token;
-
-      // Update content with markdown rendering
-      streamingContentDiv.innerHTML = marked.parse(fullContent);
-
-      // Apply syntax highlighting
-      streamingContentDiv.querySelectorAll('pre code').forEach((block) => {
-        hljs.highlightElement(block);
-
-        // Add copy button
-        const pre = block.parentElement;
-        if (!pre.querySelector('.copy-btn')) {
-          const copyBtn = document.createElement('button');
-          copyBtn.className = 'copy-btn';
-          copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
-            <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-          </svg>`;
-          copyBtn.title = 'Copy code';
-          copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(block.textContent);
-            copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M3 8l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>`;
-            copyBtn.classList.add('copied');
-            setTimeout(() => {
-              copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <rect x="5" y="5" width="9" height="9" stroke="currentColor" stroke-width="1.5" fill="none" rx="1"/>
-                <path d="M3 11V3a1 1 0 0 1 1-1h8" stroke="currentColor" stroke-width="1.5" fill="none"/>
-              </svg>`;
-              copyBtn.classList.remove('copied');
-            }, 2000);
-          });
-          pre.style.position = 'relative';
-          pre.appendChild(copyBtn);
-        }
-      });
-
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    });
-
-    const completeUnlisten = await listen('chat-complete', () => {
-      setStatus('Ready');
-      statusText.classList.remove('streaming');
-      sendBtn.disabled = false;
-      messageInput.disabled = false;
-      messageInput.focus();
-      tokenUnlisten();
-      completeUnlisten();
-    });
-
-    try {
-      await invoke('chat_stream', { message });
-    } catch (error) {
-      tokenUnlisten();
-      completeUnlisten();
-      statusText.classList.remove('streaming');
-      if (streamingMessageDiv) {
-        streamingMessageDiv.remove();
-      }
-      if (error.includes('not configured')) {
-        addMessage('API not configured. Please configure your API settings.', false);
-        setTimeout(showSettings, 1000);
-      } else {
-        addMessage(`Error: ${error}`, false);
-      }
-      setStatus('Error');
-      sendBtn.disabled = false;
-      messageInput.disabled = false;
-      messageInput.focus();
-    }
-  } else {
-    // Use non-streaming
-    showTypingIndicator();
-
-    try {
-      const response = await invoke('chat', { message });
-      removeTypingIndicator();
-      addMessage(response, false);
-      setStatus('Ready');
-    } catch (error) {
-      removeTypingIndicator();
-      if (error.includes('not configured')) {
-        addMessage('API not configured. Please configure your API settings.', false);
-        setTimeout(showSettings, 1000);
-      } else {
-        addMessage(`Error: ${error}`, false);
-      }
-      setStatus('Error');
-    } finally {
-      sendBtn.disabled = false;
-      messageInput.disabled = false;
-      messageInput.focus();
-    }
-  }
+  await sendMessage(message);
 }
 
 // Settings functionality
@@ -452,7 +896,7 @@ async function handleSaveSettings(e) {
     setTimeout(() => {
       hideSettings();
       messagesContainer.innerHTML = '';
-      addMessage('API configured. Ready to chat.', false);
+      addMessage('API configured. Ready to chat.', false, true);
     }, 1000);
   } catch (error) {
     validationMsg.textContent = `Failed to save: ${error}`;
@@ -641,19 +1085,24 @@ async function loadChatHistory() {
 
     if (history.length === 0) {
       if (currentCharacter && currentCharacter.greeting) {
-        addMessage(currentCharacter.greeting, false);
+        addMessage(currentCharacter.greeting, false, true);
       } else {
-        addMessage('API configured. Ready to chat.', false);
+        addMessage('API configured. Ready to chat.', false, true);
       }
     } else {
-      history.forEach(msg => {
-        addMessage(msg.content, msg.role === 'user');
+      history.forEach((msg, index) => {
+        const messageDiv = addMessage(msg.content, msg.role === 'user');
+
+        // Update swipe controls for assistant messages with swipe info
+        if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {
+          updateSwipeControls(messageDiv, msg.current_swipe || 0, msg.swipes.length);
+        }
       });
     }
   } catch (error) {
     console.error('Failed to load chat history:', error);
     messagesContainer.innerHTML = '';
-    addMessage('API configured. Ready to chat.', false);
+    addMessage('API configured. Ready to chat.', false, true);
   }
 }
 
@@ -667,9 +1116,9 @@ async function clearHistory() {
     await invoke('clear_chat_history');
     messagesContainer.innerHTML = '';
     if (currentCharacter && currentCharacter.greeting) {
-      addMessage(currentCharacter.greeting, false);
+      addMessage(currentCharacter.greeting, false, true);
     } else {
-      addMessage('Conversation cleared. Ready to chat.', false);
+      addMessage('Conversation cleared. Ready to chat.', false, true);
     }
   } catch (error) {
     addMessage(`Failed to clear history: ${error}`, false);

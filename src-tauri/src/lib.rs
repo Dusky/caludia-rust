@@ -30,7 +30,63 @@ struct Character {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Message {
     role: String,
-    content: String,
+    #[serde(default)]
+    content: String, // Keep for backward compatibility
+    #[serde(default)]
+    swipes: Vec<String>,
+    #[serde(default)]
+    current_swipe: usize,
+}
+
+impl Message {
+    fn new_user(content: String) -> Self {
+        Self {
+            role: "user".to_string(),
+            content: content.clone(),
+            swipes: vec![content],
+            current_swipe: 0,
+        }
+    }
+
+    fn new_assistant(content: String) -> Self {
+        Self {
+            role: "assistant".to_string(),
+            content: content.clone(),
+            swipes: vec![content],
+            current_swipe: 0,
+        }
+    }
+
+    fn get_content(&self) -> &str {
+        if !self.swipes.is_empty() {
+            &self.swipes[self.current_swipe]
+        } else {
+            &self.content
+        }
+    }
+
+    fn add_swipe(&mut self, content: String) {
+        self.swipes.push(content.clone());
+        self.current_swipe = self.swipes.len() - 1;
+        self.content = content;
+    }
+
+    fn set_swipe(&mut self, index: usize) -> Result<(), String> {
+        if index >= self.swipes.len() {
+            return Err("Invalid swipe index".to_string());
+        }
+        self.current_swipe = index;
+        self.content = self.swipes[index].clone();
+        Ok(())
+    }
+
+    // Migrate old format to new format
+    fn migrate(&mut self) {
+        if self.swipes.is_empty() && !self.content.is_empty() {
+            self.swipes = vec![self.content.clone()];
+            self.current_swipe = 0;
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -144,7 +200,12 @@ fn save_config(config: &ApiConfig) -> Result<(), String> {
 fn load_history(character_id: &str) -> ChatHistory {
     let path = get_character_history_path(character_id);
     if let Ok(contents) = fs::read_to_string(path) {
-        serde_json::from_str(&contents).unwrap_or(ChatHistory { messages: vec![] })
+        let mut history: ChatHistory = serde_json::from_str(&contents).unwrap_or(ChatHistory { messages: vec![] });
+        // Migrate old messages to new format
+        for msg in &mut history.messages {
+            msg.migrate();
+        }
+        history
     } else {
         ChatHistory { messages: vec![] }
     }
@@ -350,10 +411,7 @@ async fn chat(message: String) -> Result<String, String> {
     let mut history = load_history(&character.id);
 
     // Add user message to history
-    history.messages.push(Message {
-        role: "user".to_string(),
-        content: message.clone(),
-    });
+    history.messages.push(Message::new_user(message.clone()));
 
     let client = reqwest::Client::new();
     let base = config.base_url.trim_end_matches('/');
@@ -363,12 +421,16 @@ async fn chat(message: String) -> Result<String, String> {
         format!("{}/v1/chat/completions", base)
     };
 
-    // Build messages with system prompt first
-    let mut api_messages = vec![Message {
-        role: "system".to_string(),
-        content: character.system_prompt.clone(),
-    }];
-    api_messages.extend(history.messages.clone());
+    // Build messages with system prompt first - use simple Message for API
+    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    api_messages[0].role = "system".to_string();
+
+    // Add history messages with current swipe content
+    for msg in &history.messages {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
 
     let request = ChatRequest {
         model: config.model.clone(),
@@ -401,10 +463,7 @@ async fn chat(message: String) -> Result<String, String> {
         .ok_or_else(|| "No response content".to_string())?;
 
     // Add assistant message to history
-    history.messages.push(Message {
-        role: "assistant".to_string(),
-        content: assistant_message.clone(),
-    });
+    history.messages.push(Message::new_assistant(assistant_message.clone()));
 
     // Save history
     save_history(&character.id, &history).ok();
@@ -419,10 +478,7 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
     let mut history = load_history(&character.id);
 
     // Add user message to history
-    history.messages.push(Message {
-        role: "user".to_string(),
-        content: message.clone(),
-    });
+    history.messages.push(Message::new_user(message.clone()));
 
     let client = reqwest::Client::new();
     let base = config.base_url.trim_end_matches('/');
@@ -432,12 +488,16 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
         format!("{}/v1/chat/completions", base)
     };
 
-    // Build messages with system prompt first
-    let mut api_messages = vec![Message {
-        role: "system".to_string(),
-        content: character.system_prompt.clone(),
-    }];
-    api_messages.extend(history.messages.clone());
+    // Build messages with system prompt first - use simple Message for API
+    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    api_messages[0].role = "system".to_string();
+
+    // Add history messages with current swipe content
+    for msg in &history.messages {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
 
     let request = StreamChatRequest {
         model: config.model.clone(),
@@ -499,10 +559,7 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
     }
 
     // Add assistant message to history
-    history.messages.push(Message {
-        role: "assistant".to_string(),
-        content: full_content.clone(),
-    });
+    history.messages.push(Message::new_assistant(full_content.clone()));
 
     // Save history
     save_history(&character.id, &history).ok();
@@ -524,6 +581,292 @@ fn clear_chat_history() -> Result<(), String> {
     let character = get_active_character();
     let history = ChatHistory { messages: vec![] };
     save_history(&character.id, &history)
+}
+
+#[tauri::command]
+fn truncate_history_from(index: usize) -> Result<(), String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if index < history.messages.len() {
+        history.messages.truncate(index);
+        save_history(&character.id, &history)?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_last_assistant_message() -> Result<String, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    // Find and remove the last assistant message
+    if let Some(pos) = history.messages.iter().rposition(|m| m.role == "assistant") {
+        history.messages.remove(pos);
+        save_history(&character.id, &history)?;
+    }
+
+    // Get the last user message
+    let last_user_msg = history.messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.get_content().to_string())
+        .ok_or_else(|| "No user message found".to_string())?;
+
+    Ok(last_user_msg)
+}
+
+#[tauri::command]
+fn get_last_user_message() -> Result<String, String> {
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    // Get the last user message without removing anything
+    let last_user_msg = history.messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| m.get_content().to_string())
+        .ok_or_else(|| "No user message found".to_string())?;
+
+    Ok(last_user_msg)
+}
+
+#[tauri::command]
+async fn generate_response_only() -> Result<String, String> {
+    let config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    let client = reqwest::Client::new();
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+
+    // Build messages with system prompt first
+    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    api_messages[0].role = "system".to_string();
+
+    // Add existing history (which already includes the user message)
+    for msg in &history.messages {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
+
+    let request = ChatRequest {
+        model: config.model.clone(),
+        max_tokens: 4096,
+        messages: api_messages,
+    };
+
+    let response = client
+        .post(&url)
+        .header("authorization", format!("Bearer {}", &config.api_key))
+        .header("content-type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("API error: {}", response.status()));
+    }
+
+    let chat_response: ChatResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Parse error: {}", e))?;
+
+    let assistant_message = chat_response
+        .choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .ok_or_else(|| "No response content".to_string())?;
+
+    Ok(assistant_message)
+}
+
+#[tauri::command]
+async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    let client = reqwest::Client::new();
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+
+    // Build messages with system prompt first
+    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    api_messages[0].role = "system".to_string();
+
+    // Add existing history (which already includes the user message)
+    for msg in &history.messages {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
+
+    let request = StreamChatRequest {
+        model: config.model.clone(),
+        max_tokens: 4096,
+        messages: api_messages,
+        stream: true,
+    };
+
+    let response = client
+        .post(&url)
+        .header("authorization", format!("Bearer {}", &config.api_key))
+        .header("content-type", "application/json")
+        .json(&request)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("API error: {}", response.status()));
+    }
+
+    // Process streaming response
+    let mut full_content = String::new();
+    let mut stream = response.bytes_stream();
+
+    let mut buffer = String::new();
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| format!("Stream error: {}", e))?;
+        let chunk_str = String::from_utf8_lossy(&chunk);
+        buffer.push_str(&chunk_str);
+
+        // Process complete lines
+        while let Some(line_end) = buffer.find('\n') {
+            let line = buffer[..line_end].trim().to_string();
+            buffer = buffer[line_end + 1..].to_string();
+
+            // Parse SSE data lines
+            if line.starts_with("data: ") {
+                let data = &line[6..];
+
+                // Check for stream end
+                if data == "[DONE]" {
+                    break;
+                }
+
+                // Parse JSON and extract content
+                if let Ok(stream_response) = serde_json::from_str::<StreamResponse>(data) {
+                    if let Some(choice) = stream_response.choices.first() {
+                        if let Some(content) = &choice.delta.content {
+                            full_content.push_str(content);
+
+                            // Emit token to frontend
+                            let _ = app_handle.emit_to("main", "chat-token", content.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Emit completion event
+    let _ = app_handle.emit_to("main", "chat-complete", ());
+
+    Ok(full_content)
+}
+
+#[derive(Debug, Serialize)]
+struct SwipeInfo {
+    current: usize,
+    total: usize,
+    content: String,
+}
+
+#[tauri::command]
+fn add_swipe_to_last_assistant(content: String) -> Result<SwipeInfo, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    // Find the last assistant message
+    if let Some(pos) = history.messages.iter().rposition(|m| m.role == "assistant") {
+        history.messages[pos].add_swipe(content);
+        save_history(&character.id, &history)?;
+
+        Ok(SwipeInfo {
+            current: history.messages[pos].current_swipe,
+            total: history.messages[pos].swipes.len(),
+            content: history.messages[pos].get_content().to_string(),
+        })
+    } else {
+        Err("No assistant message found".to_string())
+    }
+}
+
+#[tauri::command]
+fn navigate_swipe(message_index: usize, direction: i32) -> Result<SwipeInfo, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err("Invalid message index".to_string());
+    }
+
+    let msg = &mut history.messages[message_index];
+
+    if msg.swipes.is_empty() {
+        return Err("No swipes available".to_string());
+    }
+
+    let new_index = if direction > 0 {
+        // Swipe right (next)
+        (msg.current_swipe + 1).min(msg.swipes.len() - 1)
+    } else {
+        // Swipe left (previous)
+        msg.current_swipe.saturating_sub(1)
+    };
+
+    msg.set_swipe(new_index)?;
+
+    // Extract values before saving
+    let current = msg.current_swipe;
+    let total = msg.swipes.len();
+    let content = msg.get_content().to_string();
+
+    save_history(&character.id, &history)?;
+
+    Ok(SwipeInfo {
+        current,
+        total,
+        content,
+    })
+}
+
+#[tauri::command]
+fn get_swipe_info(message_index: usize) -> Result<SwipeInfo, String> {
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err("Invalid message index".to_string());
+    }
+
+    let msg = &history.messages[message_index];
+    let current = msg.current_swipe;
+    let total = msg.swipes.len();
+    let content = msg.get_content().to_string();
+
+    Ok(SwipeInfo {
+        current,
+        total,
+        content,
+    })
 }
 
 #[tauri::command]
@@ -625,11 +968,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             chat,
             chat_stream,
+            generate_response_only,
+            generate_response_stream,
             validate_api,
             save_api_config,
             get_api_config,
             get_chat_history,
             clear_chat_history,
+            truncate_history_from,
+            remove_last_assistant_message,
+            get_last_user_message,
+            add_swipe_to_last_assistant,
+            navigate_swipe,
+            get_swipe_info,
             get_character,
             update_character,
             upload_avatar,
