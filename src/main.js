@@ -1191,6 +1191,15 @@ async function loadCharacterSettings() {
     document.getElementById('character-system-prompt').value = character.system_prompt;
     document.getElementById('character-greeting').value = character.greeting || '';
     document.getElementById('character-personality').value = character.personality || '';
+    document.getElementById('character-description').value = character.description || '';
+    document.getElementById('character-scenario').value = character.scenario || '';
+    document.getElementById('character-mes-example').value = character.mes_example || '';
+    document.getElementById('character-post-history').value = character.post_history_instructions || '';
+    document.getElementById('character-alt-greetings').value = character.alternate_greetings ? character.alternate_greetings.join('\n') : '';
+    document.getElementById('character-tags').value = character.tags ? character.tags.join(', ') : '';
+    document.getElementById('character-creator').value = character.creator || '';
+    document.getElementById('character-version').value = character.character_version || '';
+    document.getElementById('character-creator-notes').value = character.creator_notes || '';
 
     // Load avatar preview
     const avatarPreview = document.querySelector('.avatar-circle-large');
@@ -1222,6 +1231,17 @@ async function handleSaveCharacter(e) {
   const systemPrompt = document.getElementById('character-system-prompt').value.trim();
   const greeting = document.getElementById('character-greeting').value.trim() || null;
   const personality = document.getElementById('character-personality').value.trim() || null;
+  const description = document.getElementById('character-description').value.trim() || null;
+  const scenario = document.getElementById('character-scenario').value.trim() || null;
+  const mesExample = document.getElementById('character-mes-example').value.trim() || null;
+  const postHistory = document.getElementById('character-post-history').value.trim() || null;
+  const altGreetingsText = document.getElementById('character-alt-greetings').value.trim();
+  const altGreetings = altGreetingsText ? altGreetingsText.split('\n').map(s => s.trim()).filter(s => s) : null;
+  const tagsText = document.getElementById('character-tags').value.trim();
+  const tags = tagsText ? tagsText.split(',').map(s => s.trim()).filter(s => s) : null;
+  const creator = document.getElementById('character-creator').value.trim() || null;
+  const characterVersion = document.getElementById('character-version').value.trim() || null;
+  const creatorNotes = document.getElementById('character-creator-notes').value.trim() || null;
   const saveBtn = document.getElementById('save-character-btn');
   const characterMsg = document.getElementById('character-message');
 
@@ -1240,6 +1260,15 @@ async function handleSaveCharacter(e) {
       systemPrompt,
       greeting,
       personality,
+      description,
+      scenario,
+      mesExample,
+      postHistory,
+      altGreetings,
+      tags,
+      creator,
+      characterVersion,
+      creatorNotes,
       avatarPath: pendingAvatarPath
     });
     characterMsg.textContent = 'Character saved successfully';

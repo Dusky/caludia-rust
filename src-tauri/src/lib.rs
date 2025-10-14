@@ -630,6 +630,15 @@ fn update_character(
     system_prompt: String,
     greeting: Option<String>,
     personality: Option<String>,
+    description: Option<String>,
+    scenario: Option<String>,
+    mes_example: Option<String>,
+    post_history: Option<String>,
+    alt_greetings: Option<Vec<String>>,
+    tags: Option<Vec<String>>,
+    creator: Option<String>,
+    character_version: Option<String>,
+    creator_notes: Option<String>,
     avatar_path: Option<String>,
 ) -> Result<(), String> {
     let mut character = get_active_character();
@@ -637,6 +646,15 @@ fn update_character(
     character.system_prompt = system_prompt;
     character.greeting = greeting;
     character.personality = personality;
+    character.description = description;
+    character.scenario = scenario;
+    character.mes_example = mes_example;
+    character.post_history_instructions = post_history;
+    character.alternate_greetings = alt_greetings.unwrap_or_default();
+    character.tags = tags.unwrap_or_default();
+    character.creator = creator;
+    character.character_version = character_version;
+    character.creator_notes = creator_notes;
     character.avatar_path = avatar_path;
     save_character(&character)
 }
