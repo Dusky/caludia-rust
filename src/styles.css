@@ -732,11 +732,20 @@ body {
 .status-text {
   font-size: 12px;
   color: var(--text-secondary);
+  transition: color 0.2s ease;
 }
 
 .status-text.streaming {
   color: var(--accent);
   animation: pulse 2s ease-in-out infinite;
+}
+
+.status-text.error {
+  color: #ef4444;
+}
+
+.status-text.success {
+  color: #22c55e;
 }
 
 @keyframes pulse {

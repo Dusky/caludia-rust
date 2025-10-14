@@ -485,7 +485,7 @@ async function handleRegenerateMessage(messageDiv) {
 
 // Generate a new swipe for an existing assistant message
 async function generateSwipe(messageDiv, userMessage) {
-  setStatus('Regenerating...');
+  setStatus('Regenerating response...', 'default');
 
   // Check if streaming is enabled
   let streamEnabled = false;
@@ -518,11 +518,12 @@ async function generateSwipeNonStream(messageDiv, userMessage) {
     // Update swipe controls
     updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
 
-    setStatus('Ready');
+    setStatus('Regeneration complete', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
     if (regenerateBtn) regenerateBtn.disabled = false;
   } catch (error) {
-    setStatus('Error');
+    setStatus(`Regeneration failed: ${error.substring(0, 40)}...`, 'error');
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
     if (regenerateBtn) regenerateBtn.disabled = false;
     addMessage(`Error regenerating message: ${error}`, false);
@@ -531,8 +532,7 @@ async function generateSwipeNonStream(messageDiv, userMessage) {
 
 // Generate swipe using streaming
 async function generateSwipeStream(messageDiv, userMessage) {
-  setStatus('Streaming...');
-  statusText.classList.add('streaming');
+  setStatus('Streaming regeneration...', 'streaming');
 
   let fullContent = '';
   const contentDiv = messageDiv.querySelector('.message-content');
@@ -561,8 +561,8 @@ async function generateSwipeStream(messageDiv, userMessage) {
       console.error('Failed to add swipe:', error);
     }
 
-    setStatus('Ready');
-    statusText.classList.remove('streaming');
+    setStatus('Regeneration complete', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
     if (regenerateBtn) regenerateBtn.disabled = false;
     tokenUnlisten();
@@ -574,8 +574,7 @@ async function generateSwipeStream(messageDiv, userMessage) {
   } catch (error) {
     tokenUnlisten();
     completeUnlisten();
-    statusText.classList.remove('streaming');
-    setStatus('Error');
+    setStatus(`Regeneration failed: ${error.substring(0, 40)}...`, 'error');
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
     if (regenerateBtn) regenerateBtn.disabled = false;
     addMessage(`Error: ${error}`, false);
@@ -620,7 +619,7 @@ async function sendMessage(message, isRegenerate = false) {
 
   sendBtn.disabled = true;
   messageInput.disabled = true;
-  setStatus('Thinking...');
+  setStatus('Connecting to API...', 'default');
 
   // Check if streaming is enabled
   let streamEnabled = false;
@@ -633,8 +632,7 @@ async function sendMessage(message, isRegenerate = false) {
 
   if (streamEnabled) {
     // Use streaming
-    setStatus('Streaming...');
-    statusText.classList.add('streaming');
+    setStatus('Streaming response...', 'streaming');
 
     let streamingMessageDiv = null;
     let streamingContentDiv = null;
@@ -705,8 +703,8 @@ async function sendMessage(message, isRegenerate = false) {
       actionsDiv.appendChild(regenerateBtn);
       streamingMessageDiv.appendChild(actionsDiv);
 
-      setStatus('Ready');
-      statusText.classList.remove('streaming');
+      setStatus('Response complete', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
       sendBtn.disabled = false;
       messageInput.disabled = false;
       messageInput.focus();
@@ -719,17 +717,17 @@ async function sendMessage(message, isRegenerate = false) {
     } catch (error) {
       tokenUnlisten();
       completeUnlisten();
-      statusText.classList.remove('streaming');
       if (streamingMessageDiv) {
         streamingMessageDiv.remove();
       }
       if (error.includes('not configured')) {
         addMessage('API not configured. Please configure your API settings.', false);
+        setStatus('API not configured', 'error');
         setTimeout(showSettings, 1000);
       } else {
         addMessage(`Error: ${error}`, false);
+        setStatus(`Error: ${error.substring(0, 50)}...`, 'error');
       }
-      setStatus('Error');
       sendBtn.disabled = false;
       messageInput.disabled = false;
       messageInput.focus();
@@ -742,16 +740,18 @@ async function sendMessage(message, isRegenerate = false) {
       const response = await invoke('chat', { message });
       removeTypingIndicator();
       addMessage(response, false);
-      setStatus('Ready');
+      setStatus('Response complete', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
     } catch (error) {
       removeTypingIndicator();
       if (error.includes('not configured')) {
         addMessage('API not configured. Please configure your API settings.', false);
+        setStatus('API not configured', 'error');
         setTimeout(showSettings, 1000);
       } else {
         addMessage(`Error: ${error}`, false);
+        setStatus(`Error: ${error.substring(0, 50)}...`, 'error');
       }
-      setStatus('Error');
     } finally {
       sendBtn.disabled = false;
       messageInput.disabled = false;
@@ -788,9 +788,21 @@ function removeTypingIndicator() {
   }
 }
 
-// Update status
-function setStatus(text) {
+// Update status with optional styling
+function setStatus(text, type = 'default') {
   statusText.textContent = text;
+
+  // Remove all status classes
+  statusText.classList.remove('streaming', 'error', 'success');
+
+  // Add appropriate class based on type
+  if (type === 'streaming') {
+    statusText.classList.add('streaming');
+  } else if (type === 'error') {
+    statusText.classList.add('error');
+  } else if (type === 'success') {
+    statusText.classList.add('success');
+  }
 }
 
 // Show/hide settings
@@ -903,20 +915,24 @@ async function handleSaveSettings(e) {
 
   saveBtn.disabled = true;
   saveBtn.textContent = 'Saving...';
+  setStatus('Saving configuration...', 'default');
 
   try {
     await invoke('save_api_config', { baseUrl, apiKey, model, stream });
     validationMsg.textContent = 'Configuration saved successfully';
     validationMsg.className = 'validation-message success';
+    setStatus('Configuration saved', 'success');
 
     setTimeout(() => {
       hideSettings();
       messagesContainer.innerHTML = '';
       addMessage('API configured. Ready to chat.', false, true);
+      setStatus('Ready');
     }, 1000);
   } catch (error) {
     validationMsg.textContent = `Failed to save: ${error}`;
     validationMsg.className = 'validation-message error';
+    setStatus('Failed to save configuration', 'error');
   } finally {
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save Configuration';
@@ -1048,12 +1064,16 @@ async function loadCharacters() {
 // Handle character switching
 async function handleCharacterSwitch() {
   const characterId = characterSelect.value;
+  setStatus('Switching character...', 'default');
   try {
     await invoke('set_active_character', { characterId });
     messagesContainer.innerHTML = '';
     await loadCharacters();
+    setStatus('Character switched', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
   } catch (error) {
     console.error('Failed to switch character:', error);
+    setStatus('Failed to switch character', 'error');
     addMessage(`Failed to switch character: ${error}`, false);
   }
 }
@@ -1175,6 +1195,7 @@ async function clearHistory() {
     return;
   }
 
+  setStatus('Clearing history...', 'default');
   try {
     await invoke('clear_chat_history');
     messagesContainer.innerHTML = '';
@@ -1183,7 +1204,10 @@ async function clearHistory() {
     } else {
       addMessage('Conversation cleared. Ready to chat.', false, true);
     }
+    setStatus('History cleared', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
   } catch (error) {
+    setStatus('Failed to clear history', 'error');
     addMessage(`Failed to clear history: ${error}`, false);
   }
 }
