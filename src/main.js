@@ -469,6 +469,7 @@ async function handleEditMessage(messageDiv, originalContent) {
 async function handleRegenerateMessage(messageDiv) {
   const regenerateBtn = messageDiv.querySelector('.message-action-btn');
   regenerateBtn.disabled = true;
+  regenerateBtn.classList.add('loading');
 
   try {
     // Get the last user message
@@ -479,6 +480,7 @@ async function handleRegenerateMessage(messageDiv) {
   } catch (error) {
     console.error('Failed to regenerate message:', error);
     regenerateBtn.disabled = false;
+    regenerateBtn.classList.remove('loading');
     addMessage(`Error regenerating message: ${error}`, false);
   }
 }
@@ -521,11 +523,17 @@ async function generateSwipeNonStream(messageDiv, userMessage) {
     setStatus('Regeneration complete', 'success');
     setTimeout(() => setStatus('Ready'), 2000);
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
-    if (regenerateBtn) regenerateBtn.disabled = false;
+    if (regenerateBtn) {
+      regenerateBtn.disabled = false;
+      regenerateBtn.classList.remove('loading');
+    }
   } catch (error) {
     setStatus(`Regeneration failed: ${error.substring(0, 40)}...`, 'error');
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
-    if (regenerateBtn) regenerateBtn.disabled = false;
+    if (regenerateBtn) {
+      regenerateBtn.disabled = false;
+      regenerateBtn.classList.remove('loading');
+    }
     addMessage(`Error regenerating message: ${error}`, false);
   }
 }
@@ -564,7 +572,10 @@ async function generateSwipeStream(messageDiv, userMessage) {
     setStatus('Regeneration complete', 'success');
     setTimeout(() => setStatus('Ready'), 2000);
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
-    if (regenerateBtn) regenerateBtn.disabled = false;
+    if (regenerateBtn) {
+      regenerateBtn.disabled = false;
+      regenerateBtn.classList.remove('loading');
+    }
     tokenUnlisten();
     completeUnlisten();
   });
@@ -576,7 +587,10 @@ async function generateSwipeStream(messageDiv, userMessage) {
     completeUnlisten();
     setStatus(`Regeneration failed: ${error.substring(0, 40)}...`, 'error');
     const regenerateBtn = messageDiv.querySelector('.message-action-btn');
-    if (regenerateBtn) regenerateBtn.disabled = false;
+    if (regenerateBtn) {
+      regenerateBtn.disabled = false;
+      regenerateBtn.classList.remove('loading');
+    }
     addMessage(`Error: ${error}`, false);
   }
 }
@@ -867,14 +881,18 @@ async function handleValidate() {
   }
 
   validateBtn.disabled = true;
+  validateBtn.classList.add('loading');
   validateBtn.textContent = 'Validating...';
   validationMsg.style.display = 'none';
+  setStatus('Validating API...', 'default');
 
   try {
     const models = await invoke('validate_api', { baseUrl, apiKey });
 
     validationMsg.textContent = `Found ${models.length} models`;
     validationMsg.className = 'validation-message success';
+    setStatus('API validated successfully', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
 
     modelSelect.innerHTML = '<option value="">Select a model</option>';
     models.forEach(model => {
@@ -885,14 +903,17 @@ async function handleValidate() {
     });
 
     modelsGroup.style.display = 'flex';
+    modelsGroup.classList.add('fade-in');
     saveBtn.disabled = false;
   } catch (error) {
     validationMsg.textContent = `Validation failed: ${error}`;
     validationMsg.className = 'validation-message error';
+    setStatus('API validation failed', 'error');
     modelsGroup.style.display = 'none';
     saveBtn.disabled = true;
   } finally {
     validateBtn.disabled = false;
+    validateBtn.classList.remove('loading');
     validateBtn.textContent = 'Validate';
   }
 }
@@ -914,6 +935,7 @@ async function handleSaveSettings(e) {
   }
 
   saveBtn.disabled = true;
+  saveBtn.classList.add('loading');
   saveBtn.textContent = 'Saving...';
   setStatus('Saving configuration...', 'default');
 
@@ -935,6 +957,7 @@ async function handleSaveSettings(e) {
     setStatus('Failed to save configuration', 'error');
   } finally {
     saveBtn.disabled = false;
+    saveBtn.classList.remove('loading');
     saveBtn.textContent = 'Save Configuration';
   }
 }
@@ -1292,6 +1315,7 @@ async function handleSaveCharacter(e) {
   }
 
   saveBtn.disabled = true;
+  saveBtn.classList.add('loading');
   saveBtn.textContent = 'Saving...';
 
   try {
@@ -1324,6 +1348,7 @@ async function handleSaveCharacter(e) {
     characterMsg.className = 'validation-message error';
   } finally {
     saveBtn.disabled = false;
+    saveBtn.classList.remove('loading');
     saveBtn.textContent = 'Save Character';
   }
 }
