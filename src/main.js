@@ -170,6 +170,37 @@ function loadSavedViewMode() {
   applyViewMode(savedMode);
 }
 
+// Apply font size
+function applyFontSize(scale) {
+  const root = document.documentElement;
+
+  // Calculate font size based on scale (80-140%)
+  const baseFontSize = 14; // Default base size in px
+  const newFontSize = (baseFontSize * scale) / 100;
+
+  root.style.setProperty('--base-font-size', `${newFontSize}px`);
+  root.style.fontSize = `${newFontSize}px`;
+
+  // Update the display value
+  const fontSizeValue = document.getElementById('font-size-value');
+  if (fontSizeValue) {
+    fontSizeValue.textContent = `${scale}%`;
+  }
+
+  // Store preference
+  localStorage.setItem('claudia-font-size', scale.toString());
+}
+
+// Load saved font size
+function loadSavedFontSize() {
+  const savedSize = parseInt(localStorage.getItem('claudia-font-size') || '100');
+  const fontSizeSlider = document.getElementById('font-size-slider');
+  if (fontSizeSlider) {
+    fontSizeSlider.value = savedSize;
+  }
+  applyFontSize(savedSize);
+}
+
 // Helper function to get avatar URL
 async function getAvatarUrl(avatarFilename) {
   if (!avatarFilename) return null;
@@ -1211,6 +1242,14 @@ function setupAppControls() {
       applyViewMode(e.target.value);
     });
   }
+
+  // Setup font size slider
+  const fontSizeSlider = document.getElementById('font-size-slider');
+  if (fontSizeSlider) {
+    fontSizeSlider.addEventListener('input', (e) => {
+      applyFontSize(parseInt(e.target.value));
+    });
+  }
 }
 
 // Keyboard shortcuts
@@ -1608,6 +1647,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Load saved preferences before anything else
   loadSavedTheme();
   loadSavedViewMode();
+  loadSavedFontSize();
 
   loadExistingConfig();
 });
