@@ -73,6 +73,47 @@ function makeAvatarClickable(avatarElement, avatarUrl) {
   });
 }
 
+// Format timestamp for display
+function formatTimestamp(timestamp) {
+  if (!timestamp) return '';
+
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now - date;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  // Just now (less than 1 minute)
+  if (seconds < 60) {
+    return 'Just now';
+  }
+
+  // Minutes ago (less than 1 hour)
+  if (minutes < 60) {
+    return `${minutes}m ago`;
+  }
+
+  // Today (show time)
+  if (days === 0) {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+
+  // Yesterday
+  if (days === 1) {
+    return `Yesterday at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+  }
+
+  // This week (show day name)
+  if (days < 7) {
+    return date.toLocaleDateString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+
+  // Older (show date)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 // Auto-resize textarea
 function autoResize(textarea) {
   textarea.style.height = 'auto';
@@ -80,7 +121,7 @@ function autoResize(textarea) {
 }
 
 // Add message to chat
-function addMessage(content, isUser = false, skipActions = false) {
+function addMessage(content, isUser = false, skipActions = false, timestamp = null) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
 
@@ -105,6 +146,14 @@ function addMessage(content, isUser = false, skipActions = false) {
     const p = document.createElement('p');
     p.textContent = content;
     contentDiv.appendChild(p);
+
+    // Add timestamp if provided
+    if (timestamp) {
+      const timestampDiv = document.createElement('div');
+      timestampDiv.className = 'message-timestamp';
+      timestampDiv.textContent = formatTimestamp(timestamp);
+      contentDiv.appendChild(timestampDiv);
+    }
   } else {
     // Assistant messages: render as markdown
     contentDiv.innerHTML = marked.parse(content);
@@ -141,6 +190,14 @@ function addMessage(content, isUser = false, skipActions = false) {
         pre.appendChild(copyBtn);
       }
     });
+
+    // Add timestamp if provided
+    if (timestamp) {
+      const timestampDiv = document.createElement('div');
+      timestampDiv.className = 'message-timestamp';
+      timestampDiv.textContent = formatTimestamp(timestamp);
+      contentDiv.appendChild(timestampDiv);
+    }
   }
 
   // Build message structure
@@ -566,7 +623,7 @@ function addCopyButtonToCode(block) {
 // Extract message sending logic into separate function
 async function sendMessage(message, isRegenerate = false) {
   if (!isRegenerate) {
-    addMessage(message, true);
+    addMessage(message, true, false, Date.now());
   }
 
   sendBtn.disabled = true;
@@ -1138,7 +1195,7 @@ async function loadChatHistory() {
       }
     } else {
       history.forEach((msg, index) => {
-        const messageDiv = addMessage(msg.content, msg.role === 'user');
+        const messageDiv = addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
 
         // Update swipe controls for assistant messages with swipe info
         if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {

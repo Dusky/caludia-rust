@@ -86,6 +86,7 @@ body {
   border: 1px solid var(--border);
   background-size: cover;
   background-position: center;
+  flex-shrink: 0;
 }
 
 .avatar-circle-large {
@@ -285,6 +286,24 @@ body {
 
 .message-content p + p {
   margin-top: 12px;
+}
+
+/* Message timestamp */
+.message-timestamp {
+  font-size: 10px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+  margin-top: 4px;
+  user-select: none;
+}
+
+.message.user .message-timestamp {
+  text-align: right;
+}
+
+.message.assistant .message-timestamp {
+  text-align: left;
+  margin-left: 4px;
 }
 
 /* Message action buttons */

@@ -174,24 +174,38 @@ struct Message {
     swipes: Vec<String>,
     #[serde(default)]
     current_swipe: usize,
+    #[serde(default)]
+    timestamp: i64, // Unix timestamp in milliseconds
 }
 
 impl Message {
     fn new_user(content: String) -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
         Self {
             role: "user".to_string(),
             content: content.clone(),
             swipes: vec![content],
             current_swipe: 0,
+            timestamp,
         }
     }
 
     fn new_assistant(content: String) -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
         Self {
             role: "assistant".to_string(),
             content: content.clone(),
             swipes: vec![content],
             current_swipe: 0,
+            timestamp,
         }
     }
 
