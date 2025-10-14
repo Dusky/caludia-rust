@@ -55,7 +55,10 @@
         </div>
       </main>
 
-      <div class="settings-panel" id="settings-panel" style="display: none;">
+      <!-- Settings overlay backdrop -->
+      <div class="settings-overlay" id="settings-overlay"></div>
+
+      <div class="settings-panel" id="settings-panel">
         <div class="settings-header">
           <h2>Settings</h2>
           <button id="close-settings-btn" class="icon-btn">
@@ -125,165 +128,217 @@
               <label for="character-settings-select">Select Character</label>
               <select id="character-settings-select"></select>
             </div>
-            <div class="form-group">
-              <label for="character-name">Character Name</label>
-              <input
-                type="text"
-                id="character-name"
-                placeholder="Assistant"
-                required
-              />
-            </div>
 
-            <div class="form-group">
-              <label for="character-avatar">Avatar (Optional)</label>
-              <div class="avatar-upload">
-                <div id="avatar-preview" class="avatar-preview">
-                  <div class="avatar-circle-large"></div>
+            <!-- Basic Info Section -->
+            <div class="settings-section" data-section="basic">
+              <div class="settings-section-header">
+                <div class="settings-section-title">
+                  <svg class="settings-section-icon" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Basic Information
                 </div>
-                <input
-                  type="file"
-                  id="character-avatar"
-                  accept="image/png,image/jpeg,image/jpg,image/webp"
-                  style="display: none;"
-                />
-                <button type="button" id="upload-avatar-btn" class="btn-secondary">
-                  Choose Image
-                </button>
-                <button type="button" id="remove-avatar-btn" class="btn-secondary" style="display: none;">
-                  Remove
-                </button>
+              </div>
+              <div class="settings-section-content">
+                <div class="form-group">
+                  <label for="character-name">Character Name</label>
+                  <input
+                    type="text"
+                    id="character-name"
+                    placeholder="Assistant"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="character-avatar">Avatar (Optional)</label>
+                  <div class="avatar-upload">
+                    <div id="avatar-preview" class="avatar-preview">
+                      <div class="avatar-circle-large"></div>
+                    </div>
+                    <input
+                      type="file"
+                      id="character-avatar"
+                      accept="image/png,image/jpeg,image/jpg,image/webp"
+                      style="display: none;"
+                    />
+                    <button type="button" id="upload-avatar-btn" class="btn-secondary">
+                      Choose Image
+                    </button>
+                    <button type="button" id="remove-avatar-btn" class="btn-secondary" style="display: none;">
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label for="character-system-prompt">System Prompt</label>
+                  <textarea
+                    id="character-system-prompt"
+                    placeholder="You are a helpful AI assistant..."
+                    rows="6"
+                    required
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="character-greeting">Greeting (Optional)</label>
+                  <textarea
+                    id="character-greeting"
+                    placeholder="Hello! How can I help you today?"
+                    rows="2"
+                  ></textarea>
+                </div>
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="character-system-prompt">System Prompt</label>
-              <textarea
-                id="character-system-prompt"
-                placeholder="You are a helpful AI assistant..."
-                rows="6"
-                required
-              ></textarea>
+            <!-- Roleplay Details Section -->
+            <div class="settings-section collapsed" data-section="roleplay">
+              <div class="settings-section-header">
+                <div class="settings-section-title">
+                  <svg class="settings-section-icon" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Roleplay Details
+                </div>
+              </div>
+              <div class="settings-section-content">
+                <div class="form-group">
+                  <label for="character-personality">Personality Tags</label>
+                  <input
+                    type="text"
+                    id="character-personality"
+                    placeholder="helpful, friendly, knowledgeable"
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="character-description">Description</label>
+                  <textarea
+                    id="character-description"
+                    placeholder="Detailed character description, appearance, background..."
+                    rows="8"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="character-scenario">Scenario</label>
+                  <textarea
+                    id="character-scenario"
+                    placeholder="The setting or situation where the character exists..."
+                    rows="4"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="character-mes-example">Message Examples</label>
+                  <textarea
+                    id="character-mes-example"
+                    placeholder="Example dialogue from the character..."
+                    rows="4"
+                  ></textarea>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
-              <label for="character-greeting">Greeting (Optional)</label>
-              <textarea
-                id="character-greeting"
-                placeholder="Hello! How can I help you today?"
-                rows="2"
-              ></textarea>
+            <!-- Advanced Settings Section -->
+            <div class="settings-section collapsed" data-section="advanced">
+              <div class="settings-section-header">
+                <div class="settings-section-title">
+                  <svg class="settings-section-icon" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Advanced Settings
+                </div>
+              </div>
+              <div class="settings-section-content">
+                <div class="form-group">
+                  <label for="character-post-history">Post-History Instructions</label>
+                  <textarea
+                    id="character-post-history"
+                    placeholder="Instructions to apply after chat history..."
+                    rows="3"
+                  ></textarea>
+                </div>
+
+                <div class="form-group">
+                  <label for="character-alt-greetings">Alternate Greetings</label>
+                  <textarea
+                    id="character-alt-greetings"
+                    placeholder="One greeting per line..."
+                    rows="3"
+                  ></textarea>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
-              <label for="character-personality">Personality Tags (Optional)</label>
-              <input
-                type="text"
-                id="character-personality"
-                placeholder="helpful, friendly, knowledgeable"
-              />
-            </div>
+            <!-- Metadata Section -->
+            <div class="settings-section collapsed" data-section="metadata">
+              <div class="settings-section-header">
+                <div class="settings-section-title">
+                  <svg class="settings-section-icon" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Metadata
+                </div>
+              </div>
+              <div class="settings-section-content">
+                <div class="form-group">
+                  <label for="character-tags">Tags</label>
+                  <input
+                    type="text"
+                    id="character-tags"
+                    placeholder="fantasy, adventure, comedy"
+                  />
+                </div>
 
-            <div class="form-group">
-              <label for="character-description">Description (Optional)</label>
-              <textarea
-                id="character-description"
-                placeholder="Detailed character description, appearance, background..."
-                rows="10"
-              ></textarea>
-            </div>
+                <div class="form-group">
+                  <label for="character-creator">Creator</label>
+                  <input
+                    type="text"
+                    id="character-creator"
+                    placeholder="Card creator name"
+                  />
+                </div>
 
-            <div class="form-group">
-              <label for="character-scenario">Scenario (Optional)</label>
-              <textarea
-                id="character-scenario"
-                placeholder="The setting or situation where the character exists..."
-                rows="4"
-              ></textarea>
-            </div>
+                <div class="form-group">
+                  <label for="character-version">Character Version</label>
+                  <input
+                    type="text"
+                    id="character-version"
+                    placeholder="1.0"
+                  />
+                </div>
 
-            <div class="form-group">
-              <label for="character-mes-example">Message Example (Optional)</label>
-              <textarea
-                id="character-mes-example"
-                placeholder="Example dialogue from the character..."
-                rows="4"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="character-post-history">Post-History Instructions (Optional)</label>
-              <textarea
-                id="character-post-history"
-                placeholder="Instructions to apply after chat history..."
-                rows="3"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="character-alt-greetings">Alternate Greetings (Optional)</label>
-              <textarea
-                id="character-alt-greetings"
-                placeholder="One greeting per line..."
-                rows="3"
-              ></textarea>
-            </div>
-
-            <div class="form-group">
-              <label for="character-tags">Tags (Optional)</label>
-              <input
-                type="text"
-                id="character-tags"
-                placeholder="fantasy, adventure, comedy"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="character-creator">Creator (Optional)</label>
-              <input
-                type="text"
-                id="character-creator"
-                placeholder="Card creator name"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="character-version">Character Version (Optional)</label>
-              <input
-                type="text"
-                id="character-version"
-                placeholder="1.0"
-              />
-            </div>
-
-            <div class="form-group">
-              <label for="character-creator-notes">Creator Notes (Optional)</label>
-              <textarea
-                id="character-creator-notes"
-                placeholder="Notes from the creator..."
-                rows="2"
-              ></textarea>
+                <div class="form-group">
+                  <label for="character-creator-notes">Creator Notes</label>
+                  <textarea
+                    id="character-creator-notes"
+                    placeholder="Notes from the creator..."
+                    rows="2"
+                  ></textarea>
+                </div>
+              </div>
             </div>
 
             <div id="character-message" class="validation-message"></div>
 
-            <button type="submit" id="save-character-btn" class="btn-primary">
-              Save Character
-            </button>
-            <button type="button" id="delete-character-btn" class="btn-danger">
-              Delete Character
-            </button>
+            <div style="display: flex; gap: 8px;">
+              <button type="submit" id="save-character-btn" class="btn-primary" style="flex: 1;">
+                Save Character
+              </button>
+              <button type="button" id="delete-character-btn" class="btn-danger">
+                Delete
+              </button>
+            </div>
 
-            <div class="form-group" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-              <label>Character Card Import/Export</label>
-              <div style="display: flex; gap: 0.5rem;">
-                <button type="button" id="import-character-btn" class="btn-secondary" style="flex: 1;">
-                  Import v2 Card
-                </button>
-                <button type="button" id="export-character-btn" class="btn-secondary" style="flex: 1;">
-                  Export v2 Card
-                </button>
-              </div>
+            <div style="display: flex; gap: 8px;">
+              <button type="button" id="import-character-btn" class="btn-secondary" style="flex: 1;">
+                Import v2 Card
+              </button>
+              <button type="button" id="export-character-btn" class="btn-secondary" style="flex: 1;">
+                Export v2 Card
+              </button>
             </div>
           </form>
         </div>

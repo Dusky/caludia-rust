@@ -821,14 +821,16 @@ function setStatus(text, type = 'default') {
 
 // Show/hide settings
 async function showSettings() {
-  settingsPanel.style.display = 'block';
-  chatView.style.display = 'none';
+  const overlay = document.getElementById('settings-overlay');
+  settingsPanel.classList.add('open');
+  overlay.classList.add('show');
   await loadCharacterSettings();
 }
 
 function hideSettings() {
-  settingsPanel.style.display = 'none';
-  chatView.style.display = 'flex';
+  const overlay = document.getElementById('settings-overlay');
+  settingsPanel.classList.remove('open');
+  overlay.classList.remove('show');
 }
 
 // Tab switching
@@ -1015,6 +1017,7 @@ function handleAvatarRemove() {
 function setupAppControls() {
   document.getElementById('settings-btn').addEventListener('click', showSettings);
   document.getElementById('close-settings-btn').addEventListener('click', hideSettings);
+  document.getElementById('settings-overlay').addEventListener('click', hideSettings);
   document.getElementById('clear-btn').addEventListener('click', clearHistory);
   characterSelect.addEventListener('change', handleCharacterSwitch);
   newCharacterBtn.addEventListener('click', handleNewCharacter);
@@ -1028,6 +1031,14 @@ function setupAppControls() {
   document.getElementById('remove-avatar-btn').addEventListener('click', handleAvatarRemove);
   document.getElementById('import-character-btn').addEventListener('click', handleImportCharacter);
   document.getElementById('export-character-btn').addEventListener('click', handleExportCharacter);
+
+  // Setup collapsible sections
+  document.querySelectorAll('.settings-section-header').forEach(header => {
+    header.addEventListener('click', () => {
+      const section = header.parentElement;
+      section.classList.toggle('collapsed');
+    });
+  });
 }
 
 // Keyboard shortcuts
