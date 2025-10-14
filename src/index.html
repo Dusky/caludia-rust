@@ -136,6 +136,27 @@
             </div>
 
             <div class="form-group">
+              <label for="character-avatar">Avatar (Optional)</label>
+              <div class="avatar-upload">
+                <div id="avatar-preview" class="avatar-preview">
+                  <div class="avatar-circle-large"></div>
+                </div>
+                <input
+                  type="file"
+                  id="character-avatar"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  style="display: none;"
+                />
+                <button type="button" id="upload-avatar-btn" class="btn-secondary">
+                  Choose Image
+                </button>
+                <button type="button" id="remove-avatar-btn" class="btn-secondary" style="display: none;">
+                  Remove
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
               <label for="character-system-prompt">System Prompt</label>
               <textarea
                 id="character-system-prompt"
@@ -192,6 +213,14 @@
           <span id="status-text" class="status-text">Ready</span>
         </div>
       </footer>
+    </div>
+
+    <!-- Avatar zoom modal -->
+    <div id="avatar-modal" class="avatar-modal" style="display: none;">
+      <div class="avatar-modal-overlay"></div>
+      <div class="avatar-modal-content">
+        <img id="avatar-modal-img" src="" alt="Avatar" />
+      </div>
     </div>
   </body>
 </html>

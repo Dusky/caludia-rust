@@ -113,6 +113,15 @@ fn get_character_history_path(character_id: &str) -> PathBuf {
     PathBuf::from(home).join(format!(".config/claudia/history_{}.json", character_id))
 }
 
+fn get_avatars_dir() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/avatars")
+}
+
+fn get_avatar_path(filename: &str) -> PathBuf {
+    get_avatars_dir().join(filename)
+}
+
 fn load_config() -> Option<ApiConfig> {
     let path = get_config_path();
     if let Ok(contents) = fs::read_to_string(path) {
@@ -217,13 +226,71 @@ fn update_character(
     system_prompt: String,
     greeting: Option<String>,
     personality: Option<String>,
+    avatar_path: Option<String>,
 ) -> Result<(), String> {
     let mut character = get_active_character();
     character.name = name;
     character.system_prompt = system_prompt;
     character.greeting = greeting;
     character.personality = personality;
+    character.avatar_path = avatar_path;
     save_character(&character)
+}
+
+#[tauri::command]
+fn upload_avatar(source_path: String, character_id: String) -> Result<String, String> {
+    // Create avatars directory if it doesn't exist
+    let avatars_dir = get_avatars_dir();
+    fs::create_dir_all(&avatars_dir).map_err(|e| e.to_string())?;
+
+    // Get file extension
+    let source = PathBuf::from(&source_path);
+    let extension = source
+        .extension()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| "Invalid file extension".to_string())?;
+
+    // Create unique filename: character_id + extension
+    let filename = format!("{}.{}", character_id, extension);
+    let dest_path = get_avatar_path(&filename);
+
+    // Copy file
+    fs::copy(&source, &dest_path).map_err(|e| format!("Failed to copy file: {}", e))?;
+
+    Ok(filename)
+}
+
+#[tauri::command]
+async fn select_and_upload_avatar(app_handle: tauri::AppHandle, character_id: String) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Open file dialog
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
+        .blocking_pick_file();
+
+    if let Some(path) = file_path {
+        // Upload the selected file
+        let path_str = path.as_path()
+            .ok_or_else(|| "Could not get file path".to_string())?
+            .to_string_lossy()
+            .to_string();
+        upload_avatar(path_str, character_id)
+    } else {
+        Err("No file selected".to_string())
+    }
+}
+
+#[tauri::command]
+fn get_avatar_full_path(avatar_filename: String) -> Result<String, String> {
+    let path = get_avatar_path(&avatar_filename);
+    if path.exists() {
+        Ok(path.to_string_lossy().to_string())
+    } else {
+        Err("Avatar file not found".to_string())
+    }
 }
 
 #[tauri::command]
@@ -485,6 +552,17 @@ fn delete_character(character_id: String) -> Result<(), String> {
         return Err("Cannot delete the default character.".to_string());
     }
 
+    // Get character to check for avatar
+    if let Some(character) = load_character(&character_id) {
+        // Remove avatar if it exists
+        if let Some(avatar_filename) = character.avatar_path {
+            let avatar_path = get_avatar_path(&avatar_filename);
+            if avatar_path.exists() {
+                fs::remove_file(avatar_path).ok();
+            }
+        }
+    }
+
     // Remove character file
     let path = get_character_path(&character_id);
     if path.exists() {
@@ -543,6 +621,7 @@ fn set_active_character(character_id: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             chat,
             chat_stream,
@@ -553,6 +632,9 @@ pub fn run() {
             clear_chat_history,
             get_character,
             update_character,
+            upload_avatar,
+            select_and_upload_avatar,
+            get_avatar_full_path,
             list_characters,
             create_character,
             delete_character,

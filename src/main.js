@@ -12,6 +12,66 @@ let characterHeaderName;
 let newCharacterBtn;
 
 let currentCharacter = null;
+let pendingAvatarPath = null;
+
+// Helper function to get avatar URL
+async function getAvatarUrl(avatarFilename) {
+  if (!avatarFilename) return null;
+  try {
+    const fullPath = await invoke('get_avatar_full_path', { avatarFilename });
+    console.log('Avatar full path:', fullPath);
+
+    // Try to use convertFileSrc if available
+    if (window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.convertFileSrc) {
+      const url = window.__TAURI__.core.convertFileSrc(fullPath);
+      console.log('Converted URL:', url);
+      return url;
+    } else {
+      // Fallback to using the path directly with proper protocol
+      const url = `asset://localhost/${fullPath}`;
+      console.log('Using asset protocol URL:', url);
+      return url;
+    }
+  } catch (error) {
+    console.error('Failed to get avatar URL for', avatarFilename, ':', error);
+    return null;
+  }
+}
+
+// Show avatar in modal
+function showAvatarModal(avatarUrl) {
+  const modal = document.getElementById('avatar-modal');
+  const modalImg = document.getElementById('avatar-modal-img');
+
+  modalImg.src = avatarUrl;
+  modal.style.display = 'flex';
+
+  // Fade in animation
+  modal.style.opacity = '0';
+  setTimeout(() => {
+    modal.style.opacity = '1';
+    modal.style.transition = 'opacity 0.2s ease';
+  }, 10);
+}
+
+// Hide avatar modal
+function hideAvatarModal() {
+  const modal = document.getElementById('avatar-modal');
+  modal.style.opacity = '0';
+  setTimeout(() => {
+    modal.style.display = 'none';
+  }, 200);
+}
+
+// Make avatar clickable
+function makeAvatarClickable(avatarElement, avatarUrl) {
+  if (!avatarUrl) return;
+
+  avatarElement.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showAvatarModal(avatarUrl);
+  });
+}
 
 // Auto-resize textarea
 function autoResize(textarea) {
@@ -26,7 +86,16 @@ function addMessage(content, isUser = false) {
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar-circle';
-  // TODO: Set avatar image
+
+  // Set avatar image for assistant messages
+  if (!isUser && currentCharacter && currentCharacter.avatar_path) {
+    getAvatarUrl(currentCharacter.avatar_path).then(url => {
+      if (url) {
+        avatar.style.backgroundImage = `url('${url}')`;
+        makeAvatarClickable(avatar, url);
+      }
+    });
+  }
 
   const contentDiv = document.createElement('div');
   contentDiv.className = 'message-content';
@@ -186,6 +255,16 @@ async function handleSubmit(e) {
 
     const avatar = document.createElement('div');
     avatar.className = 'avatar-circle';
+
+    // Set avatar image for streaming messages
+    if (currentCharacter && currentCharacter.avatar_path) {
+      getAvatarUrl(currentCharacter.avatar_path).then(url => {
+        if (url) {
+          avatar.style.backgroundImage = `url('${url}')`;
+          makeAvatarClickable(avatar, url);
+        }
+      });
+    }
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
@@ -384,6 +463,55 @@ async function handleSaveSettings(e) {
   }
 }
 
+// Avatar upload handling
+async function handleAvatarUpload() {
+  const characterMsg = document.getElementById('character-message');
+
+  try {
+    const characterId = document.getElementById('character-settings-select').value;
+    const avatarFilename = await invoke('select_and_upload_avatar', {
+      characterId: characterId
+    });
+
+    pendingAvatarPath = avatarFilename;
+
+    // Update preview
+    const avatarPreview = document.querySelector('.avatar-circle-large');
+    const avatarUrl = await getAvatarUrl(avatarFilename);
+    if (avatarUrl) {
+      avatarPreview.style.backgroundImage = `url('${avatarUrl}')`;
+    }
+    document.getElementById('remove-avatar-btn').style.display = 'inline-block';
+
+    characterMsg.textContent = 'Avatar uploaded. Click "Save Character" to apply.';
+    characterMsg.className = 'validation-message success';
+    setTimeout(() => {
+      characterMsg.style.display = 'none';
+    }, 3000);
+  } catch (error) {
+    console.error('Avatar upload error:', error);
+    // Don't show error if user just cancelled the dialog
+    if (error && !error.toString().includes('No file selected')) {
+      characterMsg.textContent = `Failed to upload avatar: ${error}`;
+      characterMsg.className = 'validation-message error';
+    }
+  }
+}
+
+function handleAvatarRemove() {
+  pendingAvatarPath = null;
+  const avatarPreview = document.querySelector('.avatar-circle-large');
+  avatarPreview.style.backgroundImage = '';
+  document.getElementById('remove-avatar-btn').style.display = 'none';
+
+  const characterMsg = document.getElementById('character-message');
+  characterMsg.textContent = 'Avatar removed. Click "Save Character" to apply.';
+  characterMsg.className = 'validation-message success';
+  setTimeout(() => {
+    characterMsg.style.display = 'none';
+  }, 3000);
+}
+
 // App controls
 function setupAppControls() {
   document.getElementById('settings-btn').addEventListener('click', showSettings);
@@ -397,6 +525,8 @@ function setupAppControls() {
     await invoke('set_active_character', { characterId });
     await loadCharacterSettings();
   });
+  document.getElementById('upload-avatar-btn').addEventListener('click', handleAvatarUpload);
+  document.getElementById('remove-avatar-btn').addEventListener('click', handleAvatarRemove);
 }
 
 // Keyboard shortcuts
@@ -432,6 +562,19 @@ async function loadCharacters() {
     characterSelect.value = activeCharacter.id;
     characterHeaderName.textContent = activeCharacter.name;
     currentCharacter = activeCharacter;
+
+    // Update header avatar
+    const headerAvatar = document.querySelector('.avatar-circle');
+    if (headerAvatar && activeCharacter.avatar_path) {
+      getAvatarUrl(activeCharacter.avatar_path).then(url => {
+        if (url) {
+          headerAvatar.style.backgroundImage = `url('${url}')`;
+          makeAvatarClickable(headerAvatar, url);
+        }
+      });
+    } else if (headerAvatar) {
+      headerAvatar.style.backgroundImage = '';
+    }
 
     await loadChatHistory();
   } catch (error) {
@@ -552,6 +695,24 @@ async function loadCharacterSettings() {
     document.getElementById('character-system-prompt').value = character.system_prompt;
     document.getElementById('character-greeting').value = character.greeting || '';
     document.getElementById('character-personality').value = character.personality || '';
+
+    // Load avatar preview
+    const avatarPreview = document.querySelector('.avatar-circle-large');
+    const removeAvatarBtn = document.getElementById('remove-avatar-btn');
+    if (character.avatar_path) {
+      getAvatarUrl(character.avatar_path).then(url => {
+        if (url) {
+          avatarPreview.style.backgroundImage = `url('${url}')`;
+          makeAvatarClickable(avatarPreview, url);
+        }
+      });
+      removeAvatarBtn.style.display = 'inline-block';
+      pendingAvatarPath = character.avatar_path;
+    } else {
+      avatarPreview.style.backgroundImage = '';
+      removeAvatarBtn.style.display = 'none';
+      pendingAvatarPath = null;
+    }
   } catch (error) {
     console.error('Failed to load character:', error);
   }
@@ -582,7 +743,8 @@ async function handleSaveCharacter(e) {
       name,
       systemPrompt,
       greeting,
-      personality
+      personality,
+      avatarPath: pendingAvatarPath
     });
     characterMsg.textContent = 'Character saved successfully';
     characterMsg.className = 'validation-message success';
@@ -653,6 +815,19 @@ window.addEventListener('DOMContentLoaded', () => {
   setupAppControls();
   setupKeyboardShortcuts();
   setupTabs();
+
+  // Avatar modal close handlers
+  const avatarModal = document.getElementById('avatar-modal');
+  const avatarModalOverlay = document.querySelector('.avatar-modal-overlay');
+
+  avatarModalOverlay.addEventListener('click', hideAvatarModal);
+
+  // ESC key to close modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && avatarModal.style.display !== 'none') {
+      hideAvatarModal();
+    }
+  });
 
   messageInput.focus();
   setStatus('Ready');
