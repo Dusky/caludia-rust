@@ -14,6 +14,138 @@ let newCharacterBtn;
 let currentCharacter = null;
 let pendingAvatarPath = null;
 
+// Theme definitions
+const themes = {
+  dark: {
+    name: 'Dark (Default)',
+    bgPrimary: '#1a1a1a',
+    bgSecondary: '#252525',
+    bgTertiary: '#2f2f2f',
+    textPrimary: '#e8e8e8',
+    textSecondary: '#a0a0a0',
+    accent: '#6366f1',
+    accentHover: '#4f46e5',
+    userMsg: '#4f46e5',
+    assistantMsg: '#2f2f2f',
+    border: '#3a3a3a',
+    gradient: 'linear-gradient(135deg, #1a1a1a 0%, #2a1a2a 100%)',
+    glow: 'rgba(99, 102, 241, 0.1)'
+  },
+  darker: {
+    name: 'Darker',
+    bgPrimary: '#0a0a0a',
+    bgSecondary: '#141414',
+    bgTertiary: '#1a1a1a',
+    textPrimary: '#e0e0e0',
+    textSecondary: '#909090',
+    accent: '#7c3aed',
+    accentHover: '#6d28d9',
+    userMsg: '#6d28d9',
+    assistantMsg: '#1a1a1a',
+    border: '#2a2a2a',
+    gradient: 'linear-gradient(135deg, #0a0a0a 0%, #1a0a1a 100%)',
+    glow: 'rgba(124, 58, 237, 0.1)'
+  },
+  midnight: {
+    name: 'Midnight Blue',
+    bgPrimary: '#0f1419',
+    bgSecondary: '#1a2332',
+    bgTertiary: '#243447',
+    textPrimary: '#e6f1ff',
+    textSecondary: '#8892a0',
+    accent: '#3b82f6',
+    accentHover: '#2563eb',
+    userMsg: '#1e40af',
+    assistantMsg: '#243447',
+    border: '#2d3e54',
+    gradient: 'linear-gradient(135deg, #0f1419 0%, #1a2845 100%)',
+    glow: 'rgba(59, 130, 246, 0.1)'
+  },
+  forest: {
+    name: 'Forest',
+    bgPrimary: '#0d1b14',
+    bgSecondary: '#162820',
+    bgTertiary: '#1f352b',
+    textPrimary: '#e8f5e9',
+    textSecondary: '#90a89f',
+    accent: '#10b981',
+    accentHover: '#059669',
+    userMsg: '#047857',
+    assistantMsg: '#1f352b',
+    border: '#2d4a3a',
+    gradient: 'linear-gradient(135deg, #0d1b14 0%, #1a2820 100%)',
+    glow: 'rgba(16, 185, 129, 0.1)'
+  },
+  sunset: {
+    name: 'Sunset',
+    bgPrimary: '#1a1214',
+    bgSecondary: '#261a1e',
+    bgTertiary: '#332228',
+    textPrimary: '#fde8e8',
+    textSecondary: '#b89090',
+    accent: '#f97316',
+    accentHover: '#ea580c',
+    userMsg: '#c2410c',
+    assistantMsg: '#332228',
+    border: '#4a3238',
+    gradient: 'linear-gradient(135deg, #1a1214 0%, #2a1a1e 100%)',
+    glow: 'rgba(249, 115, 22, 0.1)'
+  },
+  light: {
+    name: 'Light',
+    bgPrimary: '#ffffff',
+    bgSecondary: '#f5f5f5',
+    bgTertiary: '#e8e8e8',
+    textPrimary: '#1a1a1a',
+    textSecondary: '#666666',
+    accent: '#6366f1',
+    accentHover: '#4f46e5',
+    userMsg: '#6366f1',
+    assistantMsg: '#f0f0f0',
+    border: '#d0d0d0',
+    gradient: 'linear-gradient(135deg, #ffffff 0%, #f5f0ff 100%)',
+    glow: 'rgba(99, 102, 241, 0.05)'
+  }
+};
+
+// Apply theme
+function applyTheme(themeName) {
+  const theme = themes[themeName];
+  if (!theme) return;
+
+  const root = document.documentElement;
+  root.style.setProperty('--bg-primary', theme.bgPrimary);
+  root.style.setProperty('--bg-secondary', theme.bgSecondary);
+  root.style.setProperty('--bg-tertiary', theme.bgTertiary);
+  root.style.setProperty('--text-primary', theme.textPrimary);
+  root.style.setProperty('--text-secondary', theme.textSecondary);
+  root.style.setProperty('--accent', theme.accent);
+  root.style.setProperty('--accent-hover', theme.accentHover);
+  root.style.setProperty('--user-msg', theme.userMsg);
+  root.style.setProperty('--assistant-msg', theme.assistantMsg);
+  root.style.setProperty('--border', theme.border);
+
+  // Update gradient and glow
+  const appContainer = document.querySelector('.app-container');
+  if (appContainer) {
+    appContainer.style.background = theme.gradient;
+    const glow = appContainer.querySelector('::before');
+  }
+
+  // Store preference
+  localStorage.setItem('claudia-theme', themeName);
+}
+
+// Load saved theme
+function loadSavedTheme() {
+  const savedTheme = localStorage.getItem('claudia-theme') || 'dark';
+  const themeSelect = document.getElementById('theme-select');
+  if (themeSelect) {
+    themeSelect.value = savedTheme;
+  }
+  applyTheme(savedTheme);
+}
+
 // Helper function to get avatar URL
 async function getAvatarUrl(avatarFilename) {
   if (!avatarFilename) return null;
@@ -1039,6 +1171,14 @@ function setupAppControls() {
       section.classList.toggle('collapsed');
     });
   });
+
+  // Setup theme selector
+  const themeSelect = document.getElementById('theme-select');
+  if (themeSelect) {
+    themeSelect.addEventListener('change', (e) => {
+      applyTheme(e.target.value);
+    });
+  }
 }
 
 // Keyboard shortcuts
@@ -1432,6 +1572,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   messageInput.focus();
   setStatus('Ready');
+
+  // Load saved theme before anything else
+  loadSavedTheme();
 
   loadExistingConfig();
 });
