@@ -10,6 +10,11 @@
 - Character Avatars with upload and zoom
 - Expanded Character Editor (all v2/v3 fields)
 
+### 🎯 Current Focus: UI/UX Improvements
+**Decision:** Before adding complex roleplay features, we're focusing on polishing the existing UI/UX to establish a solid foundation. This includes better visual design, improved workflows, and enhanced user experience.
+
+See "Phase 7: Polish & UX" section for details on UI improvements being prioritized.
+
 ## Phase 1: Core Roleplay Infrastructure (High Priority)
 **Goal: Enable basic roleplay-focused prompt engineering**
 
