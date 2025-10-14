@@ -9,7 +9,12 @@
       "Bash(WAYLAND_DISPLAY=\"\" DISPLAY=:0 ./src-tauri/target/debug/tauri-app:*)",
       "Bash(ldd:*)",
       "Read(//home/matt/.config/claudia/**)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(cat:*)",
+      "Bash(npm run tauri:dev:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

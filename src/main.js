@@ -971,6 +971,8 @@ function setupAppControls() {
   });
   document.getElementById('upload-avatar-btn').addEventListener('click', handleAvatarUpload);
   document.getElementById('remove-avatar-btn').addEventListener('click', handleAvatarRemove);
+  document.getElementById('import-character-btn').addEventListener('click', handleImportCharacter);
+  document.getElementById('export-character-btn').addEventListener('click', handleExportCharacter);
 }
 
 // Keyboard shortcuts
@@ -1073,6 +1075,51 @@ async function handleDeleteCharacter() {
     } catch (error) {
       console.error('Failed to delete character:', error);
       addMessage(`Failed to delete character: ${error}`, false);
+    }
+  }
+}
+
+// Handle character card import
+async function handleImportCharacter() {
+  const characterMsg = document.getElementById('character-message');
+  try {
+    const importedCharacter = await invoke('import_character_card');
+    characterMsg.textContent = `Successfully imported ${importedCharacter.name}!`;
+    characterMsg.className = 'validation-message success';
+
+    // Reload characters and switch to the imported one
+    await loadCharacters();
+    await loadCharacterSettings();
+
+    setTimeout(() => {
+      characterMsg.style.display = 'none';
+    }, 3000);
+  } catch (error) {
+    console.error('Failed to import character:', error);
+    if (error && !error.toString().includes('No file selected') && !error.toString().includes('cancelled')) {
+      characterMsg.textContent = `Failed to import: ${error}`;
+      characterMsg.className = 'validation-message error';
+    }
+  }
+}
+
+// Handle character card export
+async function handleExportCharacter() {
+  const characterMsg = document.getElementById('character-message');
+  try {
+    const characterId = document.getElementById('character-settings-select').value;
+    const outputPath = await invoke('export_character_card', { characterId });
+    characterMsg.textContent = `Successfully exported to ${outputPath}`;
+    characterMsg.className = 'validation-message success';
+
+    setTimeout(() => {
+      characterMsg.style.display = 'none';
+    }, 3000);
+  } catch (error) {
+    console.error('Failed to export character:', error);
+    if (error && !error.toString().includes('cancelled')) {
+      characterMsg.textContent = `Failed to export: ${error}`;
+      characterMsg.className = 'validation-message error';
     }
   }
 }

@@ -1,9 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::io::BufWriter;
 use uuid::Uuid;
 use futures::StreamExt;
 use tauri::Emitter;
+use base64::Engine;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiConfig {
@@ -25,6 +27,93 @@ struct Character {
     greeting: Option<String>,
     personality: Option<String>,
     created_at: i64,
+
+    // V2 character card fields
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    scenario: Option<String>,
+    #[serde(default)]
+    mes_example: Option<String>,
+    #[serde(default)]
+    post_history_instructions: Option<String>,
+    #[serde(default)]
+    alternate_greetings: Vec<String>,
+    #[serde(default)]
+    character_book: Option<serde_json::Value>,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    creator: Option<String>,
+    #[serde(default)]
+    character_version: Option<String>,
+    #[serde(default)]
+    creator_notes: Option<String>,
+    #[serde(default)]
+    extensions: serde_json::Value,
+}
+
+// V2 character card specification structs
+#[derive(Debug, Serialize, Deserialize)]
+struct CharacterCardV2 {
+    spec: String,
+    spec_version: String,
+    data: CharacterCardV2Data,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CharacterCardV2Data {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    personality: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scenario: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    first_mes: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mes_example: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    system_prompt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    post_history_instructions: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    alternate_greetings: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    character_book: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    tags: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    creator: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    character_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    creator_notes: Option<String>,
+    #[serde(default)]
+    extensions: serde_json::Value,
+}
+
+impl From<Character> for CharacterCardV2Data {
+    fn from(character: Character) -> Self {
+        Self {
+            name: character.name,
+            description: character.description,
+            personality: character.personality,
+            scenario: character.scenario,
+            first_mes: character.greeting,
+            mes_example: character.mes_example,
+            system_prompt: Some(character.system_prompt),
+            post_history_instructions: character.post_history_instructions,
+            alternate_greetings: character.alternate_greetings,
+            character_book: character.character_book,
+            tags: character.tags,
+            creator: character.creator,
+            character_version: character.character_version,
+            creator_notes: character.creator_notes,
+            extensions: character.extensions,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,6 +267,147 @@ fn get_avatar_path(filename: &str) -> PathBuf {
     get_avatars_dir().join(filename)
 }
 
+// PNG Character Card Utilities
+fn read_character_card_from_png(png_path: &PathBuf) -> Result<CharacterCardV2Data, String> {
+    use png::Decoder;
+    use std::io::BufReader;
+
+    // Open and decode PNG
+    let file = fs::File::open(png_path)
+        .map_err(|e| format!("Failed to open PNG file: {}", e))?;
+    let decoder = Decoder::new(BufReader::new(file));
+    let reader = decoder.read_info()
+        .map_err(|e| format!("Failed to read PNG info: {}", e))?;
+
+    // Get metadata
+    let info = reader.info();
+
+    // Look for "chara" tEXt chunk
+    let mut chara_data = None;
+    for text_chunk in &info.uncompressed_latin1_text {
+        if text_chunk.keyword == "chara" {
+            chara_data = Some(text_chunk.text.clone());
+            break;
+        }
+    }
+
+    // Also check UTF-8 text chunks (iTXt)
+    if chara_data.is_none() {
+        for text_chunk in &info.utf8_text {
+            if text_chunk.keyword == "chara" {
+                let text = text_chunk.get_text()
+                    .map_err(|e| format!("Failed to read UTF-8 text chunk: {}", e))?;
+                chara_data = Some(text);
+                break;
+            }
+        }
+    }
+
+    let chara_text = chara_data
+        .ok_or_else(|| "No character card data found in PNG (missing 'chara' chunk)".to_string())?;
+
+    // Base64 decode
+    let json_bytes = base64::engine::general_purpose::STANDARD.decode(&chara_text)
+        .map_err(|e| format!("Failed to decode base64: {}", e))?;
+
+    // Convert to UTF-8 string
+    let json_str = String::from_utf8(json_bytes)
+        .map_err(|e| format!("Invalid UTF-8 in character data: {}", e))?;
+
+    // Parse as V2 card
+    let card: CharacterCardV2 = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse character card JSON: {}", e))?;
+
+    // Validate spec
+    if card.spec != "chara_card_v2" {
+        return Err(format!("Unsupported character card spec: {}", card.spec));
+    }
+
+    Ok(card.data)
+}
+
+fn write_character_card_to_png(
+    character: &Character,
+    source_png_path: &PathBuf,
+    output_png_path: &PathBuf,
+) -> Result<(), String> {
+    use image::io::Reader as ImageReader;
+    use png::{Encoder, ColorType, BitDepth, Compression};
+
+    // Load the source image
+    let img = ImageReader::open(source_png_path)
+        .map_err(|e| format!("Failed to open source image: {}", e))?
+        .decode()
+        .map_err(|e| format!("Failed to decode image: {}", e))?;
+
+    let rgba = img.to_rgba8();
+    let (width, height) = (rgba.width(), rgba.height());
+
+    // Build V2 card
+    let card = CharacterCardV2 {
+        spec: "chara_card_v2".to_string(),
+        spec_version: "2.0".to_string(),
+        data: CharacterCardV2Data::from(character.clone()),
+    };
+
+    // Serialize to JSON
+    let json_str = serde_json::to_string(&card)
+        .map_err(|e| format!("Failed to serialize character card: {}", e))?;
+
+    // Base64 encode
+    let b64_data = base64::engine::general_purpose::STANDARD.encode(json_str.as_bytes());
+
+    // Create output file
+    let file = fs::File::create(output_png_path)
+        .map_err(|e| format!("Failed to create output file: {}", e))?;
+    let w = BufWriter::new(file);
+
+    // Create PNG encoder
+    let mut encoder = Encoder::new(w, width, height);
+    encoder.set_color(ColorType::Rgba);
+    encoder.set_depth(BitDepth::Eight);
+    encoder.set_compression(Compression::Default);
+
+    // Add character data as tEXt chunk
+    encoder.add_text_chunk("chara".to_string(), b64_data)
+        .map_err(|e| format!("Failed to add text chunk: {}", e))?;
+
+    // Write PNG
+    let mut writer = encoder.write_header()
+        .map_err(|e| format!("Failed to write PNG header: {}", e))?;
+
+    writer.write_image_data(rgba.as_raw())
+        .map_err(|e| format!("Failed to write image data: {}", e))?;
+
+    writer.finish()
+        .map_err(|e| format!("Failed to finish writing PNG: {}", e))?;
+
+    Ok(())
+}
+
+fn create_placeholder_png(output_path: &PathBuf, character_name: &str) -> Result<(), String> {
+    use image::{ImageBuffer, Rgba};
+
+    // Create a 512x512 placeholder image with gradient
+    let width = 512;
+    let height = 512;
+    let mut img = ImageBuffer::new(width, height);
+
+    for (x, y, pixel) in img.enumerate_pixels_mut() {
+        // Create a simple gradient based on character name hash
+        let name_hash = character_name.bytes().fold(0u32, |acc, b| acc.wrapping_add(b as u32));
+        let r = ((name_hash % 200) + 55) as u8;
+        let g = ((x + y + name_hash) % 200 + 55) as u8;
+        let b = ((x.wrapping_mul(2) + y.wrapping_mul(3) + name_hash) % 200 + 55) as u8;
+        *pixel = Rgba([r, g, b, 255]);
+    }
+
+    img.save(output_path)
+        .map_err(|e| format!("Failed to save placeholder image: {}", e))?;
+
+    Ok(())
+}
+
 fn load_config() -> Option<ApiConfig> {
     let path = get_config_path();
     if let Ok(contents) = fs::read_to_string(path) {
@@ -252,6 +482,17 @@ fn create_default_character() -> Character {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64,
+        description: None,
+        scenario: None,
+        mes_example: None,
+        post_history_instructions: None,
+        alternate_greetings: Vec::new(),
+        character_book: None,
+        tags: Vec::new(),
+        creator: None,
+        character_version: None,
+        creator_notes: None,
+        extensions: serde_json::Value::Object(serde_json::Map::new()),
     }
 }
 
@@ -883,6 +1124,17 @@ fn create_character(name: String, system_prompt: String) -> Result<Character, St
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64,
+        description: None,
+        scenario: None,
+        mes_example: None,
+        post_history_instructions: None,
+        alternate_greetings: Vec::new(),
+        character_book: None,
+        tags: Vec::new(),
+        creator: None,
+        character_version: None,
+        creator_notes: None,
+        extensions: serde_json::Value::Object(serde_json::Map::new()),
     };
     save_character(&character)?;
     set_active_character(new_id)?;
@@ -960,6 +1212,143 @@ fn set_active_character(character_id: String) -> Result<(), String> {
     }
 }
 
+// Import character card from PNG
+#[tauri::command]
+async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Open file picker for PNG files
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Character Cards", &["png"])
+        .blocking_pick_file();
+
+    let png_path = if let Some(path) = file_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("No file selected".to_string());
+    };
+
+    // Read character data from PNG
+    let card_data = read_character_card_from_png(&png_path)?;
+
+    // Create new character ID
+    let new_id = Uuid::new_v4().to_string();
+
+    // Check for name conflicts and append number if needed
+    let mut final_name = card_data.name.clone();
+    let existing_chars = list_characters()?;
+    let mut counter = 1;
+    while existing_chars.iter().any(|c| c.name == final_name) {
+        final_name = format!("{} ({})", card_data.name, counter);
+        counter += 1;
+    }
+
+    // Save PNG as avatar
+    let avatar_filename = format!("{}.png", new_id);
+    let avatar_dest = get_avatar_path(&avatar_filename);
+
+    // Ensure avatars directory exists
+    fs::create_dir_all(get_avatars_dir()).map_err(|e| e.to_string())?;
+
+    // Copy PNG to avatars directory
+    fs::copy(&png_path, &avatar_dest)
+        .map_err(|e| format!("Failed to copy avatar: {}", e))?;
+
+    // Create Character from card data
+    let character = Character {
+        id: new_id.clone(),
+        name: final_name,
+        avatar_path: Some(avatar_filename),
+        system_prompt: card_data.system_prompt.unwrap_or_else(||
+            "You are a helpful AI assistant.".to_string()
+        ),
+        greeting: card_data.first_mes,
+        personality: card_data.personality,
+        created_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64,
+        description: card_data.description,
+        scenario: card_data.scenario,
+        mes_example: card_data.mes_example,
+        post_history_instructions: card_data.post_history_instructions,
+        alternate_greetings: card_data.alternate_greetings,
+        character_book: card_data.character_book,
+        tags: card_data.tags,
+        creator: card_data.creator,
+        character_version: card_data.character_version,
+        creator_notes: card_data.creator_notes,
+        extensions: card_data.extensions,
+    };
+
+    // Save character
+    save_character(&character)?;
+
+    // Set as active character
+    set_active_character(new_id)?;
+
+    Ok(character)
+}
+
+// Export character card to PNG
+#[tauri::command]
+async fn export_character_card(app_handle: tauri::AppHandle, character_id: String) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Load character
+    let character = load_character(&character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    // Get source PNG (avatar or create placeholder)
+    let source_png = if let Some(avatar_filename) = &character.avatar_path {
+        let avatar_path = get_avatar_path(avatar_filename);
+        if avatar_path.exists() {
+            avatar_path
+        } else {
+            // Avatar file missing, create placeholder
+            let temp_path = std::env::temp_dir().join(format!("{}_temp.png", character.id));
+            create_placeholder_png(&temp_path, &character.name)?;
+            temp_path
+        }
+    } else {
+        // No avatar, create placeholder
+        let temp_path = std::env::temp_dir().join(format!("{}_temp.png", character.id));
+        create_placeholder_png(&temp_path, &character.name)?;
+        temp_path
+    };
+
+    // Open save dialog
+    let save_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Character Card", &["png"])
+        .set_file_name(&format!("{}.png", character.name))
+        .blocking_save_file();
+
+    let output_path = if let Some(path) = save_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("Save cancelled".to_string());
+    };
+
+    // Write character card to PNG
+    write_character_card_to_png(&character, &source_png, &output_path)?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -989,7 +1378,9 @@ pub fn run() {
             list_characters,
             create_character,
             delete_character,
-            set_active_character
+            set_active_character,
+            import_character_card,
+            export_character_card
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
