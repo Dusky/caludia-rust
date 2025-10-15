@@ -846,6 +846,99 @@ fn get_api_config() -> Result<ApiConfig, String> {
     load_config().ok_or_else(|| "No config found".to_string())
 }
 
+// Roleplay Context Injection Logic
+
+// Scan messages for World Info keywords and return activated entries
+fn scan_for_world_info(messages: &[Message], world_info: &[WorldInfoEntry], scan_depth: usize) -> Vec<WorldInfoEntry> {
+    let mut activated_entries = Vec::new();
+
+    // Scan the last N messages (scan_depth)
+    let messages_to_scan: Vec<&Message> = messages.iter()
+        .rev()
+        .take(scan_depth)
+        .collect();
+
+    for entry in world_info {
+        if !entry.enabled {
+            continue;
+        }
+
+        // Check if any keyword matches in the scanned messages
+        let mut activated = false;
+        for message in &messages_to_scan {
+            let content = message.get_content();
+
+            for keyword in &entry.keys {
+                let matches = if entry.case_sensitive {
+                    content.contains(keyword)
+                } else {
+                    content.to_lowercase().contains(&keyword.to_lowercase())
+                };
+
+                if matches {
+                    activated = true;
+                    break;
+                }
+            }
+
+            if activated {
+                break;
+            }
+        }
+
+        if activated {
+            activated_entries.push(entry.clone());
+        }
+    }
+
+    // Sort by priority (higher first)
+    activated_entries.sort_by(|a, b| b.priority.cmp(&a.priority));
+
+    activated_entries
+}
+
+// Build injected context from roleplay settings
+fn build_roleplay_context(
+    _character: &Character,
+    messages: &[Message],
+    settings: &RoleplaySettings,
+) -> (String, Option<String>) {
+    let mut system_additions = String::new();
+    let mut authors_note_content = None;
+
+    // 1. Add Persona to system prompt
+    if settings.persona_enabled {
+        if let Some(name) = &settings.persona_name {
+            if let Some(desc) = &settings.persona_description {
+                system_additions.push_str(&format!("\n\n[{{{{user}}}}'s Persona: {} - {}]", name, desc));
+            }
+        }
+    }
+
+    // 2. Scan for World Info and add to system prompt
+    let scan_depth = 20; // Scan last 20 messages
+    let activated_entries = scan_for_world_info(messages, &settings.world_info, scan_depth);
+
+    if !activated_entries.is_empty() {
+        system_additions.push_str("\n\n[Relevant World Information:");
+        for entry in activated_entries {
+            system_additions.push_str(&format!("\n- {}", entry.content));
+        }
+        system_additions.push_str("]");
+    }
+
+    // 3. Store Author's Note for later injection
+    if settings.authors_note_enabled {
+        if let Some(note) = &settings.authors_note {
+            if !note.is_empty() {
+                authors_note_content = Some(note.clone());
+            }
+        }
+    }
+
+    (system_additions, authors_note_content)
+}
+
 #[tauri::command]
 async fn chat(message: String) -> Result<String, String> {
     let config = load_config().ok_or_else(|| "API not configured".to_string())?;
@@ -863,8 +956,13 @@ async fn chat(message: String) -> Result<String, String> {
         format!("{}/v1/chat/completions", base)
     };
 
+    // Load roleplay settings and build context
+    let roleplay_settings = load_roleplay_settings(&character.id);
+    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+
     // Build messages with system prompt first - use simple Message for API
-    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
 
     // Add history messages with current swipe content
@@ -872,6 +970,16 @@ async fn chat(message: String) -> Result<String, String> {
         let mut api_msg = Message::new_user(msg.get_content().to_string());
         api_msg.role = msg.role.clone();
         api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note before last 3 messages if it exists
+    if let Some(note) = authors_note {
+        if api_messages.len() > 4 { // system + at least 3 messages
+            let insert_pos = api_messages.len().saturating_sub(3);
+            let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
+            note_msg.role = "system".to_string();
+            api_messages.insert(insert_pos, note_msg);
+        }
     }
 
     let request = ChatRequest {
@@ -930,8 +1038,13 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
         format!("{}/v1/chat/completions", base)
     };
 
+    // Load roleplay settings and build context
+    let roleplay_settings = load_roleplay_settings(&character.id);
+    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+
     // Build messages with system prompt first - use simple Message for API
-    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
 
     // Add history messages with current swipe content
@@ -939,6 +1052,16 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
         let mut api_msg = Message::new_user(msg.get_content().to_string());
         api_msg.role = msg.role.clone();
         api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note before last 3 messages if it exists
+    if let Some(note) = authors_note {
+        if api_messages.len() > 4 { // system + at least 3 messages
+            let insert_pos = api_messages.len().saturating_sub(3);
+            let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
+            note_msg.role = "system".to_string();
+            api_messages.insert(insert_pos, note_msg);
+        }
     }
 
     let request = StreamChatRequest {
@@ -1090,8 +1213,13 @@ async fn generate_response_only() -> Result<String, String> {
         format!("{}/v1/chat/completions", base)
     };
 
-    // Build messages with system prompt first
-    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    // Load roleplay settings and build context
+    let roleplay_settings = load_roleplay_settings(&character.id);
+    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+
+    // Build messages with enhanced system prompt first
+    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
 
     // Add existing history (which already includes the user message)
@@ -1099,6 +1227,16 @@ async fn generate_response_only() -> Result<String, String> {
         let mut api_msg = Message::new_user(msg.get_content().to_string());
         api_msg.role = msg.role.clone();
         api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note before last 3 messages if it exists
+    if let Some(note) = authors_note {
+        if api_messages.len() > 4 { // system + at least 3 messages
+            let insert_pos = api_messages.len().saturating_sub(3);
+            let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
+            note_msg.role = "system".to_string();
+            api_messages.insert(insert_pos, note_msg);
+        }
     }
 
     let request = ChatRequest {
@@ -1148,8 +1286,13 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
         format!("{}/v1/chat/completions", base)
     };
 
-    // Build messages with system prompt first
-    let mut api_messages = vec![Message::new_user(character.system_prompt.clone())];
+    // Load roleplay settings and build context
+    let roleplay_settings = load_roleplay_settings(&character.id);
+    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+
+    // Build messages with enhanced system prompt first
+    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
 
     // Add existing history (which already includes the user message)
@@ -1157,6 +1300,16 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
         let mut api_msg = Message::new_user(msg.get_content().to_string());
         api_msg.role = msg.role.clone();
         api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note before last 3 messages if it exists
+    if let Some(note) = authors_note {
+        if api_messages.len() > 4 { // system + at least 3 messages
+            let insert_pos = api_messages.len().saturating_sub(3);
+            let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
+            note_msg.role = "system".to_string();
+            api_messages.insert(insert_pos, note_msg);
+        }
     }
 
     let request = StreamChatRequest {
