@@ -241,6 +241,49 @@ impl Message {
     }
 }
 
+// World Info / Lorebook Entry
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WorldInfoEntry {
+    id: String,
+    keys: Vec<String>, // Keywords that trigger this entry
+    content: String, // The content to inject
+    enabled: bool,
+    #[serde(default)]
+    case_sensitive: bool,
+    #[serde(default)]
+    priority: i32, // Higher priority entries are injected first
+}
+
+// Roleplay Settings (Author's Note, Persona, World Info)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RoleplaySettings {
+    #[serde(default)]
+    authors_note: Option<String>,
+    #[serde(default)]
+    authors_note_enabled: bool,
+    #[serde(default)]
+    persona_name: Option<String>,
+    #[serde(default)]
+    persona_description: Option<String>,
+    #[serde(default)]
+    persona_enabled: bool,
+    #[serde(default)]
+    world_info: Vec<WorldInfoEntry>,
+}
+
+impl Default for RoleplaySettings {
+    fn default() -> Self {
+        Self {
+            authors_note: None,
+            authors_note_enabled: false,
+            persona_name: None,
+            persona_description: None,
+            persona_enabled: false,
+            world_info: Vec::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChatHistory {
     messages: Vec<Message>,
@@ -328,6 +371,30 @@ fn get_avatars_dir() -> PathBuf {
 
 fn get_avatar_path(filename: &str) -> PathBuf {
     get_avatars_dir().join(filename)
+}
+
+fn get_roleplay_settings_path(character_id: &str) -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(format!(".config/claudia/roleplay_{}.json", character_id))
+}
+
+fn load_roleplay_settings(character_id: &str) -> RoleplaySettings {
+    let path = get_roleplay_settings_path(character_id);
+    if let Ok(contents) = fs::read_to_string(path) {
+        serde_json::from_str(&contents).unwrap_or_default()
+    } else {
+        RoleplaySettings::default()
+    }
+}
+
+fn save_roleplay_settings(character_id: &str, settings: &RoleplaySettings) -> Result<(), String> {
+    let path = get_roleplay_settings_path(character_id);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let contents = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
+    fs::write(path, contents).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 // PNG Character Card Utilities
@@ -1512,6 +1579,98 @@ async fn import_chat_history(app_handle: tauri::AppHandle) -> Result<usize, Stri
     Ok(message_count)
 }
 
+// Roleplay Settings Commands
+
+#[tauri::command]
+fn get_roleplay_settings(character_id: String) -> Result<RoleplaySettings, String> {
+    Ok(load_roleplay_settings(&character_id))
+}
+
+#[tauri::command]
+fn update_authors_note(
+    character_id: String,
+    content: Option<String>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.authors_note = content;
+    settings.authors_note_enabled = enabled;
+    save_roleplay_settings(&character_id, &settings)
+}
+
+#[tauri::command]
+fn update_persona(
+    character_id: String,
+    name: Option<String>,
+    description: Option<String>,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.persona_name = name;
+    settings.persona_description = description;
+    settings.persona_enabled = enabled;
+    save_roleplay_settings(&character_id, &settings)
+}
+
+#[tauri::command]
+fn add_world_info_entry(
+    character_id: String,
+    keys: Vec<String>,
+    content: String,
+    priority: i32,
+    case_sensitive: bool,
+) -> Result<WorldInfoEntry, String> {
+    let mut settings = load_roleplay_settings(&character_id);
+
+    let entry = WorldInfoEntry {
+        id: Uuid::new_v4().to_string(),
+        keys,
+        content,
+        enabled: true,
+        case_sensitive,
+        priority,
+    };
+
+    settings.world_info.push(entry.clone());
+    save_roleplay_settings(&character_id, &settings)?;
+
+    Ok(entry)
+}
+
+#[tauri::command]
+fn update_world_info_entry(
+    character_id: String,
+    entry_id: String,
+    keys: Vec<String>,
+    content: String,
+    enabled: bool,
+    priority: i32,
+    case_sensitive: bool,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+
+    if let Some(entry) = settings.world_info.iter_mut().find(|e| e.id == entry_id) {
+        entry.keys = keys;
+        entry.content = content;
+        entry.enabled = enabled;
+        entry.priority = priority;
+        entry.case_sensitive = case_sensitive;
+        save_roleplay_settings(&character_id, &settings)
+    } else {
+        Err("World Info entry not found".to_string())
+    }
+}
+
+#[tauri::command]
+fn delete_world_info_entry(
+    character_id: String,
+    entry_id: String,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.world_info.retain(|e| e.id != entry_id);
+    save_roleplay_settings(&character_id, &settings)
+}
+
 // Export character card to PNG
 #[tauri::command]
 async fn export_character_card(app_handle: tauri::AppHandle, character_id: String) -> Result<String, String> {
@@ -1597,7 +1756,13 @@ pub fn run() {
             import_character_card,
             export_character_card,
             export_chat_history,
-            import_chat_history
+            import_chat_history,
+            get_roleplay_settings,
+            update_authors_note,
+            update_persona,
+            add_world_info_entry,
+            update_world_info_entry,
+            delete_world_info_entry
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

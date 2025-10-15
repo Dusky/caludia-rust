@@ -1062,11 +1062,14 @@ function hideSettings() {
 }
 
 // Show/hide roleplay panel
-function showRoleplayPanel() {
+async function showRoleplayPanel() {
   const panel = document.getElementById('roleplay-panel');
   const overlay = document.getElementById('roleplay-overlay');
   panel.classList.add('open');
   overlay.classList.add('show');
+
+  // Load roleplay settings when panel opens
+  await loadRoleplaySettings();
 }
 
 function hideRoleplayPanel() {
@@ -1330,6 +1333,11 @@ function setupAppControls() {
       applyFontSize(parseInt(e.target.value));
     });
   }
+
+  // Setup roleplay panel buttons
+  document.getElementById('add-worldinfo-btn').addEventListener('click', handleAddWorldInfoEntry);
+  document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
+  document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
 }
 
 // Keyboard shortcuts
@@ -1652,6 +1660,258 @@ async function handleSaveCharacter(e) {
     saveBtn.disabled = false;
     saveBtn.classList.remove('loading');
     saveBtn.textContent = 'Save Character';
+  }
+}
+
+// World Info / Roleplay Settings Management
+
+let currentRoleplaySettings = null;
+
+// Load roleplay settings for current character
+async function loadRoleplaySettings() {
+  if (!currentCharacter) return;
+
+  try {
+    const settings = await invoke('get_roleplay_settings', { characterId: currentCharacter.id });
+    currentRoleplaySettings = settings;
+
+    // Load World Info entries
+    renderWorldInfoList(settings.world_info || []);
+
+    // Load Author's Note
+    document.getElementById('authors-note-text').value = settings.authors_note || '';
+    document.getElementById('authors-note-enabled').checked = settings.authors_note_enabled || false;
+
+    // Load Persona
+    document.getElementById('persona-name').value = settings.persona_name || '';
+    document.getElementById('persona-description').value = settings.persona_description || '';
+    document.getElementById('persona-enabled').checked = settings.persona_enabled || false;
+  } catch (error) {
+    console.error('Failed to load roleplay settings:', error);
+  }
+}
+
+// Render World Info entries
+function renderWorldInfoList(entries) {
+  const listContainer = document.getElementById('worldinfo-list');
+  listContainer.innerHTML = '';
+
+  if (entries.length === 0) {
+    const emptyMsg = document.createElement('p');
+    emptyMsg.style.color = 'var(--text-secondary)';
+    emptyMsg.style.fontSize = '14px';
+    emptyMsg.style.textAlign = 'center';
+    emptyMsg.style.padding = '20px';
+    emptyMsg.textContent = 'No entries yet. Click "Add Entry" to create one.';
+    listContainer.appendChild(emptyMsg);
+    return;
+  }
+
+  // Sort entries by priority (higher first)
+  const sortedEntries = [...entries].sort((a, b) => (b.priority || 0) - (a.priority || 0));
+
+  sortedEntries.forEach(entry => {
+    const entryDiv = document.createElement('div');
+    entryDiv.className = 'worldinfo-entry';
+    entryDiv.dataset.entryId = entry.id;
+
+    const header = document.createElement('div');
+    header.className = 'worldinfo-entry-header';
+
+    const enableCheckbox = document.createElement('input');
+    enableCheckbox.type = 'checkbox';
+    enableCheckbox.checked = entry.enabled;
+    enableCheckbox.addEventListener('change', () => handleToggleWorldInfoEntry(entry.id, enableCheckbox.checked));
+
+    const keysText = document.createElement('span');
+    keysText.className = 'worldinfo-keys';
+    keysText.textContent = entry.keys.join(', ');
+
+    const priority = document.createElement('span');
+    priority.className = 'worldinfo-priority';
+    priority.textContent = `Priority: ${entry.priority || 0}`;
+
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'worldinfo-entry-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'worldinfo-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => handleEditWorldInfoEntry(entry));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'worldinfo-btn worldinfo-btn-danger';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => handleDeleteWorldInfoEntry(entry.id));
+
+    actionsDiv.appendChild(editBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    header.appendChild(enableCheckbox);
+    header.appendChild(keysText);
+    header.appendChild(priority);
+    header.appendChild(actionsDiv);
+
+    const content = document.createElement('div');
+    content.className = 'worldinfo-entry-content';
+    content.textContent = entry.content;
+
+    entryDiv.appendChild(header);
+    entryDiv.appendChild(content);
+    listContainer.appendChild(entryDiv);
+  });
+}
+
+// Add new World Info entry
+async function handleAddWorldInfoEntry() {
+  const keys = prompt('Enter keywords (comma-separated):\nExample: John, John Smith');
+  if (!keys) return;
+
+  const content = prompt('Enter the content to inject when keywords are found:');
+  if (!content) return;
+
+  const priorityStr = prompt('Enter priority (higher = injected first, default 0):', '0');
+  const priority = parseInt(priorityStr) || 0;
+
+  try {
+    const keysArray = keys.split(',').map(k => k.trim()).filter(k => k);
+    await invoke('add_world_info_entry', {
+      characterId: currentCharacter.id,
+      keys: keysArray,
+      content: content.trim(),
+      priority,
+      caseSensitive: false
+    });
+
+    // Reload settings
+    await loadRoleplaySettings();
+  } catch (error) {
+    console.error('Failed to add World Info entry:', error);
+    alert(`Failed to add entry: ${error}`);
+  }
+}
+
+// Edit World Info entry
+async function handleEditWorldInfoEntry(entry) {
+  const keys = prompt('Edit keywords (comma-separated):', entry.keys.join(', '));
+  if (keys === null) return;
+
+  const content = prompt('Edit content:', entry.content);
+  if (content === null) return;
+
+  const priorityStr = prompt('Edit priority:', entry.priority.toString());
+  if (priorityStr === null) return;
+  const priority = parseInt(priorityStr) || 0;
+
+  try {
+    const keysArray = keys.split(',').map(k => k.trim()).filter(k => k);
+    await invoke('update_world_info_entry', {
+      characterId: currentCharacter.id,
+      entryId: entry.id,
+      keys: keysArray,
+      content: content.trim(),
+      enabled: entry.enabled,
+      priority,
+      caseSensitive: entry.case_sensitive
+    });
+
+    // Reload settings
+    await loadRoleplaySettings();
+  } catch (error) {
+    console.error('Failed to update World Info entry:', error);
+    alert(`Failed to update entry: ${error}`);
+  }
+}
+
+// Toggle World Info entry enabled state
+async function handleToggleWorldInfoEntry(entryId, enabled) {
+  if (!currentRoleplaySettings) return;
+
+  const entry = currentRoleplaySettings.world_info.find(e => e.id === entryId);
+  if (!entry) return;
+
+  try {
+    await invoke('update_world_info_entry', {
+      characterId: currentCharacter.id,
+      entryId: entryId,
+      keys: entry.keys,
+      content: entry.content,
+      enabled: enabled,
+      priority: entry.priority,
+      caseSensitive: entry.case_sensitive
+    });
+
+    // Update local settings
+    entry.enabled = enabled;
+  } catch (error) {
+    console.error('Failed to toggle World Info entry:', error);
+    alert(`Failed to toggle entry: ${error}`);
+  }
+}
+
+// Delete World Info entry
+async function handleDeleteWorldInfoEntry(entryId) {
+  if (!confirm('Delete this World Info entry? This cannot be undone.')) return;
+
+  try {
+    await invoke('delete_world_info_entry', {
+      characterId: currentCharacter.id,
+      entryId: entryId
+    });
+
+    // Reload settings
+    await loadRoleplaySettings();
+  } catch (error) {
+    console.error('Failed to delete World Info entry:', error);
+    alert(`Failed to delete entry: ${error}`);
+  }
+}
+
+// Save Author's Note
+async function handleSaveAuthorsNote() {
+  if (!currentCharacter) return;
+
+  const content = document.getElementById('authors-note-text').value.trim() || null;
+  const enabled = document.getElementById('authors-note-enabled').checked;
+
+  try {
+    await invoke('update_authors_note', {
+      characterId: currentCharacter.id,
+      content,
+      enabled
+    });
+
+    // Show success message
+    setStatus('Author\'s Note saved', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to save Author\'s Note:', error);
+    setStatus('Failed to save Author\'s Note', 'error');
+  }
+}
+
+// Save Persona
+async function handleSavePersona() {
+  if (!currentCharacter) return;
+
+  const name = document.getElementById('persona-name').value.trim() || null;
+  const description = document.getElementById('persona-description').value.trim() || null;
+  const enabled = document.getElementById('persona-enabled').checked;
+
+  try {
+    await invoke('update_persona', {
+      characterId: currentCharacter.id,
+      name,
+      description,
+      enabled
+    });
+
+    // Show success message
+    setStatus('Persona saved', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to save Persona:', error);
+    setStatus('Failed to save Persona', 'error');
   }
 }
 

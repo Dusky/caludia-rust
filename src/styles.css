@@ -1611,6 +1611,91 @@ body.view-comfortable .message-content pre {
   margin-top: 12px;
 }
 
+.worldinfo-entry {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.2s ease;
+}
+
+.worldinfo-entry:hover {
+  border-color: var(--accent);
+}
+
+.worldinfo-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.worldinfo-entry-header input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.worldinfo-keys {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.worldinfo-priority {
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.worldinfo-entry-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.worldinfo-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.worldinfo-btn:hover {
+  background: var(--border);
+  border-color: var(--accent);
+}
+
+.worldinfo-btn-danger {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.worldinfo-btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #ef4444;
+}
+
+.worldinfo-entry-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  word-wrap: break-word;
+}
+
 .header-left-controls {
   display: flex;
   gap: 8px;
