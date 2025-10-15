@@ -201,6 +201,47 @@ function loadSavedFontSize() {
   applyFontSize(savedSize);
 }
 
+// Export chat history
+async function exportChatHistory() {
+  try {
+    setStatus('Exporting chat...', 'default');
+    const filePath = await invoke('export_chat_history');
+    setStatus('Chat exported successfully!', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+    console.log('Chat exported to:', filePath);
+  } catch (error) {
+    console.error('Export failed:', error);
+    if (error && !error.toString().includes('cancelled')) {
+      setStatus(`Export failed: ${error}`, 'error');
+      setTimeout(() => setStatus('Ready'), 3000);
+    } else {
+      setStatus('Ready');
+    }
+  }
+}
+
+// Import chat history
+async function importChatHistory() {
+  try {
+    setStatus('Importing chat...', 'default');
+    const messageCount = await invoke('import_chat_history');
+
+    // Reload the chat history
+    await loadChatHistory();
+
+    setStatus(`Imported ${messageCount} messages successfully!`, 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Import failed:', error);
+    if (error === 'No file selected' || error.toString().includes('cancelled')) {
+      setStatus('Ready');
+    } else {
+      setStatus(`Import failed: ${error}`, 'error');
+      setTimeout(() => setStatus('Ready'), 3000);
+    }
+  }
+}
+
 // Helper function to get avatar URL
 async function getAvatarUrl(avatarFilename) {
   if (!avatarFilename) return null;
@@ -1206,6 +1247,8 @@ function setupAppControls() {
   document.getElementById('close-settings-btn').addEventListener('click', hideSettings);
   document.getElementById('settings-overlay').addEventListener('click', hideSettings);
   document.getElementById('clear-btn').addEventListener('click', clearHistory);
+  document.getElementById('export-chat-btn').addEventListener('click', exportChatHistory);
+  document.getElementById('import-chat-btn').addEventListener('click', importChatHistory);
   characterSelect.addEventListener('change', handleCharacterSwitch);
   newCharacterBtn.addEventListener('click', handleNewCharacter);
   document.getElementById('delete-character-btn').addEventListener('click', handleDeleteCharacter);

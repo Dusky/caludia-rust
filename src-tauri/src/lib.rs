@@ -1431,6 +1431,87 @@ async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character
     Ok(character)
 }
 
+// Export chat history to JSON
+#[tauri::command]
+async fn export_chat_history(app_handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    // Open save dialog
+    let save_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Chat History", &["json"])
+        .set_file_name(&format!("chat_{}.json", character.name))
+        .blocking_save_file();
+
+    let output_path = if let Some(path) = save_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("Save cancelled".to_string());
+    };
+
+    // Write history to JSON file
+    let contents = serde_json::to_string_pretty(&history)
+        .map_err(|e| format!("Failed to serialize history: {}", e))?;
+
+    fs::write(&output_path, contents)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+// Import chat history from JSON
+#[tauri::command]
+async fn import_chat_history(app_handle: tauri::AppHandle) -> Result<usize, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Open file picker for JSON files
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Chat History", &["json"])
+        .blocking_pick_file();
+
+    let json_path = if let Some(path) = file_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("No file selected".to_string());
+    };
+
+    // Read and parse history file
+    let contents = fs::read_to_string(&json_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let mut history: ChatHistory = serde_json::from_str(&contents)
+        .map_err(|e| format!("Failed to parse history: {}", e))?;
+
+    // Migrate messages to ensure compatibility
+    for msg in &mut history.messages {
+        msg.migrate();
+    }
+
+    let message_count = history.messages.len();
+
+    // Save history for current character
+    let character = get_active_character();
+    save_history(&character.id, &history)?;
+
+    Ok(message_count)
+}
+
 // Export character card to PNG
 #[tauri::command]
 async fn export_character_card(app_handle: tauri::AppHandle, character_id: String) -> Result<String, String> {
@@ -1514,7 +1595,9 @@ pub fn run() {
             delete_character,
             set_active_character,
             import_character_card,
-            export_character_card
+            export_character_card,
+            export_chat_history,
+            import_chat_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
