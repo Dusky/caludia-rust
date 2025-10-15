@@ -15,6 +15,13 @@
     <div class="app-container">
       <header class="app-header">
         <div class="header-content">
+          <div class="header-left-controls">
+            <button id="roleplay-btn" class="icon-btn" title="Roleplay Tools">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
           <div class="character-display">
             <div class="avatar-circle"></div>
             <span id="character-header-name"></span>
@@ -66,6 +73,103 @@
           </div>
         </div>
       </main>
+
+      <!-- Roleplay sidebar overlay -->
+      <div class="roleplay-overlay" id="roleplay-overlay"></div>
+
+      <!-- Roleplay sidebar (left) -->
+      <div class="roleplay-panel" id="roleplay-panel">
+        <div class="roleplay-header">
+          <h2>Roleplay Tools</h2>
+          <button id="close-roleplay-btn" class="icon-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="roleplay-tabs">
+          <button class="roleplay-tab-btn active" data-tab="worldinfo">World Info</button>
+          <button class="roleplay-tab-btn" data-tab="authorsnote">Author's Note</button>
+          <button class="roleplay-tab-btn" data-tab="persona">Persona</button>
+        </div>
+
+        <div id="worldinfo-tab" class="roleplay-tab-content active">
+          <div class="roleplay-content">
+            <div class="form-group">
+              <label>World Info / Lorebook</label>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">
+                Create entries that inject context when keywords are mentioned.
+              </p>
+              <button type="button" id="add-worldinfo-btn" class="btn-secondary" style="width: 100%;">
+                + Add Entry
+              </button>
+            </div>
+            <div id="worldinfo-list" class="worldinfo-list">
+              <!-- World info entries will be added here -->
+            </div>
+          </div>
+        </div>
+
+        <div id="authorsnote-tab" class="roleplay-tab-content">
+          <div class="roleplay-content">
+            <div class="form-group">
+              <label for="authors-note-text">Author's Note</label>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">
+                Instructions inserted near the end of the prompt before the latest messages.
+              </p>
+              <textarea
+                id="authors-note-text"
+                placeholder="Write in present tense. Focus on sensory details..."
+                rows="6"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="authors-note-enabled" />
+                Enable Author's Note
+              </label>
+            </div>
+            <button type="button" id="save-authors-note-btn" class="btn-primary" style="width: 100%;">
+              Save Author's Note
+            </button>
+          </div>
+        </div>
+
+        <div id="persona-tab" class="roleplay-tab-content">
+          <div class="roleplay-content">
+            <div class="form-group">
+              <label for="persona-name">Persona Name</label>
+              <input
+                type="text"
+                id="persona-name"
+                placeholder="Your character name"
+              />
+            </div>
+            <div class="form-group">
+              <label for="persona-description">Persona Description</label>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">
+                Describe yourself as the user in this roleplay.
+              </p>
+              <textarea
+                id="persona-description"
+                placeholder="Describe your character's appearance, personality, background..."
+                rows="8"
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="persona-enabled" />
+                Enable Persona
+              </label>
+            </div>
+            <button type="button" id="save-persona-btn" class="btn-primary" style="width: 100%;">
+              Save Persona
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- Settings overlay backdrop -->
       <div class="settings-overlay" id="settings-overlay"></div>

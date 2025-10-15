@@ -1505,6 +1505,117 @@ body.view-comfortable .message-content pre {
   margin: 12px 0;
 }
 
+/* Roleplay Panel - Slide-in from Left */
+.roleplay-panel {
+  position: fixed;
+  top: 0;
+  left: -500px;
+  width: 500px;
+  height: 100vh;
+  background: var(--bg-primary);
+  border-right: 1px solid var(--border);
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  overflow-y: auto;
+  padding: 20px;
+  transition: left 0.3s ease;
+}
+
+.roleplay-panel.open {
+  left: 0;
+}
+
+.roleplay-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.roleplay-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.roleplay-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.roleplay-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.roleplay-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.roleplay-tab-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.roleplay-tab-btn:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.roleplay-tab-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.roleplay-tab-content {
+  display: none;
+}
+
+.roleplay-tab-content.active {
+  display: block;
+}
+
+.roleplay-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.worldinfo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.header-left-controls {
+  display: flex;
+  gap: 8px;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .messages-list {
@@ -1526,5 +1637,14 @@ body.view-comfortable .message-content pre {
 
   .settings-panel.open {
     right: 0;
+  }
+
+  .roleplay-panel {
+    width: 100%;
+    left: -100%;
+  }
+
+  .roleplay-panel.open {
+    left: 0;
   }
 }

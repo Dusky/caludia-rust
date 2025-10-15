@@ -1061,8 +1061,24 @@ function hideSettings() {
   overlay.classList.remove('show');
 }
 
+// Show/hide roleplay panel
+function showRoleplayPanel() {
+  const panel = document.getElementById('roleplay-panel');
+  const overlay = document.getElementById('roleplay-overlay');
+  panel.classList.add('open');
+  overlay.classList.add('show');
+}
+
+function hideRoleplayPanel() {
+  const panel = document.getElementById('roleplay-panel');
+  const overlay = document.getElementById('roleplay-overlay');
+  panel.classList.remove('open');
+  overlay.classList.remove('show');
+}
+
 // Tab switching
 function setupTabs() {
+  // Settings tabs
   const tabBtns = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
 
@@ -1073,6 +1089,24 @@ function setupTabs() {
       // Remove active class from all tabs and contents
       tabBtns.forEach(b => b.classList.remove('active'));
       tabContents.forEach(c => c.classList.remove('active'));
+
+      // Add active class to clicked tab and corresponding content
+      btn.classList.add('active');
+      document.getElementById(`${targetTab}-tab`).classList.add('active');
+    });
+  });
+
+  // Roleplay tabs
+  const roleplayTabBtns = document.querySelectorAll('.roleplay-tab-btn');
+  const roleplayTabContents = document.querySelectorAll('.roleplay-tab-content');
+
+  roleplayTabBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const targetTab = btn.getAttribute('data-tab');
+
+      // Remove active class from all roleplay tabs and contents
+      roleplayTabBtns.forEach(b => b.classList.remove('active'));
+      roleplayTabContents.forEach(c => c.classList.remove('active'));
 
       // Add active class to clicked tab and corresponding content
       btn.classList.add('active');
@@ -1246,6 +1280,9 @@ function setupAppControls() {
   document.getElementById('settings-btn').addEventListener('click', showSettings);
   document.getElementById('close-settings-btn').addEventListener('click', hideSettings);
   document.getElementById('settings-overlay').addEventListener('click', hideSettings);
+  document.getElementById('roleplay-btn').addEventListener('click', showRoleplayPanel);
+  document.getElementById('close-roleplay-btn').addEventListener('click', hideRoleplayPanel);
+  document.getElementById('roleplay-overlay').addEventListener('click', hideRoleplayPanel);
   document.getElementById('clear-btn').addEventListener('click', clearHistory);
   document.getElementById('export-chat-btn').addEventListener('click', exportChatHistory);
   document.getElementById('import-chat-btn').addEventListener('click', importChatHistory);
