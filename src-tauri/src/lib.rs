@@ -6,6 +6,7 @@ use uuid::Uuid;
 use futures::StreamExt;
 use tauri::Emitter;
 use base64::Engine;
+use regex::Regex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiConfig {
@@ -252,6 +253,8 @@ struct WorldInfoEntry {
     case_sensitive: bool,
     #[serde(default)]
     priority: i32, // Higher priority entries are injected first
+    #[serde(default)]
+    use_regex: bool, // Use regex matching instead of literal string matching
 }
 
 // Roleplay Settings (Author's Note, Persona, World Info)
@@ -261,6 +264,8 @@ struct RoleplaySettings {
     authors_note: Option<String>,
     #[serde(default)]
     authors_note_enabled: bool,
+    #[serde(default = "default_authors_note_depth")]
+    authors_note_depth: usize, // Insert before last N messages (default 3)
     #[serde(default)]
     persona_name: Option<String>,
     #[serde(default)]
@@ -269,6 +274,16 @@ struct RoleplaySettings {
     persona_enabled: bool,
     #[serde(default)]
     world_info: Vec<WorldInfoEntry>,
+    #[serde(default = "default_scan_depth")]
+    scan_depth: usize, // Scan last N messages for keywords (default 20)
+}
+
+fn default_authors_note_depth() -> usize {
+    3
+}
+
+fn default_scan_depth() -> usize {
+    20
 }
 
 impl Default for RoleplaySettings {
@@ -276,10 +291,12 @@ impl Default for RoleplaySettings {
         Self {
             authors_note: None,
             authors_note_enabled: false,
+            authors_note_depth: default_authors_note_depth(),
             persona_name: None,
             persona_description: None,
             persona_enabled: false,
             world_info: Vec::new(),
+            scan_depth: default_scan_depth(),
         }
     }
 }
@@ -869,10 +886,26 @@ fn scan_for_world_info(messages: &[Message], world_info: &[WorldInfoEntry], scan
             let content = message.get_content();
 
             for keyword in &entry.keys {
-                let matches = if entry.case_sensitive {
-                    content.contains(keyword)
+                let matches = if entry.use_regex {
+                    // Use regex matching
+                    if let Ok(re) = Regex::new(keyword) {
+                        re.is_match(content)
+                    } else {
+                        // Invalid regex - fall back to literal matching
+                        eprintln!("Invalid regex pattern '{}' for entry {}: falling back to literal match", keyword, entry.id);
+                        if entry.case_sensitive {
+                            content.contains(keyword)
+                        } else {
+                            content.to_lowercase().contains(&keyword.to_lowercase())
+                        }
+                    }
                 } else {
-                    content.to_lowercase().contains(&keyword.to_lowercase())
+                    // Use literal string matching
+                    if entry.case_sensitive {
+                        content.contains(keyword)
+                    } else {
+                        content.to_lowercase().contains(&keyword.to_lowercase())
+                    }
                 };
 
                 if matches {
@@ -902,7 +935,7 @@ fn build_roleplay_context(
     _character: &Character,
     messages: &[Message],
     settings: &RoleplaySettings,
-) -> (String, Option<String>) {
+) -> (String, Option<String>, usize) {
     let mut system_additions = String::new();
     let mut authors_note_content = None;
 
@@ -916,8 +949,7 @@ fn build_roleplay_context(
     }
 
     // 2. Scan for World Info and add to system prompt
-    let scan_depth = 20; // Scan last 20 messages
-    let activated_entries = scan_for_world_info(messages, &settings.world_info, scan_depth);
+    let activated_entries = scan_for_world_info(messages, &settings.world_info, settings.scan_depth);
 
     if !activated_entries.is_empty() {
         system_additions.push_str("\n\n[Relevant World Information:");
@@ -936,7 +968,7 @@ fn build_roleplay_context(
         }
     }
 
-    (system_additions, authors_note_content)
+    (system_additions, authors_note_content, settings.authors_note_depth)
 }
 
 #[tauri::command]
@@ -958,7 +990,7 @@ async fn chat(message: String) -> Result<String, String> {
 
     // Load roleplay settings and build context
     let roleplay_settings = load_roleplay_settings(&character.id);
-    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
     // Build messages with system prompt first - use simple Message for API
     let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
@@ -972,10 +1004,10 @@ async fn chat(message: String) -> Result<String, String> {
         api_messages.push(api_msg);
     }
 
-    // Insert Author's Note before last 3 messages if it exists
+    // Insert Author's Note before last N messages if it exists (configurable depth)
     if let Some(note) = authors_note {
-        if api_messages.len() > 4 { // system + at least 3 messages
-            let insert_pos = api_messages.len().saturating_sub(3);
+        if api_messages.len() > (note_depth + 1) { // system + at least note_depth messages
+            let insert_pos = api_messages.len().saturating_sub(note_depth);
             let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
             note_msg.role = "system".to_string();
             api_messages.insert(insert_pos, note_msg);
@@ -1040,7 +1072,7 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
 
     // Load roleplay settings and build context
     let roleplay_settings = load_roleplay_settings(&character.id);
-    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
     // Build messages with system prompt first - use simple Message for API
     let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
@@ -1054,10 +1086,10 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
         api_messages.push(api_msg);
     }
 
-    // Insert Author's Note before last 3 messages if it exists
+    // Insert Author's Note before last N messages if it exists (configurable depth)
     if let Some(note) = authors_note {
-        if api_messages.len() > 4 { // system + at least 3 messages
-            let insert_pos = api_messages.len().saturating_sub(3);
+        if api_messages.len() > (note_depth + 1) { // system + at least note_depth messages
+            let insert_pos = api_messages.len().saturating_sub(note_depth);
             let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
             note_msg.role = "system".to_string();
             api_messages.insert(insert_pos, note_msg);
@@ -1215,7 +1247,7 @@ async fn generate_response_only() -> Result<String, String> {
 
     // Load roleplay settings and build context
     let roleplay_settings = load_roleplay_settings(&character.id);
-    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
     // Build messages with enhanced system prompt first
     let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
@@ -1229,10 +1261,10 @@ async fn generate_response_only() -> Result<String, String> {
         api_messages.push(api_msg);
     }
 
-    // Insert Author's Note before last 3 messages if it exists
+    // Insert Author's Note before last N messages if it exists (configurable depth)
     if let Some(note) = authors_note {
-        if api_messages.len() > 4 { // system + at least 3 messages
-            let insert_pos = api_messages.len().saturating_sub(3);
+        if api_messages.len() > (note_depth + 1) { // system + at least note_depth messages
+            let insert_pos = api_messages.len().saturating_sub(note_depth);
             let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
             note_msg.role = "system".to_string();
             api_messages.insert(insert_pos, note_msg);
@@ -1288,7 +1320,7 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
 
     // Load roleplay settings and build context
     let roleplay_settings = load_roleplay_settings(&character.id);
-    let (system_additions, authors_note) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
     // Build messages with enhanced system prompt first
     let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
@@ -1302,10 +1334,10 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
         api_messages.push(api_msg);
     }
 
-    // Insert Author's Note before last 3 messages if it exists
+    // Insert Author's Note before last N messages if it exists (configurable depth)
     if let Some(note) = authors_note {
-        if api_messages.len() > 4 { // system + at least 3 messages
-            let insert_pos = api_messages.len().saturating_sub(3);
+        if api_messages.len() > (note_depth + 1) { // system + at least note_depth messages
+            let insert_pos = api_messages.len().saturating_sub(note_depth);
             let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
             note_msg.role = "system".to_string();
             api_messages.insert(insert_pos, note_msg);
@@ -1688,6 +1720,155 @@ async fn export_chat_history(app_handle: tauri::AppHandle) -> Result<String, Str
     Ok(output_path.to_string_lossy().to_string())
 }
 
+// Export chat history as Markdown
+#[tauri::command]
+async fn export_chat_as_markdown(app_handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    // Open save dialog
+    let save_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Markdown", &["md"])
+        .set_file_name(&format!("chat_{}.md", character.name))
+        .blocking_save_file();
+
+    let output_path = if let Some(path) = save_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("Save cancelled".to_string());
+    };
+
+    // Build markdown content
+    let mut contents = String::new();
+    contents.push_str(&format!("# Chat with {}\n\n", character.name));
+
+    for msg in &history.messages {
+        let role_label = if msg.role == "user" { "**User**" } else { "**Assistant**" };
+        contents.push_str(&format!("{}: {}\n\n", role_label, msg.get_content()));
+    }
+
+    fs::write(&output_path, contents)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+// Export chat history as plain text
+#[tauri::command]
+async fn export_chat_as_text(app_handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    // Open save dialog
+    let save_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Text", &["txt"])
+        .set_file_name(&format!("chat_{}.txt", character.name))
+        .blocking_save_file();
+
+    let output_path = if let Some(path) = save_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("Save cancelled".to_string());
+    };
+
+    // Build plain text content
+    let mut contents = String::new();
+    contents.push_str(&format!("Chat with {}\n", character.name));
+    contents.push_str(&"=".repeat(50));
+    contents.push_str("\n\n");
+
+    for msg in &history.messages {
+        let role_label = if msg.role == "user" { "User" } else { "Assistant" };
+        contents.push_str(&format!("{}: {}\n\n", role_label, msg.get_content()));
+    }
+
+    fs::write(&output_path, contents)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+// Export chat history as HTML
+#[tauri::command]
+async fn export_chat_as_html(app_handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    // Open save dialog
+    let save_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("HTML", &["html"])
+        .set_file_name(&format!("chat_{}.html", character.name))
+        .blocking_save_file();
+
+    let output_path = if let Some(path) = save_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("Save cancelled".to_string());
+    };
+
+    // Build HTML content with styling
+    let mut contents = String::new();
+    contents.push_str("<!DOCTYPE html>\n<html>\n<head>\n");
+    contents.push_str("    <meta charset=\"UTF-8\">\n");
+    contents.push_str(&format!("    <title>Chat with {}</title>\n", character.name));
+    contents.push_str("    <style>\n");
+    contents.push_str("        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f5f5f5; }\n");
+    contents.push_str("        h1 { color: #333; border-bottom: 2px solid #ddd; padding-bottom: 10px; }\n");
+    contents.push_str("        .message { margin: 20px 0; padding: 15px; border-radius: 8px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }\n");
+    contents.push_str("        .user { border-left: 4px solid #4CAF50; }\n");
+    contents.push_str("        .assistant { border-left: 4px solid #2196F3; }\n");
+    contents.push_str("        .role { font-weight: bold; margin-bottom: 8px; color: #555; }\n");
+    contents.push_str("        .content { line-height: 1.6; color: #333; white-space: pre-wrap; }\n");
+    contents.push_str("    </style>\n");
+    contents.push_str("</head>\n<body>\n");
+    contents.push_str(&format!("    <h1>Chat with {}</h1>\n", character.name));
+
+    for msg in &history.messages {
+        let role_class = if msg.role == "user" { "user" } else { "assistant" };
+        let role_label = if msg.role == "user" { "User" } else { "Assistant" };
+        let content = msg.get_content().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+
+        contents.push_str(&format!("    <div class=\"message {}\">\n", role_class));
+        contents.push_str(&format!("        <div class=\"role\">{}</div>\n", role_label));
+        contents.push_str(&format!("        <div class=\"content\">{}</div>\n", content));
+        contents.push_str("    </div>\n");
+    }
+
+    contents.push_str("</body>\n</html>");
+
+    fs::write(&output_path, contents)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
 // Import chat history from JSON
 #[tauri::command]
 async fn import_chat_history(app_handle: tauri::AppHandle) -> Result<usize, String> {
@@ -1739,6 +1920,43 @@ fn get_roleplay_settings(character_id: String) -> Result<RoleplaySettings, Strin
     Ok(load_roleplay_settings(&character_id))
 }
 
+// Validate a regex pattern
+#[tauri::command]
+fn validate_regex_pattern(pattern: String) -> Result<bool, String> {
+    match Regex::new(&pattern) {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Invalid regex pattern: {}", e))
+    }
+}
+
+// Update roleplay settings with validation
+#[tauri::command]
+fn update_roleplay_depths(
+    character_id: String,
+    scan_depth: Option<usize>,
+    authors_note_depth: Option<usize>,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+
+    // Validate scan_depth (should be between 1 and 100)
+    if let Some(depth) = scan_depth {
+        if depth < 1 || depth > 100 {
+            return Err("Scan depth must be between 1 and 100".to_string());
+        }
+        settings.scan_depth = depth;
+    }
+
+    // Validate authors_note_depth (should be between 1 and 50)
+    if let Some(depth) = authors_note_depth {
+        if depth < 1 || depth > 50 {
+            return Err("Author's Note depth must be between 1 and 50".to_string());
+        }
+        settings.authors_note_depth = depth;
+    }
+
+    save_roleplay_settings(&character_id, &settings)
+}
+
 #[tauri::command]
 fn update_authors_note(
     character_id: String,
@@ -1772,8 +1990,28 @@ fn add_world_info_entry(
     content: String,
     priority: i32,
     case_sensitive: bool,
+    use_regex: bool,
 ) -> Result<WorldInfoEntry, String> {
     let mut settings = load_roleplay_settings(&character_id);
+
+    // Validate regex patterns if use_regex is true
+    if use_regex {
+        for key in &keys {
+            if let Err(e) = Regex::new(key) {
+                return Err(format!("Invalid regex pattern '{}': {}", key, e));
+            }
+        }
+    }
+
+    // Validate that keys is not empty
+    if keys.is_empty() {
+        return Err("At least one keyword is required".to_string());
+    }
+
+    // Validate that content is not empty
+    if content.trim().is_empty() {
+        return Err("Content cannot be empty".to_string());
+    }
 
     let entry = WorldInfoEntry {
         id: Uuid::new_v4().to_string(),
@@ -1782,6 +2020,7 @@ fn add_world_info_entry(
         enabled: true,
         case_sensitive,
         priority,
+        use_regex,
     };
 
     settings.world_info.push(entry.clone());
@@ -1799,8 +2038,28 @@ fn update_world_info_entry(
     enabled: bool,
     priority: i32,
     case_sensitive: bool,
+    use_regex: bool,
 ) -> Result<(), String> {
     let mut settings = load_roleplay_settings(&character_id);
+
+    // Validate regex patterns if use_regex is true
+    if use_regex {
+        for key in &keys {
+            if let Err(e) = Regex::new(key) {
+                return Err(format!("Invalid regex pattern '{}': {}", key, e));
+            }
+        }
+    }
+
+    // Validate that keys is not empty
+    if keys.is_empty() {
+        return Err("At least one keyword is required".to_string());
+    }
+
+    // Validate that content is not empty
+    if content.trim().is_empty() {
+        return Err("Content cannot be empty".to_string());
+    }
 
     if let Some(entry) = settings.world_info.iter_mut().find(|e| e.id == entry_id) {
         entry.keys = keys;
@@ -1808,6 +2067,7 @@ fn update_world_info_entry(
         entry.enabled = enabled;
         entry.priority = priority;
         entry.case_sensitive = case_sensitive;
+        entry.use_regex = use_regex;
         save_roleplay_settings(&character_id, &settings)
     } else {
         Err("World Info entry not found".to_string())
@@ -1822,6 +2082,99 @@ fn delete_world_info_entry(
     let mut settings = load_roleplay_settings(&character_id);
     settings.world_info.retain(|e| e.id != entry_id);
     save_roleplay_settings(&character_id, &settings)
+}
+
+// Export World Info entries to JSON
+#[tauri::command]
+async fn export_world_info(app_handle: tauri::AppHandle, character_id: String) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let settings = load_roleplay_settings(&character_id);
+    let character = load_character(&character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    // Open save dialog
+    let save_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("World Info", &["json"])
+        .set_file_name(&format!("worldinfo_{}.json", character.name))
+        .blocking_save_file();
+
+    let output_path = if let Some(path) = save_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("Save cancelled".to_string());
+    };
+
+    // Write world info to JSON file
+    let contents = serde_json::to_string_pretty(&settings.world_info)
+        .map_err(|e| format!("Failed to serialize World Info: {}", e))?;
+
+    fs::write(&output_path, contents)
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+
+    Ok(output_path.to_string_lossy().to_string())
+}
+
+// Import World Info entries from JSON
+#[tauri::command]
+async fn import_world_info(
+    app_handle: tauri::AppHandle,
+    character_id: String,
+    merge: bool,
+) -> Result<usize, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Open file picker for JSON files
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("World Info", &["json"])
+        .blocking_pick_file();
+
+    let json_path = if let Some(path) = file_path {
+        PathBuf::from(
+            path.as_path()
+                .ok_or_else(|| "Could not get file path".to_string())?
+                .to_string_lossy()
+                .to_string(),
+        )
+    } else {
+        return Err("No file selected".to_string());
+    };
+
+    // Read and parse world info file
+    let contents = fs::read_to_string(&json_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let imported_entries: Vec<WorldInfoEntry> = serde_json::from_str(&contents)
+        .map_err(|e| format!("Failed to parse World Info: {}", e))?;
+
+    let entry_count = imported_entries.len();
+
+    // Load current settings
+    let mut settings = load_roleplay_settings(&character_id);
+
+    if merge {
+        // Merge: Add imported entries to existing ones (regenerate IDs to avoid conflicts)
+        for mut entry in imported_entries {
+            entry.id = Uuid::new_v4().to_string(); // Generate new ID
+            settings.world_info.push(entry);
+        }
+    } else {
+        // Replace: Replace all world info with imported entries
+        settings.world_info = imported_entries;
+    }
+
+    save_roleplay_settings(&character_id, &settings)?;
+
+    Ok(entry_count)
 }
 
 // Export character card to PNG
@@ -1909,13 +2262,20 @@ pub fn run() {
             import_character_card,
             export_character_card,
             export_chat_history,
+            export_chat_as_markdown,
+            export_chat_as_text,
+            export_chat_as_html,
             import_chat_history,
             get_roleplay_settings,
+            validate_regex_pattern,
+            update_roleplay_depths,
             update_authors_note,
             update_persona,
             add_world_info_entry,
             update_world_info_entry,
-            delete_world_info_entry
+            delete_world_info_entry,
+            export_world_info,
+            import_world_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

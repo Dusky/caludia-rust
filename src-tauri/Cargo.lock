@@ -4197,6 +4197,7 @@ dependencies = [
  "futures",
  "image",
  "png",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
