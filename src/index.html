@@ -637,6 +637,53 @@
         </form>
         <div class="status-bar">
           <span id="status-text" class="status-text">Ready</span>
+          <div id="token-counter" class="token-counter" style="display: none;">
+            <span id="token-count-total" class="token-count">0 tokens</span>
+            <button id="token-details-btn" class="token-details-btn" title="Show breakdown">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M8 7v4M8 5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <!-- Token Breakdown Tooltip -->
+        <div id="token-breakdown" class="token-breakdown" style="display: none;">
+          <div class="token-breakdown-header">Token Breakdown</div>
+          <div class="token-breakdown-list">
+            <div class="token-breakdown-item">
+              <span>System Prompt:</span>
+              <span id="token-system">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Preset Instructions:</span>
+              <span id="token-preset">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Persona:</span>
+              <span id="token-persona">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>World Info:</span>
+              <span id="token-worldinfo">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Author's Note:</span>
+              <span id="token-authorsnote">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Message History:</span>
+              <span id="token-history">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Current Input:</span>
+              <span id="token-input">0</span>
+            </div>
+            <div class="token-breakdown-total">
+              <span>Total:</span>
+              <span id="token-total-detail">0</span>
+            </div>
+          </div>
         </div>
       </footer>
     </div>

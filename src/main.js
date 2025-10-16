@@ -1366,8 +1366,66 @@ function setupKeyboardShortcuts() {
 
   messageInput.addEventListener('input', () => {
     autoResize(messageInput);
+    updateTokenCount();
   });
 }
+
+// Token Counter
+let tokenUpdateTimeout = null;
+
+async function updateTokenCount() {
+  // Debounce token count updates
+  if (tokenUpdateTimeout) {
+    clearTimeout(tokenUpdateTimeout);
+  }
+
+  tokenUpdateTimeout = setTimeout(async () => {
+    try {
+      const currentInput = messageInput.value;
+      const tokenData = await invoke('get_token_count', {
+        characterId: null, // Use active character
+        currentInput
+      });
+
+      // Update total display
+      const tokenCounter = document.getElementById('token-counter');
+      const tokenCountTotal = document.getElementById('token-count-total');
+      tokenCountTotal.textContent = `${tokenData.total} tokens`;
+      tokenCounter.style.display = 'flex';
+
+      // Update breakdown
+      document.getElementById('token-system').textContent = tokenData.system_prompt;
+      document.getElementById('token-preset').textContent = tokenData.preset_instructions;
+      document.getElementById('token-persona').textContent = tokenData.persona;
+      document.getElementById('token-worldinfo').textContent = tokenData.world_info;
+      document.getElementById('token-authorsnote').textContent = tokenData.authors_note;
+      document.getElementById('token-history').textContent = tokenData.message_history;
+      document.getElementById('token-input').textContent = tokenData.current_input;
+      document.getElementById('token-total-detail').textContent = tokenData.total;
+    } catch (error) {
+      console.error('Failed to update token count:', error);
+      // Hide token counter on error
+      document.getElementById('token-counter').style.display = 'none';
+    }
+  }, 300); // Update after 300ms of no typing
+}
+
+// Toggle token breakdown display
+document.getElementById('token-details-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const breakdown = document.getElementById('token-breakdown');
+  breakdown.style.display = breakdown.style.display === 'none' ? 'block' : 'none';
+});
+
+// Close breakdown when clicking outside
+document.addEventListener('click', (e) => {
+  const breakdown = document.getElementById('token-breakdown');
+  const detailsBtn = document.getElementById('token-details-btn');
+
+  if (!breakdown.contains(e.target) && !detailsBtn.contains(e.target)) {
+    breakdown.style.display = 'none';
+  }
+});
 
 // Load characters and populate dropdown
 async function loadCharacters() {
@@ -1535,6 +1593,9 @@ async function loadChatHistory() {
     messagesContainer.innerHTML = '';
     addMessage('API configured. Ready to chat.', false, true);
   }
+
+  // Update token count after loading history
+  updateTokenCount();
 }
 
 // Clear chat history

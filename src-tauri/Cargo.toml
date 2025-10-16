@@ -32,4 +32,6 @@ png = "0.17"
 base64 = "0.21"
 image = "0.24"
 regex = "1"
+chrono = "0.4"
+tiktoken-rs = "0.5"
 

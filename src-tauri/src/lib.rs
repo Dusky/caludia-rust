@@ -9,6 +9,7 @@ use base64::Engine;
 use regex::Regex;
 use std::sync::{Mutex, OnceLock};
 use std::collections::HashMap;
+use tiktoken_rs::cl100k_base;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiConfig {
@@ -2542,6 +2543,135 @@ fn restore_builtin_preset(preset_id: String) -> Result<PromptPreset, String> {
         .ok_or_else(|| format!("Built-in preset '{}' not found", preset_id))
 }
 
+// Token Counting
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct TokenBreakdown {
+    total: usize,
+    system_prompt: usize,
+    preset_instructions: usize,
+    persona: usize,
+    world_info: usize,
+    authors_note: usize,
+    message_history: usize,
+    current_input: usize,
+    estimated_max_tokens: usize,
+}
+
+// Helper function to count tokens in a string
+fn count_tokens(text: &str) -> usize {
+    if text.is_empty() {
+        return 0;
+    }
+
+    let bpe = cl100k_base().unwrap();
+    bpe.encode_with_special_tokens(text).len()
+}
+
+#[tauri::command]
+fn get_token_count(character_id: Option<String>, current_input: String) -> Result<TokenBreakdown, String> {
+    // Get character (either specified or active)
+    let character = if let Some(id) = character_id {
+        load_character(&id).ok_or_else(|| format!("Character '{}' not found", id))?
+    } else {
+        get_active_character()
+    };
+
+    let history = load_history(&character.id);
+    let roleplay_settings = load_roleplay_settings(&character.id);
+
+    // Build the same context that would be sent to the API
+    let (_system_additions, authors_note, _note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
+
+    // Count system prompt (including template processing)
+    let processed_system_prompt = replace_template_variables(&character.system_prompt, &character, &roleplay_settings);
+    let system_prompt_tokens = count_tokens(&processed_system_prompt);
+
+    // Parse system additions to break down by component
+    let mut preset_tokens = 0;
+    let mut persona_tokens = 0;
+    let mut world_info_tokens = 0;
+
+    // Count preset instructions and system additions
+    if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        if let Some(preset) = load_preset(preset_id) {
+            if !preset.system_additions.is_empty() {
+                let processed_additions = replace_template_variables(&preset.system_additions, &character, &roleplay_settings);
+                preset_tokens += count_tokens(&processed_additions);
+            }
+
+            let mut enabled_instructions: Vec<_> = preset.instructions.iter()
+                .filter(|i| i.enabled)
+                .collect();
+            enabled_instructions.sort_by_key(|i| i.order);
+
+            for instruction in enabled_instructions {
+                let processed_content = replace_template_variables(&instruction.content, &character, &roleplay_settings);
+                preset_tokens += count_tokens(&processed_content);
+            }
+        }
+    }
+
+    // Count persona
+    if roleplay_settings.persona_enabled {
+        if let Some(name) = &roleplay_settings.persona_name {
+            if let Some(desc) = &roleplay_settings.persona_description {
+                let processed_desc = replace_template_variables(desc, &character, &roleplay_settings);
+                let persona_text = format!("\n\n[{}'s Persona: {}]", name, processed_desc);
+                persona_tokens = count_tokens(&persona_text);
+            }
+        }
+    }
+
+    // Count world info
+    let activated_entries = scan_for_world_info(&history.messages, &roleplay_settings.world_info, roleplay_settings.scan_depth, roleplay_settings.recursion_depth);
+    if !activated_entries.is_empty() {
+        let mut wi_text = String::from("\n\n[Relevant World Information:");
+        for entry in activated_entries {
+            let processed_content = replace_template_variables(&entry.content, &character, &roleplay_settings);
+            wi_text.push_str(&format!("\n- {}", processed_content));
+        }
+        wi_text.push_str("\n]");
+        world_info_tokens = count_tokens(&wi_text);
+    }
+
+    // Count author's note
+    let authors_note_tokens = if let Some(note) = authors_note {
+        let note_text = format!("[Author's Note: {}]", note);
+        count_tokens(&note_text)
+    } else {
+        0
+    };
+
+    // Count message history
+    let mut history_tokens = 0;
+    for msg in &history.messages {
+        history_tokens += count_tokens(msg.get_content());
+    }
+
+    // Count current input
+    let input_tokens = count_tokens(&current_input);
+
+    // Calculate total
+    let total = system_prompt_tokens + preset_tokens + persona_tokens + world_info_tokens +
+                authors_note_tokens + history_tokens + input_tokens;
+
+    // Estimate remaining tokens for response (assuming 16k context with 4k max response)
+    let estimated_max_tokens = if total < 12000 { 4096 } else { 16384 - total };
+
+    Ok(TokenBreakdown {
+        total,
+        system_prompt: system_prompt_tokens,
+        preset_instructions: preset_tokens,
+        persona: persona_tokens,
+        world_info: world_info_tokens,
+        authors_note: authors_note_tokens,
+        message_history: history_tokens,
+        current_input: input_tokens,
+        estimated_max_tokens,
+    })
+}
+
 // World Info Commands
 
 #[tauri::command]
@@ -2842,6 +2972,7 @@ pub fn run() {
             duplicate_preset,
             is_builtin_preset_modified,
             restore_builtin_preset,
+            get_token_count,
             add_world_info_entry,
             update_world_info_entry,
             delete_world_info_entry,
