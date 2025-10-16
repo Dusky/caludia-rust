@@ -7,6 +7,8 @@ use futures::StreamExt;
 use tauri::Emitter;
 use base64::Engine;
 use regex::Regex;
+use std::sync::{Mutex, OnceLock};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiConfig {
@@ -257,7 +259,7 @@ struct WorldInfoEntry {
     use_regex: bool, // Use regex matching instead of literal string matching
 }
 
-// Roleplay Settings (Author's Note, Persona, World Info)
+// Roleplay Settings (Author's Note, Persona, World Info, Prompt Presets)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct RoleplaySettings {
     #[serde(default)]
@@ -276,6 +278,10 @@ struct RoleplaySettings {
     world_info: Vec<WorldInfoEntry>,
     #[serde(default = "default_scan_depth")]
     scan_depth: usize, // Scan last N messages for keywords (default 20)
+    #[serde(default = "default_recursion_depth")]
+    recursion_depth: usize, // Max depth for recursive World Info activation (default 3)
+    #[serde(default)]
+    active_preset_id: Option<String>, // Selected prompt preset for this character
 }
 
 fn default_authors_note_depth() -> usize {
@@ -284,6 +290,10 @@ fn default_authors_note_depth() -> usize {
 
 fn default_scan_depth() -> usize {
     20
+}
+
+fn default_recursion_depth() -> usize {
+    3
 }
 
 impl Default for RoleplaySettings {
@@ -297,8 +307,174 @@ impl Default for RoleplaySettings {
             persona_enabled: false,
             world_info: Vec::new(),
             scan_depth: default_scan_depth(),
+            recursion_depth: default_recursion_depth(),
+            active_preset_id: None, // No preset selected by default
         }
     }
+}
+
+// Prompt Preset System (Simplified MVP)
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InstructionBlock {
+    id: String,
+    name: String,
+    content: String,
+    enabled: bool,
+    #[serde(default)]
+    order: i32, // Lower = earlier in context
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FormatHints {
+    #[serde(default = "default_wi_format")]
+    wi_format: String,  // e.g., "{0}" or "[WorldInfo: {0}]"
+    #[serde(default = "default_scenario_format")]
+    scenario_format: String, // e.g., "{{scenario}}"
+    #[serde(default = "default_personality_format")]
+    personality_format: String, // e.g., "[{{char}}'s personality: {{personality}}]"
+}
+
+fn default_wi_format() -> String {
+    "{0}".to_string()
+}
+
+fn default_scenario_format() -> String {
+    "{{scenario}}".to_string()
+}
+
+fn default_personality_format() -> String {
+    "[{{char}}'s personality: {{personality}}]".to_string()
+}
+
+impl Default for FormatHints {
+    fn default() -> Self {
+        Self {
+            wi_format: default_wi_format(),
+            scenario_format: default_scenario_format(),
+            personality_format: default_personality_format(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PromptPreset {
+    id: String,
+    name: String,
+    description: String,
+    #[serde(default)]
+    system_additions: String,        // Added to character system_prompt
+    #[serde(default)]
+    authors_note_default: String,    // Default Author's Note content
+    #[serde(default)]
+    instructions: Vec<InstructionBlock>,
+    #[serde(default)]
+    format_hints: FormatHints,
+}
+
+// Simplified info for listing presets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct PresetInfo {
+    id: String,
+    name: String,
+    description: String,
+}
+
+// Create built-in presets
+
+fn create_default_preset() -> PromptPreset {
+    PromptPreset {
+        id: "default".to_string(),
+        name: "Default".to_string(),
+        description: "Minimal instructions for general use".to_string(),
+        system_additions: String::new(),
+        authors_note_default: String::new(),
+        instructions: vec![],
+        format_hints: FormatHints::default(),
+    }
+}
+
+fn create_roleplay_preset() -> PromptPreset {
+    PromptPreset {
+        id: "roleplay".to_string(),
+        name: "Roleplay".to_string(),
+        description: "Optimized for immersive character roleplay".to_string(),
+        system_additions: "\n\n[Roleplay Guidelines:\n- Stay in character at all times\n- Use vivid, descriptive language\n- Show, don't tell - express emotions through actions and dialogue\n- Maintain consistent characterization\n- Respond dynamically to {{user}}'s actions]".to_string(),
+        authors_note_default: "[Write detailed, immersive responses focusing on {{char}}'s perspective. Include their thoughts, feelings, and physical reactions.]".to_string(),
+        instructions: vec![
+            InstructionBlock {
+                id: Uuid::new_v4().to_string(),
+                name: "Immersion".to_string(),
+                content: "[Focus on sensory details and environmental descriptions to create immersion]".to_string(),
+                enabled: true,
+                order: 1,
+            },
+            InstructionBlock {
+                id: Uuid::new_v4().to_string(),
+                name: "Character Voice".to_string(),
+                content: "[Maintain {{char}}'s unique voice, speech patterns, and personality traits]".to_string(),
+                enabled: true,
+                order: 2,
+            },
+        ],
+        format_hints: FormatHints::default(),
+    }
+}
+
+fn create_creative_writing_preset() -> PromptPreset {
+    PromptPreset {
+        id: "creative-writing".to_string(),
+        name: "Creative Writing".to_string(),
+        description: "For collaborative storytelling and narrative co-writing".to_string(),
+        system_additions: "\n\n[Creative Writing Mode:\n- Focus on narrative flow and story progression\n- Use varied sentence structure and literary devices\n- Balance description, dialogue, and action\n- Build tension and pacing appropriately\n- Maintain consistent tone and style]".to_string(),
+        authors_note_default: "[Continue the narrative with engaging prose. Advance the plot while maintaining character development.]".to_string(),
+        instructions: vec![
+            InstructionBlock {
+                id: Uuid::new_v4().to_string(),
+                name: "Narrative Style".to_string(),
+                content: "[Write in a literary style with attention to prose quality and storytelling craft]".to_string(),
+                enabled: true,
+                order: 1,
+            },
+            InstructionBlock {
+                id: Uuid::new_v4().to_string(),
+                name: "Story Structure".to_string(),
+                content: "[Consider story beats, conflict, and resolution. Build towards meaningful moments]".to_string(),
+                enabled: true,
+                order: 2,
+            },
+        ],
+        format_hints: FormatHints::default(),
+    }
+}
+
+fn create_assistant_preset() -> PromptPreset {
+    PromptPreset {
+        id: "assistant".to_string(),
+        name: "Assistant".to_string(),
+        description: "Traditional AI assistant behavior for practical tasks".to_string(),
+        system_additions: "\n\n[Assistant Guidelines:\n- Provide clear, helpful, and accurate information\n- Be concise but thorough\n- Use formatting (lists, bold, etc.) when it improves clarity\n- Ask clarifying questions when needed\n- Maintain a professional yet friendly tone]".to_string(),
+        authors_note_default: "[Focus on being helpful, informative, and user-friendly]".to_string(),
+        instructions: vec![
+            InstructionBlock {
+                id: Uuid::new_v4().to_string(),
+                name: "Clarity".to_string(),
+                content: "[Organize information logically and use examples when helpful]".to_string(),
+                enabled: true,
+                order: 1,
+            },
+        ],
+        format_hints: FormatHints::default(),
+    }
+}
+
+fn get_builtin_presets() -> Vec<PromptPreset> {
+    vec![
+        create_default_preset(),
+        create_roleplay_preset(),
+        create_creative_writing_preset(),
+        create_assistant_preset(),
+    ]
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -412,6 +588,129 @@ fn save_roleplay_settings(character_id: &str, settings: &RoleplaySettings) -> Re
     let contents = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
     fs::write(path, contents).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// Prompt Preset Path and Loading Functions
+
+// Preset cache to avoid disk I/O on every message
+static PRESET_CACHE: OnceLock<Mutex<HashMap<String, PromptPreset>>> = OnceLock::new();
+
+fn get_preset_cache() -> &'static Mutex<HashMap<String, PromptPreset>> {
+    PRESET_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+#[allow(dead_code)]
+fn clear_preset_cache() {
+    if let Ok(mut cache) = get_preset_cache().lock() {
+        cache.clear();
+    }
+}
+
+fn get_presets_dir() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/presets")
+}
+
+fn get_preset_path(preset_id: &str) -> PathBuf {
+    get_presets_dir().join(format!("{}.json", preset_id))
+}
+
+fn load_preset(preset_id: &str) -> Option<PromptPreset> {
+    // Check cache first
+    if let Ok(cache) = get_preset_cache().lock() {
+        if let Some(preset) = cache.get(preset_id) {
+            return Some(preset.clone());
+        }
+    }
+
+    // First check if it's a built-in preset
+    let builtin_presets = get_builtin_presets();
+    if let Some(preset) = builtin_presets.iter().find(|p| p.id == preset_id) {
+        // Cache built-in preset
+        if let Ok(mut cache) = get_preset_cache().lock() {
+            cache.insert(preset_id.to_string(), preset.clone());
+        }
+        return Some(preset.clone());
+    }
+
+    // Then check user presets directory
+    let path = get_preset_path(preset_id);
+    match fs::read_to_string(&path) {
+        Ok(contents) => {
+            match serde_json::from_str::<PromptPreset>(&contents) {
+                Ok(preset) => {
+                    // Cache successfully loaded preset
+                    if let Ok(mut cache) = get_preset_cache().lock() {
+                        cache.insert(preset_id.to_string(), preset.clone());
+                    }
+                    Some(preset)
+                }
+                Err(e) => {
+                    eprintln!("Failed to parse preset '{}': {}", preset_id, e);
+                    None
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to load preset '{}' from {:?}: {}", preset_id, path, e);
+            None
+        }
+    }
+}
+
+fn save_preset(preset: &PromptPreset) -> Result<(), String> {
+    let dir = get_presets_dir();
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let path = get_preset_path(&preset.id);
+    let contents = serde_json::to_string_pretty(preset).map_err(|e| e.to_string())?;
+    fs::write(path, contents).map_err(|e| e.to_string())?;
+
+    // Invalidate cache for this preset
+    if let Ok(mut cache) = get_preset_cache().lock() {
+        cache.remove(&preset.id);
+    }
+
+    Ok(())
+}
+
+fn list_preset_infos() -> Vec<PresetInfo> {
+    let mut presets = Vec::new();
+
+    // Add built-in presets
+    for preset in get_builtin_presets() {
+        presets.push(PresetInfo {
+            id: preset.id,
+            name: preset.name,
+            description: preset.description,
+        });
+    }
+
+    // Add user presets from directory
+    let dir = get_presets_dir();
+    if dir.exists() {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    if let Ok(contents) = fs::read_to_string(&path) {
+                        if let Ok(preset) = serde_json::from_str::<PromptPreset>(&contents) {
+                            // Skip if it's a duplicate of a built-in preset
+                            if !presets.iter().any(|p| p.id == preset.id) {
+                                presets.push(PresetInfo {
+                                    id: preset.id,
+                                    name: preset.name,
+                                    description: preset.description,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    presets
 }
 
 // PNG Character Card Utilities
@@ -865,62 +1164,101 @@ fn get_api_config() -> Result<ApiConfig, String> {
 
 // Roleplay Context Injection Logic
 
-// Scan messages for World Info keywords and return activated entries
-fn scan_for_world_info(messages: &[Message], world_info: &[WorldInfoEntry], scan_depth: usize) -> Vec<WorldInfoEntry> {
-    let mut activated_entries = Vec::new();
+// Helper function to check if text contains any keyword from an entry
+fn text_matches_entry(text: &str, entry: &WorldInfoEntry) -> bool {
+    for keyword in &entry.keys {
+        let matches = if entry.use_regex {
+            // Use regex matching
+            if let Ok(re) = Regex::new(keyword) {
+                re.is_match(text)
+            } else {
+                // Invalid regex - fall back to literal matching
+                eprintln!("Invalid regex pattern '{}' for entry {}: falling back to literal match", keyword, entry.id);
+                if entry.case_sensitive {
+                    text.contains(keyword)
+                } else {
+                    text.to_lowercase().contains(&keyword.to_lowercase())
+                }
+            }
+        } else {
+            // Use literal string matching
+            if entry.case_sensitive {
+                text.contains(keyword)
+            } else {
+                text.to_lowercase().contains(&keyword.to_lowercase())
+            }
+        };
 
-    // Scan the last N messages (scan_depth)
+        if matches {
+            return true;
+        }
+    }
+    false
+}
+
+// Scan messages for World Info keywords and return activated entries (with recursive activation)
+fn scan_for_world_info(messages: &[Message], world_info: &[WorldInfoEntry], scan_depth: usize, recursion_depth: usize) -> Vec<WorldInfoEntry> {
+    scan_for_world_info_recursive(messages, world_info, scan_depth, recursion_depth)
+}
+
+// Recursive World Info scanning with configurable recursion depth
+fn scan_for_world_info_recursive(
+    messages: &[Message],
+    world_info: &[WorldInfoEntry],
+    scan_depth: usize,
+    recursion_depth: usize,
+) -> Vec<WorldInfoEntry> {
+    use std::collections::HashSet;
+
+    let mut activated_ids: HashSet<String> = HashSet::new();
+    let mut activated_entries: Vec<WorldInfoEntry> = Vec::new();
+
+    // Collect text to scan from messages
     let messages_to_scan: Vec<&Message> = messages.iter()
         .rev()
         .take(scan_depth)
         .collect();
 
-    for entry in world_info {
-        if !entry.enabled {
-            continue;
-        }
+    let mut scan_texts: Vec<String> = messages_to_scan
+        .iter()
+        .map(|msg| msg.get_content().to_string())
+        .collect();
 
-        // Check if any keyword matches in the scanned messages
-        let mut activated = false;
-        for message in &messages_to_scan {
-            let content = message.get_content();
+    // Iteratively scan for keywords with depth limit
+    for current_depth in 0..recursion_depth {
+        let mut newly_activated = Vec::new();
 
-            for keyword in &entry.keys {
-                let matches = if entry.use_regex {
-                    // Use regex matching
-                    if let Ok(re) = Regex::new(keyword) {
-                        re.is_match(content)
-                    } else {
-                        // Invalid regex - fall back to literal matching
-                        eprintln!("Invalid regex pattern '{}' for entry {}: falling back to literal match", keyword, entry.id);
-                        if entry.case_sensitive {
-                            content.contains(keyword)
-                        } else {
-                            content.to_lowercase().contains(&keyword.to_lowercase())
-                        }
-                    }
-                } else {
-                    // Use literal string matching
-                    if entry.case_sensitive {
-                        content.contains(keyword)
-                    } else {
-                        content.to_lowercase().contains(&keyword.to_lowercase())
-                    }
-                };
+        // Check each enabled entry against current scan texts
+        for entry in world_info {
+            if !entry.enabled || activated_ids.contains(&entry.id) {
+                continue;
+            }
 
-                if matches {
-                    activated = true;
+            // Check if this entry matches any of the scan texts
+            for text in &scan_texts {
+                if text_matches_entry(text, entry) {
+                    activated_ids.insert(entry.id.clone());
+                    newly_activated.push(entry.clone());
                     break;
                 }
             }
-
-            if activated {
-                break;
-            }
         }
 
-        if activated {
-            activated_entries.push(entry.clone());
+        // If no new entries were activated, stop recursion
+        if newly_activated.is_empty() {
+            break;
+        }
+
+        // Add newly activated entries to results
+        activated_entries.extend(newly_activated.clone());
+
+        // For next iteration, scan the content of newly activated entries
+        // (only if we haven't reached max depth)
+        if current_depth + 1 < recursion_depth {
+            scan_texts = newly_activated
+                .iter()
+                .map(|entry| entry.content.clone())
+                .collect();
         }
     }
 
@@ -930,45 +1268,151 @@ fn scan_for_world_info(messages: &[Message], world_info: &[WorldInfoEntry], scan
     activated_entries
 }
 
+// Replace template variables in text
+fn replace_template_variables(
+    text: &str,
+    character: &Character,
+    settings: &RoleplaySettings,
+) -> String {
+    use chrono::Local;
+
+    let mut result = text.to_string();
+
+    // {{char}} - Character name
+    result = result.replace("{{char}}", &character.name);
+
+    // {{user}} - User name (from persona if enabled, otherwise "User")
+    let user_name = if settings.persona_enabled {
+        settings.persona_name.as_deref().unwrap_or("User")
+    } else {
+        "User"
+    };
+    result = result.replace("{{user}}", user_name);
+
+    // {{date}} - Current date (YYYY-MM-DD format)
+    let now = Local::now();
+    let date_str = now.format("%Y-%m-%d").to_string();
+    result = result.replace("{{date}}", &date_str);
+
+    // {{time}} - Current time (HH:MM format)
+    let time_str = now.format("%H:%M").to_string();
+    result = result.replace("{{time}}", &time_str);
+
+    result
+}
+
 // Build injected context from roleplay settings
 fn build_roleplay_context(
-    _character: &Character,
+    character: &Character,
     messages: &[Message],
     settings: &RoleplaySettings,
 ) -> (String, Option<String>, usize) {
     let mut system_additions = String::new();
     let mut authors_note_content = None;
 
-    // 1. Add Persona to system prompt
-    if settings.persona_enabled {
-        if let Some(name) = &settings.persona_name {
-            if let Some(desc) = &settings.persona_description {
-                system_additions.push_str(&format!("\n\n[{{{{user}}}}'s Persona: {} - {}]", name, desc));
+    // 0. Apply Prompt Preset instructions if one is selected
+    if let Some(preset_id) = &settings.active_preset_id {
+        if let Some(preset) = load_preset(preset_id) {
+            // Add preset system additions (with template variables replaced)
+            if !preset.system_additions.is_empty() {
+                let processed_additions = replace_template_variables(&preset.system_additions, character, settings);
+                system_additions.push_str(&processed_additions);
+            }
+
+            // Add enabled instruction blocks (sorted by order, with template variables replaced)
+            let mut enabled_instructions: Vec<_> = preset.instructions.iter()
+                .filter(|i| i.enabled)
+                .collect();
+            enabled_instructions.sort_by_key(|i| i.order);
+
+            for instruction in enabled_instructions {
+                let processed_content = replace_template_variables(&instruction.content, character, settings);
+                system_additions.push_str(&format!("\n{}", processed_content));
+            }
+
+            // Set default Author's Note from preset if user hasn't set one
+            if !settings.authors_note_enabled && !preset.authors_note_default.is_empty() {
+                let processed_note = replace_template_variables(&preset.authors_note_default, character, settings);
+                authors_note_content = Some(processed_note);
             }
         }
     }
 
-    // 2. Scan for World Info and add to system prompt
-    let activated_entries = scan_for_world_info(messages, &settings.world_info, settings.scan_depth);
+    // 1. Add Persona to system prompt (with template variables replaced)
+    if settings.persona_enabled {
+        if let Some(name) = &settings.persona_name {
+            if let Some(desc) = &settings.persona_description {
+                let processed_desc = replace_template_variables(desc, character, settings);
+                system_additions.push_str(&format!("\n\n[{}'s Persona: {}]", name, processed_desc));
+            }
+        }
+    }
+
+    // 2. Scan for World Info and add to system prompt (with template variables replaced)
+    let activated_entries = scan_for_world_info(messages, &settings.world_info, settings.scan_depth, settings.recursion_depth);
 
     if !activated_entries.is_empty() {
         system_additions.push_str("\n\n[Relevant World Information:");
         for entry in activated_entries {
-            system_additions.push_str(&format!("\n- {}", entry.content));
+            let processed_content = replace_template_variables(&entry.content, character, settings);
+            system_additions.push_str(&format!("\n- {}", processed_content));
         }
-        system_additions.push_str("]");
+        system_additions.push_str("\n]");
     }
 
-    // 3. Store Author's Note for later injection
+    // 3. Store Author's Note for later injection (with template variables replaced)
+    // User's explicit Author's Note overrides preset default
     if settings.authors_note_enabled {
         if let Some(note) = &settings.authors_note {
             if !note.is_empty() {
-                authors_note_content = Some(note.clone());
+                let processed_note = replace_template_variables(note, character, settings);
+                authors_note_content = Some(processed_note);
             }
         }
     }
 
     (system_additions, authors_note_content, settings.authors_note_depth)
+}
+
+// Helper function to build API messages array with all context injection
+fn build_api_messages(
+    character: &Character,
+    history: &ChatHistory,
+    roleplay_settings: &RoleplaySettings,
+) -> Vec<Message> {
+    // Load roleplay settings and build context
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(character, &history.messages, roleplay_settings);
+
+    // Build messages with system prompt first - use simple Message for API (with template variables replaced)
+    let processed_system_prompt = replace_template_variables(&character.system_prompt, character, roleplay_settings);
+    let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
+    api_messages[0].role = "system".to_string();
+
+    // Add history messages with current swipe content
+    for msg in &history.messages {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note before last N messages if it exists (configurable depth)
+    // FIX: If conversation is too short, insert after system message instead of skipping
+    if let Some(note) = authors_note {
+        let insert_pos = if api_messages.len() > (note_depth + 1) {
+            // Normal case: insert before last N messages
+            api_messages.len().saturating_sub(note_depth)
+        } else {
+            // Edge case: conversation too short, insert after system message
+            1
+        };
+
+        let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
+        note_msg.role = "system".to_string();
+        api_messages.insert(insert_pos, note_msg);
+    }
+
+    api_messages
 }
 
 #[tauri::command]
@@ -988,31 +1432,9 @@ async fn chat(message: String) -> Result<String, String> {
         format!("{}/v1/chat/completions", base)
     };
 
-    // Load roleplay settings and build context
+    // Build API messages with all roleplay context
     let roleplay_settings = load_roleplay_settings(&character.id);
-    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
-
-    // Build messages with system prompt first - use simple Message for API
-    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
-    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
-    api_messages[0].role = "system".to_string();
-
-    // Add history messages with current swipe content
-    for msg in &history.messages {
-        let mut api_msg = Message::new_user(msg.get_content().to_string());
-        api_msg.role = msg.role.clone();
-        api_messages.push(api_msg);
-    }
-
-    // Insert Author's Note before last N messages if it exists (configurable depth)
-    if let Some(note) = authors_note {
-        if api_messages.len() > (note_depth + 1) { // system + at least note_depth messages
-            let insert_pos = api_messages.len().saturating_sub(note_depth);
-            let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
-            note_msg.role = "system".to_string();
-            api_messages.insert(insert_pos, note_msg);
-        }
-    }
+    let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
     let request = ChatRequest {
         model: config.model.clone(),
@@ -1070,31 +1492,9 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
         format!("{}/v1/chat/completions", base)
     };
 
-    // Load roleplay settings and build context
+    // Build API messages with all roleplay context
     let roleplay_settings = load_roleplay_settings(&character.id);
-    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
-
-    // Build messages with system prompt first - use simple Message for API
-    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
-    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
-    api_messages[0].role = "system".to_string();
-
-    // Add history messages with current swipe content
-    for msg in &history.messages {
-        let mut api_msg = Message::new_user(msg.get_content().to_string());
-        api_msg.role = msg.role.clone();
-        api_messages.push(api_msg);
-    }
-
-    // Insert Author's Note before last N messages if it exists (configurable depth)
-    if let Some(note) = authors_note {
-        if api_messages.len() > (note_depth + 1) { // system + at least note_depth messages
-            let insert_pos = api_messages.len().saturating_sub(note_depth);
-            let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
-            note_msg.role = "system".to_string();
-            api_messages.insert(insert_pos, note_msg);
-        }
-    }
+    let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
     let request = StreamChatRequest {
         model: config.model.clone(),
@@ -1249,8 +1649,9 @@ async fn generate_response_only() -> Result<String, String> {
     let roleplay_settings = load_roleplay_settings(&character.id);
     let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
-    // Build messages with enhanced system prompt first
-    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
+    // Build messages with enhanced system prompt first (with template variables replaced)
+    let processed_system_prompt = replace_template_variables(&character.system_prompt, &character, &roleplay_settings);
+    let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
     let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
 
@@ -1322,8 +1723,9 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
     let roleplay_settings = load_roleplay_settings(&character.id);
     let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
-    // Build messages with enhanced system prompt first
-    let enhanced_system_prompt = format!("{}{}", character.system_prompt, system_additions);
+    // Build messages with enhanced system prompt first (with template variables replaced)
+    let processed_system_prompt = replace_template_variables(&character.system_prompt, &character, &roleplay_settings);
+    let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
     let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
 
@@ -1984,6 +2386,165 @@ fn update_persona(
 }
 
 #[tauri::command]
+fn update_recursion_depth(
+    character_id: String,
+    depth: usize,
+) -> Result<(), String> {
+    // Validate recursion depth (should be between 0 and 10)
+    if depth > 10 {
+        return Err("Recursion depth must be between 0 and 10".to_string());
+    }
+
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.recursion_depth = depth;
+    save_roleplay_settings(&character_id, &settings)
+}
+
+// Prompt Preset Commands
+
+#[tauri::command]
+fn get_presets() -> Result<Vec<PresetInfo>, String> {
+    Ok(list_preset_infos())
+}
+
+#[tauri::command]
+fn get_preset(preset_id: String) -> Result<PromptPreset, String> {
+    load_preset(&preset_id).ok_or_else(|| format!("Preset '{}' not found", preset_id))
+}
+
+#[tauri::command]
+fn set_active_preset(
+    character_id: String,
+    preset_id: Option<String>,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.active_preset_id = preset_id;
+    save_roleplay_settings(&character_id, &settings)
+}
+
+#[tauri::command]
+fn save_custom_preset(preset: PromptPreset) -> Result<(), String> {
+    // Validate that it's not overwriting a built-in preset
+    let builtin_ids: Vec<String> = get_builtin_presets().iter().map(|p| p.id.clone()).collect();
+    if builtin_ids.contains(&preset.id) {
+        return Err("Cannot overwrite built-in presets".to_string());
+    }
+
+    save_preset(&preset)
+}
+
+#[tauri::command]
+fn update_preset_instructions(
+    preset_id: String,
+    instructions: Vec<InstructionBlock>,
+) -> Result<(), String> {
+    // Cannot update built-in presets
+    let builtin_ids: Vec<String> = get_builtin_presets().iter().map(|p| p.id.clone()).collect();
+    if builtin_ids.contains(&preset_id) {
+        return Err("Cannot modify built-in presets".to_string());
+    }
+
+    // Load the preset
+    let mut preset = load_preset(&preset_id)
+        .ok_or_else(|| format!("Preset '{}' not found", preset_id))?;
+
+    // Update instructions
+    preset.instructions = instructions;
+
+    // Save back
+    save_preset(&preset)
+}
+
+#[tauri::command]
+fn delete_custom_preset(preset_id: String) -> Result<(), String> {
+    // Cannot delete built-in presets
+    let builtin_ids: Vec<String> = get_builtin_presets().iter().map(|p| p.id.clone()).collect();
+    if builtin_ids.contains(&preset_id) {
+        return Err("Cannot delete built-in presets".to_string());
+    }
+
+    let path = get_preset_path(&preset_id);
+    fs::remove_file(path).map_err(|e| format!("Failed to delete preset: {}", e))?;
+
+    // Invalidate cache for this preset
+    if let Ok(mut cache) = get_preset_cache().lock() {
+        cache.remove(&preset_id);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn duplicate_preset(source_preset_id: String, new_name: String) -> Result<PromptPreset, String> {
+    // Load the source preset (can be built-in or custom)
+    let source_preset = load_preset(&source_preset_id)
+        .ok_or_else(|| format!("Source preset '{}' not found", source_preset_id))?;
+
+    // Create new preset ID from name
+    let new_id = new_name.to_lowercase().replace(' ', "_");
+
+    // Check if preset with this ID already exists
+    if load_preset(&new_id).is_some() {
+        return Err(format!("A preset with ID '{}' already exists", new_id));
+    }
+
+    // Create the duplicated preset
+    let new_preset = PromptPreset {
+        id: new_id,
+        name: new_name,
+        description: format!("Copy of {}", source_preset.name),
+        system_additions: source_preset.system_additions.clone(),
+        authors_note_default: source_preset.authors_note_default.clone(),
+        instructions: source_preset.instructions.clone(),
+        format_hints: source_preset.format_hints.clone(),
+    };
+
+    // Save as custom preset
+    save_preset(&new_preset)?;
+
+    Ok(new_preset)
+}
+
+#[tauri::command]
+fn is_builtin_preset_modified(preset_id: String) -> bool {
+    // Check if it's a built-in preset ID
+    let builtin_ids = vec!["default", "roleplay", "creative-writing", "assistant"];
+    if !builtin_ids.contains(&preset_id.as_str()) {
+        return false;
+    }
+
+    // Check if a custom override exists
+    let path = get_preset_path(&preset_id);
+    path.exists()
+}
+
+#[tauri::command]
+fn restore_builtin_preset(preset_id: String) -> Result<PromptPreset, String> {
+    // Verify it's a built-in preset
+    let builtin_ids = vec!["default", "roleplay", "creative-writing", "assistant"];
+    if !builtin_ids.contains(&preset_id.as_str()) {
+        return Err("Can only restore built-in presets".to_string());
+    }
+
+    // Delete the custom override if it exists
+    let path = get_preset_path(&preset_id);
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| format!("Failed to delete override: {}", e))?;
+    }
+
+    // Invalidate cache
+    if let Ok(mut cache) = get_preset_cache().lock() {
+        cache.remove(&preset_id);
+    }
+
+    // Load and return the built-in preset
+    load_preset(&preset_id)
+        .ok_or_else(|| format!("Built-in preset '{}' not found", preset_id))
+}
+
+// World Info Commands
+
+#[tauri::command]
 fn add_world_info_entry(
     character_id: String,
     keys: Vec<String>,
@@ -2271,6 +2832,16 @@ pub fn run() {
             update_roleplay_depths,
             update_authors_note,
             update_persona,
+            update_recursion_depth,
+            get_presets,
+            get_preset,
+            set_active_preset,
+            save_custom_preset,
+            update_preset_instructions,
+            delete_custom_preset,
+            duplicate_preset,
+            is_builtin_preset_modified,
+            restore_builtin_preset,
             add_world_info_entry,
             update_world_info_entry,
             delete_world_info_entry,

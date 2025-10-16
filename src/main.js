@@ -1338,6 +1338,21 @@ function setupAppControls() {
   document.getElementById('add-worldinfo-btn').addEventListener('click', handleAddWorldInfoEntry);
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
+
+  // Setup recursion depth change handler
+  document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
+
+  // Setup preset controls
+  document.getElementById('preset-select').addEventListener('change', (e) => {
+    handlePresetSelect(e.target.value);
+  });
+  document.getElementById('apply-preset-btn').addEventListener('click', handleApplyPreset);
+  document.getElementById('create-preset-btn').addEventListener('click', handleCreatePreset);
+  document.getElementById('add-instruction-btn').addEventListener('click', addInstructionBlock);
+  document.getElementById('save-preset-changes-btn').addEventListener('click', savePresetChanges);
+  document.getElementById('delete-preset-btn').addEventListener('click', deletePreset);
+  document.getElementById('duplicate-preset-btn').addEventListener('click', duplicatePreset);
+  document.getElementById('restore-preset-btn').addEventListener('click', restoreBuiltinPreset);
 }
 
 // Keyboard shortcuts
@@ -1678,6 +1693,9 @@ async function loadRoleplaySettings() {
     // Load World Info entries
     renderWorldInfoList(settings.world_info || []);
 
+    // Load World Info recursion depth
+    document.getElementById('recursion-depth').value = settings.recursion_depth || 3;
+
     // Load Author's Note
     document.getElementById('authors-note-text').value = settings.authors_note || '';
     document.getElementById('authors-note-enabled').checked = settings.authors_note_enabled || false;
@@ -1686,6 +1704,9 @@ async function loadRoleplaySettings() {
     document.getElementById('persona-name').value = settings.persona_name || '';
     document.getElementById('persona-description').value = settings.persona_description || '';
     document.getElementById('persona-enabled').checked = settings.persona_enabled || false;
+
+    // Load Presets
+    await loadPresets();
   } catch (error) {
     console.error('Failed to load roleplay settings:', error);
   }
@@ -1912,6 +1933,716 @@ async function handleSavePersona() {
   } catch (error) {
     console.error('Failed to save Persona:', error);
     setStatus('Failed to save Persona', 'error');
+  }
+}
+
+// Handle recursion depth change
+async function handleRecursionDepthChange() {
+  if (!currentCharacter) return;
+
+  const depth = parseInt(document.getElementById('recursion-depth').value) || 3;
+
+  try {
+    await invoke('update_recursion_depth', {
+      characterId: currentCharacter.id,
+      depth
+    });
+
+    console.log('Recursion depth updated to:', depth);
+  } catch (error) {
+    console.error('Failed to update recursion depth:', error);
+    setStatus('Failed to save recursion depth', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
+  }
+}
+
+// Prompt Preset Management
+
+// Load available presets
+async function loadPresets() {
+  try {
+    const presets = await invoke('get_presets');
+    const presetSelect = document.getElementById('preset-select');
+
+    // Clear existing options except "No Preset"
+    presetSelect.innerHTML = '<option value="">No Preset</option>';
+
+    // Add presets to dropdown
+    presets.forEach(preset => {
+      const option = document.createElement('option');
+      option.value = preset.id;
+      option.textContent = preset.name;
+      presetSelect.appendChild(option);
+    });
+
+    // Set current preset if one is active
+    if (currentRoleplaySettings && currentRoleplaySettings.active_preset_id) {
+      presetSelect.value = currentRoleplaySettings.active_preset_id;
+      await handlePresetSelect(currentRoleplaySettings.active_preset_id);
+    } else {
+      presetSelect.value = '';
+      hidePresetInfo();
+    }
+  } catch (error) {
+    console.error('Failed to load presets:', error);
+  }
+}
+
+// Hide preset info panel
+function hidePresetInfo() {
+  const presetInfo = document.getElementById('preset-info');
+  const applyBtn = document.getElementById('apply-preset-btn');
+  presetInfo.style.display = 'none';
+  applyBtn.disabled = true;
+}
+
+// Global variable to track current preset being edited
+let currentEditingPreset = null;
+
+// Show preset details/editor
+async function handlePresetSelect(presetId) {
+  if (!presetId) {
+    hidePresetInfo();
+    return;
+  }
+
+  try {
+    const preset = await invoke('get_preset', { presetId });
+    currentEditingPreset = preset;
+
+    // Determine if this is a built-in preset
+    const builtInIds = ['default', 'roleplay', 'creative-writing', 'assistant'];
+    const isBuiltIn = builtInIds.includes(preset.id);
+
+    // Show preset info
+    const presetInfo = document.getElementById('preset-info');
+    const presetName = document.getElementById('preset-name');
+    const presetDescription = document.getElementById('preset-description');
+    const builtInBadge = document.getElementById('preset-builtin-badge');
+    const deleteBtn = document.getElementById('delete-preset-btn');
+    const duplicateBtn = document.getElementById('duplicate-preset-btn');
+    const saveChangesBtn = document.getElementById('save-preset-changes-btn');
+    const addInstructionBtn = document.getElementById('add-instruction-btn');
+    const applyBtn = document.getElementById('apply-preset-btn');
+
+    // System additions elements
+    const systemReadonly = document.getElementById('preset-system-readonly');
+    const systemEditable = document.getElementById('preset-system-editable');
+
+    // Author's note elements
+    const authorsNoteReadonly = document.getElementById('preset-authors-note-readonly');
+    const authorsNoteEditable = document.getElementById('preset-authors-note-editable');
+
+    presetName.textContent = preset.name;
+    presetDescription.textContent = preset.description;
+    presetInfo.style.display = 'block';
+
+    // Check if built-in preset is modified
+    const modifiedBadge = document.getElementById('preset-modified-badge');
+    const restoreBtn = document.getElementById('restore-preset-btn');
+    let isModified = false;
+
+    if (isBuiltIn) {
+      isModified = await invoke('is_builtin_preset_modified', { presetId: preset.id });
+    }
+
+    // Show/hide built-in badge and controls
+    if (isBuiltIn) {
+      builtInBadge.style.display = 'inline-block';
+      modifiedBadge.style.display = isModified ? 'inline-block' : 'none';
+      deleteBtn.style.display = 'none';
+      duplicateBtn.style.display = 'inline-block';
+      restoreBtn.style.display = isModified ? 'inline-block' : 'none';
+      saveChangesBtn.style.display = 'inline-block';
+      addInstructionBtn.style.display = 'inline-block';
+
+      // Show editable versions (built-in presets are now editable)
+      systemEditable.value = preset.system_additions || '';
+      systemEditable.style.display = 'block';
+      systemReadonly.style.display = 'none';
+
+      authorsNoteEditable.value = preset.authors_note_default || '';
+      authorsNoteEditable.style.display = 'block';
+      authorsNoteReadonly.style.display = 'none';
+    } else {
+      builtInBadge.style.display = 'none';
+      modifiedBadge.style.display = 'none';
+      restoreBtn.style.display = 'none';
+      deleteBtn.style.display = 'inline-block';
+      duplicateBtn.style.display = 'none';
+      saveChangesBtn.style.display = 'block';
+      addInstructionBtn.style.display = 'inline-block';
+
+      // Show editable versions
+      systemEditable.value = preset.system_additions || '';
+      systemEditable.style.display = 'block';
+      systemReadonly.style.display = 'none';
+
+      authorsNoteEditable.value = preset.authors_note_default || '';
+      authorsNoteEditable.style.display = 'block';
+      authorsNoteReadonly.style.display = 'none';
+    }
+
+    // Render instruction blocks (all presets are now editable)
+    renderInstructionBlocks(preset.instructions, false);
+
+    // Enable apply button
+    applyBtn.disabled = false;
+  } catch (error) {
+    console.error('Failed to load preset details:', error);
+    hidePresetInfo();
+  }
+}
+
+// Apply selected preset
+async function handleApplyPreset() {
+  if (!currentCharacter) return;
+
+  const presetSelect = document.getElementById('preset-select');
+  const presetId = presetSelect.value || null;
+
+  try {
+    await invoke('set_active_preset', {
+      characterId: currentCharacter.id,
+      presetId
+    });
+
+    // Update local settings
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.active_preset_id = presetId;
+    }
+
+    setStatus(presetId ? 'Preset applied' : 'Preset removed', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to apply preset:', error);
+    setStatus('Failed to apply preset', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
+  }
+}
+
+// Create custom preset
+async function handleCreatePreset() {
+  const name = prompt('Enter a name for your custom preset:');
+  if (!name || !name.trim()) return;
+
+  const description = prompt('Enter a description for your preset:');
+  if (!description || !description.trim()) return;
+
+  const systemAdditions = prompt('Enter system additions (press Cancel to skip):', '');
+  const authorsNoteDefault = prompt('Enter default Author\'s Note (press Cancel to skip):', '');
+
+  try {
+    // Generate a simple ID from the name
+    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    const preset = {
+      id: id,
+      name: name.trim(),
+      description: description.trim(),
+      system_additions: systemAdditions || '',
+      authors_note_default: authorsNoteDefault || '',
+      instructions: [],
+      format_hints: {
+        wi_format: '[{content}]',
+        scenario_format: '[Scenario: {content}]',
+        personality_format: '[{char}\'s personality: {content}]'
+      }
+    };
+
+    await invoke('save_custom_preset', { preset });
+
+    setStatus('Custom preset created', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+
+    // Reload presets
+    await loadPresets();
+
+    // Select the new preset
+    document.getElementById('preset-select').value = id;
+    await handlePresetSelect(id);
+  } catch (error) {
+    console.error('Failed to create preset:', error);
+    alert(`Failed to create preset: ${error}`);
+    setStatus('Failed to create preset', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
+  }
+}
+
+// Render instruction blocks list
+function renderInstructionBlocks(instructions, isReadOnly) {
+  const listContainer = document.getElementById('preset-instructions-list');
+  listContainer.innerHTML = '';
+
+  if (!instructions || instructions.length === 0) {
+    listContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); font-size: 11px; padding: 12px;">No instruction blocks yet.</div>';
+    return;
+  }
+
+  // Sort by order
+  const sortedInstructions = [...instructions].sort((a, b) => a.order - b.order);
+
+  sortedInstructions.forEach((instruction, index) => {
+    const blockDiv = document.createElement('div');
+    blockDiv.className = 'worldinfo-entry';
+    blockDiv.style.marginBottom = '8px';
+    blockDiv.style.padding = '8px';
+    blockDiv.style.background = 'var(--bg-secondary)';
+    blockDiv.style.borderRadius = '4px';
+    blockDiv.style.cursor = 'pointer';
+    blockDiv.style.transition = 'all 0.2s ease';
+    blockDiv.dataset.instructionId = instruction.id;
+    blockDiv.dataset.collapsed = 'false';
+
+    // Enable drag and drop for non-readonly
+    if (!isReadOnly) {
+      blockDiv.draggable = true;
+      blockDiv.style.cursor = 'move';
+
+      // Drag event handlers
+      blockDiv.addEventListener('dragstart', (e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', instruction.id);
+        blockDiv.style.opacity = '0.5';
+      });
+
+      blockDiv.addEventListener('dragend', (e) => {
+        blockDiv.style.opacity = '1';
+        // Remove all drop indicators
+        document.querySelectorAll('.worldinfo-entry').forEach(el => {
+          el.style.borderTop = '';
+          el.style.borderBottom = '';
+        });
+      });
+
+      blockDiv.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+
+        // Show drop indicator
+        const rect = blockDiv.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        if (e.clientY < midpoint) {
+          blockDiv.style.borderTop = '2px solid var(--accent)';
+          blockDiv.style.borderBottom = '';
+        } else {
+          blockDiv.style.borderTop = '';
+          blockDiv.style.borderBottom = '2px solid var(--accent)';
+        }
+      });
+
+      blockDiv.addEventListener('dragleave', (e) => {
+        blockDiv.style.borderTop = '';
+        blockDiv.style.borderBottom = '';
+      });
+
+      blockDiv.addEventListener('drop', (e) => {
+        e.preventDefault();
+        blockDiv.style.borderTop = '';
+        blockDiv.style.borderBottom = '';
+
+        const draggedId = e.dataTransfer.getData('text/plain');
+        const draggedInstruction = currentEditingPreset.instructions.find(i => i.id === draggedId);
+        const dropInstruction = instruction;
+
+        if (draggedId !== instruction.id && draggedInstruction) {
+          // Determine drop position
+          const rect = blockDiv.getBoundingClientRect();
+          const midpoint = rect.top + rect.height / 2;
+          const dropBefore = e.clientY < midpoint;
+
+          // Reorder instructions
+          const draggedOrder = draggedInstruction.order;
+          const dropOrder = dropInstruction.order;
+
+          if (dropBefore) {
+            // Insert before
+            if (draggedOrder < dropOrder) {
+              // Moving down - shift items between draggedOrder and dropOrder-1 up
+              currentEditingPreset.instructions.forEach(inst => {
+                if (inst.order > draggedOrder && inst.order < dropOrder) {
+                  inst.order--;
+                }
+              });
+              draggedInstruction.order = dropOrder - 1;
+            } else {
+              // Moving up - shift items from dropOrder to draggedOrder-1 down
+              currentEditingPreset.instructions.forEach(inst => {
+                if (inst.order >= dropOrder && inst.order < draggedOrder) {
+                  inst.order++;
+                }
+              });
+              draggedInstruction.order = dropOrder;
+            }
+          } else {
+            // Insert after
+            if (draggedOrder < dropOrder) {
+              // Moving down - shift items between draggedOrder+1 and dropOrder down
+              currentEditingPreset.instructions.forEach(inst => {
+                if (inst.order > draggedOrder && inst.order <= dropOrder) {
+                  inst.order--;
+                }
+              });
+              draggedInstruction.order = dropOrder;
+            } else {
+              // Moving up - shift items from dropOrder+1 to draggedOrder-1 down
+              currentEditingPreset.instructions.forEach(inst => {
+                if (inst.order > dropOrder && inst.order < draggedOrder) {
+                  inst.order++;
+                }
+              });
+              draggedInstruction.order = dropOrder + 1;
+            }
+          }
+
+          // Re-render
+          renderInstructionBlocks(currentEditingPreset.instructions, isReadOnly);
+        }
+      });
+    }
+
+    const header = document.createElement('div');
+    header.style.display = 'flex';
+    header.style.justifyContent = 'space-between';
+    header.style.alignItems = 'center';
+    header.style.marginBottom = '6px';
+    header.style.userSelect = 'none';
+
+    const leftSide = document.createElement('div');
+    leftSide.style.display = 'flex';
+    leftSide.style.alignItems = 'center';
+    leftSide.style.gap = '8px';
+
+    // Expand/collapse chevron
+    const chevron = document.createElement('span');
+    chevron.style.fontSize = '10px';
+    chevron.style.transition = 'transform 0.2s ease';
+    chevron.textContent = '▼';
+    chevron.style.color = 'var(--text-secondary)';
+    leftSide.appendChild(chevron);
+
+    if (!isReadOnly) {
+      // Drag handle
+      const dragHandle = document.createElement('span');
+      dragHandle.style.fontSize = '10px';
+      dragHandle.style.color = 'var(--text-secondary)';
+      dragHandle.textContent = '⋮⋮';
+      dragHandle.style.cursor = 'move';
+      leftSide.appendChild(dragHandle);
+
+      // Checkbox for enabled/disabled
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = instruction.enabled;
+      checkbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        instruction.enabled = checkbox.checked;
+      });
+      checkbox.addEventListener('click', (e) => e.stopPropagation());
+      leftSide.appendChild(checkbox);
+    }
+
+    // Order badge
+    const orderBadge = document.createElement('span');
+    orderBadge.style.fontSize = '10px';
+    orderBadge.style.color = 'var(--text-secondary)';
+    orderBadge.style.background = 'var(--bg-primary)';
+    orderBadge.style.padding = '2px 6px';
+    orderBadge.style.borderRadius = '3px';
+    orderBadge.textContent = `#${instruction.order}`;
+    leftSide.appendChild(orderBadge);
+
+    // Name
+    const nameSpan = document.createElement('span');
+    nameSpan.style.fontWeight = '500';
+    nameSpan.style.fontSize = '11px';
+    nameSpan.textContent = instruction.name;
+    if (!instruction.enabled) {
+      nameSpan.style.opacity = '0.5';
+    }
+    leftSide.appendChild(nameSpan);
+
+    header.appendChild(leftSide);
+
+    if (!isReadOnly) {
+      // Control buttons
+      const controls = document.createElement('div');
+      controls.style.display = 'flex';
+      controls.style.gap = '4px';
+
+      // Edit button
+      const editBtn = document.createElement('button');
+      editBtn.className = 'worldinfo-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.style.fontSize = '11px';
+      editBtn.style.padding = '2px 6px';
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        editInstruction(instruction);
+      });
+      controls.appendChild(editBtn);
+
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'worldinfo-btn worldinfo-btn-danger';
+      deleteBtn.textContent = 'Delete';
+      deleteBtn.style.fontSize = '11px';
+      deleteBtn.style.padding = '2px 6px';
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteInstruction(instruction.id);
+      });
+      controls.appendChild(deleteBtn);
+
+      header.appendChild(controls);
+    }
+
+    // Content
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'instruction-content';
+    contentDiv.style.fontSize = '11px';
+    contentDiv.style.color = 'var(--text-secondary)';
+    contentDiv.style.marginTop = '4px';
+    contentDiv.style.whiteSpace = 'pre-wrap';
+    contentDiv.style.overflow = 'hidden';
+    contentDiv.style.transition = 'max-height 0.3s ease, opacity 0.3s ease';
+    contentDiv.textContent = instruction.content;
+    if (!instruction.enabled) {
+      contentDiv.style.opacity = '0.5';
+    }
+
+    // Toggle expand/collapse on header click
+    header.addEventListener('click', () => {
+      const isCollapsed = blockDiv.dataset.collapsed === 'true';
+      blockDiv.dataset.collapsed = isCollapsed ? 'false' : 'true';
+
+      if (isCollapsed) {
+        // Expand
+        chevron.style.transform = 'rotate(0deg)';
+        contentDiv.style.maxHeight = contentDiv.scrollHeight + 'px';
+        contentDiv.style.opacity = '1';
+        setTimeout(() => {
+          contentDiv.style.maxHeight = 'none';
+        }, 300);
+      } else {
+        // Collapse
+        chevron.style.transform = 'rotate(-90deg)';
+        contentDiv.style.maxHeight = contentDiv.scrollHeight + 'px';
+        setTimeout(() => {
+          contentDiv.style.maxHeight = '0';
+          contentDiv.style.opacity = '0';
+        }, 10);
+      }
+    });
+
+    blockDiv.appendChild(header);
+    blockDiv.appendChild(contentDiv);
+    listContainer.appendChild(blockDiv);
+  });
+}
+
+// Add new instruction block
+function addInstructionBlock() {
+  if (!currentEditingPreset) return;
+
+  const name = prompt('Enter instruction block name:');
+  if (!name || !name.trim()) return;
+
+  const content = prompt('Enter instruction block content:');
+  if (!content || !content.trim()) return;
+
+  // Generate ID and determine order
+  const id = `inst_${Date.now()}`;
+  const maxOrder = currentEditingPreset.instructions.length > 0
+    ? Math.max(...currentEditingPreset.instructions.map(i => i.order))
+    : 0;
+
+  const newInstruction = {
+    id,
+    name: name.trim(),
+    content: content.trim(),
+    enabled: true,
+    order: maxOrder + 1
+  };
+
+  currentEditingPreset.instructions.push(newInstruction);
+
+  // Re-render
+  renderInstructionBlocks(currentEditingPreset.instructions, false);
+}
+
+// Edit instruction block
+function editInstruction(instruction) {
+  const newName = prompt('Edit instruction block name:', instruction.name);
+  if (newName === null) return;
+
+  const newContent = prompt('Edit instruction block content:', instruction.content);
+  if (newContent === null) return;
+
+  instruction.name = newName.trim();
+  instruction.content = newContent.trim();
+
+  // Re-render
+  renderInstructionBlocks(currentEditingPreset.instructions, false);
+}
+
+// Delete instruction block
+function deleteInstruction(instructionId) {
+  if (!confirm('Delete this instruction block?')) return;
+
+  if (!currentEditingPreset) return;
+
+  currentEditingPreset.instructions = currentEditingPreset.instructions.filter(
+    i => i.id !== instructionId
+  );
+
+  // Re-render
+  renderInstructionBlocks(currentEditingPreset.instructions, false);
+}
+
+// Move instruction block up or down
+function moveInstruction(instructionId, direction) {
+  if (!currentEditingPreset) return;
+
+  const instructions = currentEditingPreset.instructions.sort((a, b) => a.order - b.order);
+  const index = instructions.findIndex(i => i.id === instructionId);
+
+  if (index === -1) return;
+  if (direction === -1 && index === 0) return; // Already at top
+  if (direction === 1 && index === instructions.length - 1) return; // Already at bottom
+
+  const targetIndex = index + direction;
+
+  // Swap orders
+  const temp = instructions[index].order;
+  instructions[index].order = instructions[targetIndex].order;
+  instructions[targetIndex].order = temp;
+
+  // Re-render
+  renderInstructionBlocks(currentEditingPreset.instructions, false);
+}
+
+// Save preset changes
+async function savePresetChanges() {
+  if (!currentEditingPreset) return;
+
+  try {
+    // Update system additions and author's note from UI
+    const systemEditable = document.getElementById('preset-system-editable');
+    const authorsNoteEditable = document.getElementById('preset-authors-note-editable');
+
+    currentEditingPreset.system_additions = systemEditable.value;
+    currentEditingPreset.authors_note_default = authorsNoteEditable.value;
+
+    // Save via update_preset_instructions command
+    await invoke('update_preset_instructions', {
+      presetId: currentEditingPreset.id,
+      instructions: currentEditingPreset.instructions
+    });
+
+    // Also save the full preset to update system_additions and authors_note_default
+    await invoke('save_custom_preset', { preset: currentEditingPreset });
+
+    setStatus('Preset saved', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+
+    // Reload to show updated preset
+    await handlePresetSelect(currentEditingPreset.id);
+  } catch (error) {
+    console.error('Failed to save preset changes:', error);
+    alert(`Failed to save changes: ${error}`);
+    setStatus('Failed to save preset', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
+  }
+}
+
+// Delete custom preset
+async function deletePreset() {
+  if (!currentEditingPreset) return;
+
+  if (!confirm(`Delete preset "${currentEditingPreset.name}"? This cannot be undone.`)) return;
+
+  try {
+    await invoke('delete_custom_preset', { presetId: currentEditingPreset.id });
+
+    setStatus('Preset deleted', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+
+    // Clear selection and reload presets
+    document.getElementById('preset-select').value = '';
+    currentEditingPreset = null;
+    hidePresetInfo();
+    await loadPresets();
+  } catch (error) {
+    console.error('Failed to delete preset:', error);
+    alert(`Failed to delete preset: ${error}`);
+    setStatus('Failed to delete preset', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
+  }
+}
+
+// Duplicate preset (create editable copy)
+async function duplicatePreset() {
+  if (!currentEditingPreset) return;
+
+  const newName = prompt(`Enter a name for the duplicated preset:`, `${currentEditingPreset.name} (Copy)`);
+  if (!newName || !newName.trim()) return;
+
+  try {
+    const duplicatedPreset = await invoke('duplicate_preset', {
+      sourcePresetId: currentEditingPreset.id,
+      newName: newName.trim()
+    });
+
+    setStatus('Preset duplicated successfully', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+
+    // Reload presets
+    await loadPresets();
+
+    // Select the new preset
+    document.getElementById('preset-select').value = duplicatedPreset.id;
+    await handlePresetSelect(duplicatedPreset.id);
+  } catch (error) {
+    console.error('Failed to duplicate preset:', error);
+    alert(`Failed to duplicate preset: ${error}`);
+    setStatus('Failed to duplicate preset', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
+  }
+}
+
+// Restore built-in preset to default
+async function restoreBuiltinPreset() {
+  if (!currentEditingPreset) return;
+
+  const builtInIds = ['default', 'roleplay', 'creative-writing', 'assistant'];
+  if (!builtInIds.includes(currentEditingPreset.id)) {
+    alert('Can only restore built-in presets');
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to restore "${currentEditingPreset.name}" to its default settings? All your modifications will be lost.`)) {
+    return;
+  }
+
+  try {
+    const restoredPreset = await invoke('restore_builtin_preset', {
+      presetId: currentEditingPreset.id
+    });
+
+    setStatus('Preset restored to default successfully', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+
+    // Reload presets
+    await loadPresets();
+
+    // Re-select the restored preset to refresh the UI
+    await handlePresetSelect(restoredPreset.id);
+  } catch (error) {
+    console.error('Failed to restore preset:', error);
+    alert(`Failed to restore preset: ${error}`);
+    setStatus('Failed to restore preset', 'error');
+    setTimeout(() => setStatus('Ready'), 2000);
   }
 }
 

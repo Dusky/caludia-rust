@@ -93,6 +93,7 @@
           <button class="roleplay-tab-btn active" data-tab="worldinfo">World Info</button>
           <button class="roleplay-tab-btn" data-tab="authorsnote">Author's Note</button>
           <button class="roleplay-tab-btn" data-tab="persona">Persona</button>
+          <button class="roleplay-tab-btn" data-tab="presets">Prompt Preset</button>
         </div>
 
         <div id="worldinfo-tab" class="roleplay-tab-content active">
@@ -101,6 +102,18 @@
               <label>World Info / Lorebook</label>
               <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">
                 Create entries that inject context when keywords are mentioned.
+              </p>
+              <label for="recursion-depth" style="font-size: 13px; margin-top: 8px;">Recursion Depth</label>
+              <input
+                type="number"
+                id="recursion-depth"
+                min="0"
+                max="10"
+                value="3"
+                style="width: 80px; margin-bottom: 8px;"
+              />
+              <p style="color: var(--text-secondary); font-size: 11px; margin-bottom: 12px;">
+                Maximum depth for cascading World Info activation. When a World Info entry is triggered, its content is scanned for additional keywords up to this depth. (Default: 3)
               </p>
               <button type="button" id="add-worldinfo-btn" class="btn-secondary" style="width: 100%;">
                 + Add Entry
@@ -124,6 +137,15 @@
                 placeholder="Write in present tense. Focus on sensory details..."
                 rows="6"
               ></textarea>
+              <div style="background: var(--bg-secondary); padding: 8px; border-radius: 4px; margin-top: 8px;">
+                <p style="color: var(--text-secondary); font-size: 11px; margin: 0 0 4px 0; font-weight: 500;">Template Variables:</p>
+                <p style="color: var(--text-secondary); font-size: 11px; margin: 0; font-family: monospace;">
+                  {{char}} - Character name<br/>
+                  {{user}} - User/Persona name<br/>
+                  {{date}} - Current date (YYYY-MM-DD)<br/>
+                  {{time}} - Current time (HH:MM)
+                </p>
+              </div>
             </div>
             <div class="form-group">
               <label>
@@ -167,6 +189,85 @@
             <button type="button" id="save-persona-btn" class="btn-primary" style="width: 100%;">
               Save Persona
             </button>
+          </div>
+        </div>
+
+        <div id="presets-tab" class="roleplay-tab-content">
+          <div class="roleplay-content">
+            <div class="form-group">
+              <label for="preset-select">Prompt Preset</label>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">
+                Choose a preset to apply specialized prompting strategies for different use cases.
+              </p>
+              <select id="preset-select" style="width: 100%; margin-bottom: 12px;">
+                <option value="">No Preset</option>
+              </select>
+            </div>
+
+            <!-- Preset Info/Editor -->
+            <div id="preset-info" style="display: none; background: var(--bg-secondary); padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-weight: 500; color: var(--text-primary);">
+                  <span id="preset-name"></span>
+                  <span id="preset-builtin-badge" style="display: none; font-size: 10px; color: var(--text-secondary); margin-left: 8px; padding: 2px 6px; background: var(--bg-primary); border-radius: 3px;">Built-in</span>
+                  <span id="preset-modified-badge" style="display: none; font-size: 10px; color: var(--accent); margin-left: 8px; padding: 2px 6px; background: var(--bg-primary); border-radius: 3px;">Modified</span>
+                </div>
+                <div style="display: flex; gap: 4px;">
+                  <button type="button" id="restore-preset-btn" class="worldinfo-btn" style="display: none; font-size: 11px; padding: 4px 8px;">Restore to Default</button>
+                  <button type="button" id="duplicate-preset-btn" class="worldinfo-btn" style="display: none; font-size: 11px; padding: 4px 8px;">Duplicate</button>
+                  <button type="button" id="delete-preset-btn" class="worldinfo-btn worldinfo-btn-danger" style="display: none; font-size: 11px; padding: 4px 8px;">Delete</button>
+                </div>
+              </div>
+              <p id="preset-description" style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;"></p>
+
+              <!-- System Additions (Read-only preview for built-in, editable for custom) -->
+              <div id="preset-system-section" style="margin-bottom: 12px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
+                  <strong>System Additions:</strong>
+                </div>
+                <div id="preset-system-readonly" style="display: none; background: var(--bg-primary); padding: 8px; border-radius: 4px; font-size: 11px; white-space: pre-wrap;"></div>
+                <textarea id="preset-system-editable" style="display: none; width: 100%; min-height: 60px; font-size: 11px;" placeholder="Additional text to prepend to system prompt..."></textarea>
+              </div>
+
+              <!-- Instruction Blocks Editor -->
+              <div id="preset-instructions-section">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <div style="font-size: 11px; color: var(--text-secondary);">
+                    <strong>Instruction Blocks:</strong>
+                  </div>
+                  <button type="button" id="add-instruction-btn" class="worldinfo-btn" style="display: none; font-size: 11px; padding: 4px 8px;">+ Add Block</button>
+                </div>
+                <div id="preset-instructions-list" style="background: var(--bg-primary); padding: 8px; border-radius: 4px; margin-bottom: 12px;">
+                  <!-- Instructions will be listed here -->
+                </div>
+              </div>
+
+              <!-- Author's Note Default -->
+              <div id="preset-authors-note-section" style="margin-bottom: 12px;">
+                <div style="font-size: 11px; color: var(--text-secondary); margin-bottom: 4px;">
+                  <strong>Default Author's Note:</strong>
+                </div>
+                <div id="preset-authors-note-readonly" style="display: none; background: var(--bg-primary); padding: 8px; border-radius: 4px; font-size: 11px; white-space: pre-wrap;"></div>
+                <textarea id="preset-authors-note-editable" style="display: none; width: 100%; min-height: 60px; font-size: 11px;" placeholder="Default Author's Note if user hasn't set one..."></textarea>
+              </div>
+
+              <!-- Save Changes Button (only for custom presets) -->
+              <button type="button" id="save-preset-changes-btn" class="btn-secondary" style="display: none; width: 100%; margin-bottom: 8px;">
+                Save Changes
+              </button>
+            </div>
+
+            <button type="button" id="apply-preset-btn" class="btn-primary" style="width: 100%; margin-bottom: 8px;" disabled>
+              Apply Preset
+            </button>
+
+            <button type="button" id="create-preset-btn" class="btn-secondary" style="width: 100%;">
+              Create Custom Preset
+            </button>
+
+            <p style="color: var(--text-secondary); font-size: 11px; margin-top: 12px; padding: 8px; background: var(--bg-secondary); border-radius: 4px;">
+              <strong>Note:</strong> Custom presets will be stored in ~/.config/claudia/presets/ and will be available across all characters.
+            </p>
           </div>
         </div>
       </div>

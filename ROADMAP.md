@@ -9,30 +9,37 @@
 - Character Management (multiple characters)
 - Character Avatars with upload and zoom
 - Expanded Character Editor (all v2/v3 fields)
+- Prompt Presets System (built-in and custom presets with instruction blocks)
+- Editable Built-in Presets with Restore to Default
+- World Info/Lorebook System (keyword detection, priority, insertion)
+- Author's Note (configurable depth and positioning)
+- User Personas (identity management with chat/character locking)
+- Regex Scripts (global and character-scoped text transformations)
+- Chat History Import/Export (JSON format)
 
-### 🎯 Current Focus: UI/UX Improvements
-**Decision:** Before adding complex roleplay features, we're focusing on polishing the existing UI/UX to establish a solid foundation. This includes better visual design, improved workflows, and enhanced user experience.
+### 🎯 Current Focus: Token Counter & Context Management
+**Next Up:** Implementing token counter with real-time display and per-section breakdown to provide visibility into context usage. This is a critical feature for debugging prompt issues and optimizing context allocation.
 
-See "Phase 7: Polish & UX" section for details on UI improvements being prioritized.
+**Recent Completion:** Prompt Presets System with editable built-in presets, instruction block management, and restore-to-default functionality.
 
 ## Phase 1: Core Roleplay Infrastructure (High Priority)
 **Goal: Enable basic roleplay-focused prompt engineering**
 
-### 1. World Info/Lorebook System
-- [ ] Create UI for managing lorebook entries (keyword, content, priority)
-- [ ] Implement keyword detection in recent messages
-- [ ] Add context injection before message generation
-- [ ] Support recursive entry activation
-- [ ] Per-character lorebook assignment
-- [ ] Import/export lorebook files
+### 1. World Info/Lorebook System ✅
+- [x] Create UI for managing lorebook entries (keyword, content, priority)
+- [x] Implement keyword detection in recent messages
+- [x] Add context injection before message generation
+- [x] Support recursive entry activation
+- [x] Per-character lorebook assignment
+- [x] Import/export lorebook files
 
 **Why Important:** World Info is the foundation of consistent roleplay. It allows dynamic context injection based on what's currently relevant in the conversation, saving tokens while maintaining world consistency.
 
-### 2. Author's Note
-- [ ] Add configurable Author's Note field (inserted at depth 1-5)
-- [ ] Position control (after system, before/after examples, etc.)
-- [ ] Per-character Author's Note support
-- [ ] Template variables in Author's Note
+### 2. Author's Note ✅
+- [x] Add configurable Author's Note field (inserted at depth 1-5)
+- [x] Position control (after system, before/after examples, etc.)
+- [x] Per-character Author's Note support
+- [x] Template variables in Author's Note
 
 **Why Important:** Author's Note is considered better than system prompts for roleplay because it appears closer to the actual conversation, reducing AI tendency to ignore or forget instructions.
 
@@ -47,12 +54,12 @@ See "Phase 7: Polish & UX" section for details on UI improvements being prioriti
 ## Phase 2: Enhanced Character Features (High Priority)
 **Goal: Better character representation and user identity**
 
-### 1. User Personas
-- [ ] Create persona management UI (name, description, avatar)
-- [ ] Chat-level persona locking
-- [ ] Character-level persona locking
-- [ ] Default persona setting
-- [ ] Quick persona switching
+### 1. User Personas ✅
+- [x] Create persona management UI (name, description, avatar)
+- [x] Chat-level persona locking
+- [x] Character-level persona locking
+- [x] Default persona setting
+- [x] Quick persona switching
 
 **Why Important:** Allows users to have multiple identities for different roleplay scenarios without manually changing their name and description each time.
 
@@ -190,13 +197,13 @@ See "Phase 7: Polish & UX" section for details on UI improvements being prioriti
 
 **Why Important:** Makes prompts and messages dynamic and reusable across different scenarios.
 
-### 3. Regex Scripts
-- [ ] Global and character-scoped scripts
-- [ ] Text transformation on messages
-- [ ] Auto-markdown formatting
-- [ ] Import/export regex presets
-- [ ] Regex testing interface
-- [ ] Script priority/ordering
+### 3. Regex Scripts ✅
+- [x] Global and character-scoped scripts
+- [x] Text transformation on messages
+- [x] Auto-markdown formatting
+- [x] Import/export regex presets
+- [x] Regex testing interface
+- [x] Script priority/ordering
 
 **Why Important:** Allows automatic text formatting, correction, and enhancement without manual intervention.
 
@@ -224,8 +231,8 @@ See "Phase 7: Polish & UX" section for details on UI improvements being prioriti
 ### 2. Export/Import Improvements
 - [ ] Export chats as markdown
 - [ ] Export chats as formatted text
-- [ ] Export chats as JSON with metadata
-- [ ] Import chats from other formats
+- [x] Export chats as JSON with metadata
+- [x] Import chats from other formats
 - [ ] Bulk character import
 - [ ] Character pack support (multiple characters + lorebooks)
 
@@ -344,4 +351,4 @@ This roadmap is based on research into SillyTavern's features and best practices
 
 ---
 
-Last updated: 2025-10-14
+Last updated: 2025-10-16
