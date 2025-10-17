@@ -20,6 +20,12 @@ struct ApiConfig {
     active_character_id: Option<String>,
     #[serde(default)]
     stream: bool,
+    #[serde(default = "default_context_limit")]
+    context_limit: u32,
+}
+
+fn default_context_limit() -> u32 {
+    200000
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1161,7 +1167,7 @@ async fn validate_api(base_url: String, api_key: String) -> Result<Vec<String>, 
 }
 
 #[tauri::command]
-async fn save_api_config(base_url: String, api_key: String, model: String, stream: bool) -> Result<(), String> {
+async fn save_api_config(base_url: String, api_key: String, model: String, stream: bool, context_limit: u32) -> Result<(), String> {
     // Preserve existing active_character_id if it exists
     let active_character_id = load_config().and_then(|c| c.active_character_id);
 
@@ -1171,6 +1177,7 @@ async fn save_api_config(base_url: String, api_key: String, model: String, strea
         model,
         active_character_id,
         stream,
+        context_limit,
     };
     save_config(&config)
 }

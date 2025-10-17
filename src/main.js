@@ -1457,6 +1457,7 @@ async function handleSaveSettings(e) {
   const apiKey = document.getElementById('api-key').value.trim();
   const model = document.getElementById('model-select').value;
   const stream = document.getElementById('stream-toggle').checked;
+  const contextLimit = parseInt(document.getElementById('context-limit').value) || 200000;
   const saveBtn = document.getElementById('save-settings-btn');
   const validationMsg = document.getElementById('validation-message');
 
@@ -1472,7 +1473,7 @@ async function handleSaveSettings(e) {
   setStatus('Saving configuration...', 'default');
 
   try {
-    await invoke('save_api_config', { baseUrl, apiKey, model, stream });
+    await invoke('save_api_config', { baseUrl, apiKey, model, stream, contextLimit });
     validationMsg.textContent = 'Configuration saved successfully';
     validationMsg.className = 'validation-message success';
     setStatus('Configuration saved', 'success');
@@ -1661,10 +1662,18 @@ async function updateTokenCount() {
         currentInput
       });
 
+      // Get context limit from config
+      let contextLimit = 200000; // Default
+      try {
+        const config = await invoke('get_api_config');
+        contextLimit = config.context_limit || 200000;
+      } catch (e) {
+        // Use default if config not available
+      }
+
       // Update total display
       const tokenCounter = document.getElementById('token-counter');
       const tokenCountTotal = document.getElementById('token-count-total');
-      const contextLimit = 200000; // Claude 200k context
 
       // Format: "2.5k / 200k tokens"
       tokenCountTotal.textContent = `${formatTokenCount(tokenData.total)} / ${formatTokenCount(contextLimit)} tokens`;
@@ -3339,6 +3348,7 @@ async function loadExistingConfig() {
     document.getElementById('api-base-url').value = config.base_url;
     document.getElementById('api-key').value = config.api_key;
     document.getElementById('stream-toggle').checked = config.stream || false;
+    document.getElementById('context-limit').value = config.context_limit || 200000;
 
     const modelSelect = document.getElementById('model-select');
     modelSelect.innerHTML = ''; // Clear existing options
