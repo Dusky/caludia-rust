@@ -19,11 +19,12 @@
 - Enhanced Message Controls (delete, pin, hide, continue, regenerate any message)
 - Token Counter (real-time display with per-section breakdown)
 - Message Examples (character card examples injected into context)
+- Chat Branching/Checkpoints (create, switch, delete, rename branches from any message)
 
-### 🎯 Current Focus: Advanced Chat Management
-**Next Up:** Implementing Chat Branching/Checkpoints to enable non-linear conversation exploration with the ability to save conversation states, create branches from any point, and switch between different conversation paths.
+### 🎯 Current Focus: Quality of Life & Polish
+**Next Up:** Implementing high-impact QoL features to reduce friction and improve user experience - starting with Toast Notifications, Command Palette, Auto-save, Drag & Drop, and Chat Search.
 
-**Recent Completion:** Message Examples - character card message examples are now parsed, processed with template variable replacement, and injected into context at configurable positions to teach the AI the character's voice and writing style.
+**Recent Completion:** Chat Branching/Checkpoints - Full conversation branching system allowing users to create and explore alternate conversation paths from any message point. Each branch maintains its own complete message history with a branch manager modal for easy navigation.
 
 ## Phase 1: Core Roleplay Infrastructure (High Priority)
 **Goal: Enable basic roleplay-focused prompt engineering**
@@ -87,13 +88,14 @@
 ## Phase 3: Advanced Chat Management (Medium Priority)
 **Goal: Non-linear conversation control**
 
-### 1. Chat Branching/Checkpoints
-- [ ] Save conversation state at any message
-- [ ] Create branches from any point
-- [ ] Switch between branches
-- [ ] Visual branch indicator in UI
-- [ ] Branch naming and organization
-- [ ] Delete/merge branches
+### 1. Chat Branching/Checkpoints ✅
+- [x] Save conversation state at any message
+- [x] Create branches from any point
+- [x] Switch between branches
+- [x] Visual branch indicator in UI
+- [x] Branch naming and organization
+- [x] Delete branches
+- [ ] Merge branches (deferred - nice to have)
 
 **Why Important:** Roleplay often involves exploring "what if" scenarios. Branching lets you explore different conversation paths without losing previous progress.
 
@@ -251,6 +253,151 @@
 - [ ] Accessibility improvements
 
 **Why Important:** Better UI means less friction and more immersion in roleplay.
+
+## Phase 8: Quality of Life & Polish (High Priority)
+**Goal: Reduce friction, improve feedback, and enhance overall user experience**
+
+### 1. Toast Notification System
+- [ ] Create toast component (bottom-right positioning)
+- [ ] Success/error/info/warning variants
+- [ ] Auto-dismiss with configurable timeout
+- [ ] Queue multiple toasts
+- [ ] Hook into all major actions (save, delete, import, export, etc.)
+
+**Why Important:** Users currently have no immediate feedback when actions succeed or fail. Toasts provide instant visual confirmation without blocking workflow.
+
+### 2. Command Palette
+- [ ] Ctrl+P to open command palette modal
+- [ ] Fuzzy search for all actions
+- [ ] Keyboard navigation (arrow keys, enter, escape)
+- [ ] Recent/frequent actions at top
+- [ ] Show keyboard shortcuts in results
+- [ ] Categories (Chat, Character, Settings, etc.)
+
+**Why Important:** Power users want keyboard-first workflow. Command palette dramatically speeds up common actions without memorizing shortcuts.
+
+### 3. Auto-save & Recovery
+- [ ] Auto-save unsent message in input field
+- [ ] Restore unsent message after app restart
+- [ ] Draft system for in-progress edits
+- [ ] Session recovery (restore scroll position, open panels)
+- [ ] Crash recovery with last known state
+
+**Why Important:** Losing work due to crashes or accidental closes is extremely frustrating. Auto-save provides a safety net for all user work.
+
+### 4. Drag & Drop Support
+- [ ] Drag character card PNGs to import
+- [ ] Drag lorebook JSON files to import
+- [ ] Drag chat history JSON to import
+- [ ] Drag images to set as character avatar
+- [ ] Drop zone overlay with visual feedback
+- [ ] Support for multiple file drops
+
+**Why Important:** Drag & drop feels natural and is much faster than navigate-click-select workflow. Modern desktop apps are expected to support this.
+
+### 5. Search in Chat History
+- [ ] Ctrl+F to open search bar
+- [ ] Highlight all matches in messages
+- [ ] Navigate between results (prev/next buttons)
+- [ ] Case-insensitive search
+- [ ] Search counter (e.g., "3 of 42 matches")
+- [ ] Clear search and restore view
+
+**Why Important:** Long roleplay sessions can span hundreds of messages. Finding specific content without search is tedious and time-consuming.
+
+### 6. Context Menus (Right-Click)
+- [ ] Right-click messages for actions (edit, delete, regenerate, branch, copy)
+- [ ] Right-click character dropdown for quick actions
+- [ ] Right-click World Info entries for edit/delete
+- [ ] Right-click in message input for paste/clear/templates
+- [ ] Context-aware menu items
+
+**Why Important:** Right-click is muscle memory for desktop users. Faster than hovering to reveal action buttons.
+
+### 7. Better Feedback & Confirmations
+- [ ] Confirmation dialogs for destructive actions (delete character, clear chat)
+- [ ] Loading spinners for API calls
+- [ ] Progress bars for file imports
+- [ ] "Saving..." / "Saved" indicators
+- [ ] Success messages for completed actions
+
+**Why Important:** Users should never wonder if an action succeeded or is still processing. Clear feedback prevents confusion and repeated clicks.
+
+### 8. Undo/Redo System
+- [ ] Undo message edit (Ctrl+Z)
+- [ ] Undo message delete
+- [ ] Undo character field changes
+- [ ] Undo World Info changes
+- [ ] Action history panel (optional)
+- [ ] Redo support (Ctrl+Shift+Z)
+
+**Why Important:** Mistakes happen. An undo system provides a safety net and encourages experimentation without fear of losing work.
+
+### 9. Settings Search
+- [ ] Search bar at top of settings panel
+- [ ] Fuzzy search across all setting names and descriptions
+- [ ] Highlight matching settings
+- [ ] Collapse/expand sections based on matches
+- [ ] "Recently changed" section
+
+**Why Important:** With 22+ features, finding specific settings is tedious. Search makes configuration much faster.
+
+### 10. Character Management Enhancements
+- [ ] Recent characters quick-switch dropdown
+- [ ] Character search/filter by name or tags
+- [ ] Character folders/categories
+- [ ] Duplicate character (as template)
+- [ ] Favorite/star characters
+- [ ] Sort options (name, date created, last used)
+
+**Why Important:** Managing 10+ characters becomes messy. Better organization tools scale with user's character collection.
+
+### 11. Enhanced Keyboard Support
+- [ ] Full keyboard navigation in all modals (Tab, Arrow keys, Enter)
+- [ ] Escape to close any open panel/modal
+- [ ] Vim-style navigation mode (optional, j/k for scroll)
+- [ ] Keyboard shortcut hints on hover
+- [ ] Focus indicators for keyboard navigation
+
+**Why Important:** Keyboard navigation should work everywhere. Current implementation is inconsistent across different UI sections.
+
+### 12. Export/Share Enhancements
+- [ ] Export conversation as formatted HTML
+- [ ] Export conversation as formatted PDF
+- [ ] Export as markdown with proper formatting
+- [ ] Copy conversation to clipboard (formatted)
+- [ ] Export individual messages
+
+**Why Important:** Users want to share and archive conversations in readable formats, not just JSON.
+
+### 13. Accessibility Improvements
+- [ ] ARIA labels for all interactive elements
+- [ ] Screen reader support
+- [ ] High contrast mode option
+- [ ] Larger click targets option (accessibility mode)
+- [ ] Reduced motion mode (respect prefers-reduced-motion)
+- [ ] Focus indicators for keyboard navigation
+
+**Why Important:** Accessibility makes the app usable for everyone, including users with disabilities. It's also often legally required.
+
+### 14. Better Visual Feedback
+- [ ] Smooth transitions for panel open/close
+- [ ] Hover states for all interactive elements
+- [ ] Active state indicators (focused panel)
+- [ ] Better empty states with helpful text
+- [ ] Skeleton loaders for content loading
+- [ ] Micro-animations for actions (delete, save, etc.)
+
+**Why Important:** Visual polish makes the app feel responsive and professional. Small animations provide context for state changes.
+
+### 15. Smart Defaults & Templates
+- [ ] Scenario templates (fantasy RPG, sci-fi, modern, etc.)
+- [ ] Pre-filled World Info templates
+- [ ] Character card templates
+- [ ] Quick-start wizard for new users
+- [ ] Import from popular character repositories
+
+**Why Important:** Reduces friction for new users and speeds up common tasks. Templates provide starting points for customization.
 
 ## Implementation Priority Ranking
 

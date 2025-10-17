@@ -146,6 +146,511 @@ function loadSavedTheme() {
   applyTheme(savedTheme);
 }
 
+// Toast Notification System
+const toastQueue = [];
+let toastContainer;
+
+function showToast(options) {
+  const {
+    type = 'info',
+    title,
+    message,
+    duration = 3000,
+    dismissible = true
+  } = options;
+
+  if (!toastContainer) {
+    toastContainer = document.getElementById('toast-container');
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  // Icon based on type
+  const icons = {
+    success: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <path d="M16.667 5L7.5 14.167L3.333 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`,
+    error: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="2"/>
+      <path d="M10 6v4M10 13h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>`,
+    warning: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <path d="M10 3.333L17.5 16.667H2.5L10 3.333z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M10 8.333v3.334M10 14.167h.008" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>`,
+    info: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="2"/>
+      <path d="M10 13.333V10M10 6.667h.008" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>`
+  };
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icons[type]}</div>
+    <div class="toast-content">
+      ${title ? `<div class="toast-title">${title}</div>` : ''}
+      ${message ? `<div class="toast-message">${message}</div>` : ''}
+    </div>
+    ${dismissible ? `<button class="toast-close" aria-label="Close">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>` : ''}
+    ${duration > 0 ? `<div class="toast-progress"><div class="toast-progress-bar" style="--duration: ${duration}ms;"></div></div>` : ''}
+  `;
+
+  toastContainer.appendChild(toast);
+
+  // Dismiss on close button click
+  if (dismissible) {
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn.addEventListener('click', () => {
+      dismissToast(toast);
+    });
+  }
+
+  // Auto-dismiss
+  if (duration > 0) {
+    setTimeout(() => {
+      dismissToast(toast);
+    }, duration);
+  }
+
+  // Click to dismiss (anywhere on toast)
+  toast.addEventListener('click', (e) => {
+    if (e.target !== toast.querySelector('.toast-close') && e.target.closest('.toast-close') === null) {
+      dismissToast(toast);
+    }
+  });
+
+  return toast;
+}
+
+function dismissToast(toast) {
+  if (!toast || toast.classList.contains('removing')) return;
+
+  toast.classList.add('removing');
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.parentNode.removeChild(toast);
+    }
+  }, 300);
+}
+
+// Convenience functions
+function showSuccess(title, message, duration) {
+  return showToast({ type: 'success', title, message, duration });
+}
+
+function showError(title, message, duration) {
+  return showToast({ type: 'error', title, message, duration });
+}
+
+function showWarning(title, message, duration) {
+  return showToast({ type: 'warning', title, message, duration });
+}
+
+function showInfo(title, message, duration) {
+  return showToast({ type: 'info', title, message, duration });
+}
+
+// Command Palette System
+let commandPaletteModal;
+let commandPaletteInput;
+let commandPaletteResults;
+let selectedCommandIndex = 0;
+let filteredCommands = [];
+
+// Define all available commands
+const commands = [
+  // Chat actions
+  {
+    id: 'clear-chat',
+    title: 'Clear Conversation',
+    description: 'Clear all messages in the current conversation',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 4h14M6 4V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1M5 4v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => clearHistory(),
+    keywords: ['delete', 'remove', 'reset']
+  },
+  {
+    id: 'export-chat',
+    title: 'Export Conversation',
+    description: 'Save conversation to a JSON file',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3v10M7 10l3 3 3-3" stroke="currentColor" stroke-width="1.5"/><path d="M3 16h14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => exportChatHistory(),
+    keywords: ['save', 'download', 'backup']
+  },
+  {
+    id: 'import-chat',
+    title: 'Import Conversation',
+    description: 'Load conversation from a JSON file',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V3M7 6l3-3 3 3" stroke="currentColor" stroke-width="1.5"/><path d="M3 16h14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => importChatHistory(),
+    keywords: ['load', 'restore', 'open']
+  },
+  // Character actions
+  {
+    id: 'new-character',
+    title: 'New Character',
+    description: 'Create a new character',
+    category: 'Characters',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 4v12M4 10h12" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => handleNewCharacter(),
+    shortcut: ['Ctrl', 'N'],
+    keywords: ['create', 'add']
+  },
+  {
+    id: 'import-character',
+    title: 'Import Character Card',
+    description: 'Import a character from PNG card',
+    category: 'Characters',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V3M7 6l3-3 3 3" stroke="currentColor" stroke-width="1.5"/><path d="M3 16h14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => handleImportCharacter(),
+    keywords: ['load', 'v2', 'card', 'png']
+  },
+  {
+    id: 'export-character',
+    title: 'Export Character Card',
+    description: 'Export current character as PNG card',
+    category: 'Characters',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3v10M7 10l3 3 3-3" stroke="currentColor" stroke-width="1.5"/><path d="M3 16h14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => handleExportCharacter(),
+    keywords: ['save', 'v2', 'card', 'png']
+  },
+  {
+    id: 'delete-character',
+    title: 'Delete Character',
+    description: 'Delete the current character',
+    category: 'Characters',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 4h14M6 4V3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v1M5 4v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => handleDeleteCharacter(),
+    keywords: ['remove']
+  },
+  // Settings actions
+  {
+    id: 'open-settings',
+    title: 'Open Settings',
+    description: 'Open the settings panel',
+    category: 'Settings',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M17 10c0-.5-.1-1-.3-1.4l1.2-.7-1-1.7-1.2.7c-.6-.6-1.3-1-2.1-1.2V4h-2v1.7c-.8.2-1.5.6-2.1 1.2L8.3 6.2l-1 1.7 1.2.7C8.1 9 8 9.5 8 10s.1 1 .3 1.4l-1.2.7 1 1.7 1.2-.7c.6.6 1.3 1 2.1 1.2V16h2v-1.7c.8-.2 1.5-.6 2.1-1.2l1.2.7 1-1.7-1.2-.7c.2-.4.3-.9.3-1.4z" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => showSettings(),
+    keywords: ['preferences', 'config', 'api']
+  },
+  {
+    id: 'open-roleplay-tools',
+    title: 'Open Roleplay Tools',
+    description: 'Open the roleplay tools panel',
+    category: 'Settings',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => showRoleplayPanel(),
+    shortcut: ['Ctrl', '/'],
+    keywords: ['world info', 'lorebook', 'persona', 'preset']
+  },
+  // Focus actions
+  {
+    id: 'focus-input',
+    title: 'Focus Message Input',
+    description: 'Move cursor to the message input',
+    category: 'Navigation',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 10h14M13 6l4 4-4 4" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => {
+      if (messageInput) messageInput.focus();
+      closeCommandPalette();
+    },
+    shortcut: ['Ctrl', 'K'],
+    keywords: ['cursor', 'type']
+  },
+  // Theme actions
+  {
+    id: 'theme-dark',
+    title: 'Switch to Dark Theme',
+    description: 'Change theme to dark mode',
+    category: 'Appearance',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17 10.5A7 7 0 1 1 9.5 3a6 6 0 0 0 7.5 7.5z" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => {
+      applyTheme('dark');
+      document.getElementById('theme-select').value = 'dark';
+      closeCommandPalette();
+      showSuccess('Theme Changed', 'Switched to Dark theme');
+    },
+    keywords: ['color', 'style']
+  },
+  {
+    id: 'theme-light',
+    title: 'Switch to Light Theme',
+    description: 'Change theme to light mode',
+    category: 'Appearance',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.66 4.34l-1.41 1.41M5.75 14.25l-1.41 1.41M15.66 15.66l-1.41-1.41M5.75 5.75L4.34 4.34" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => {
+      applyTheme('light');
+      document.getElementById('theme-select').value = 'light';
+      closeCommandPalette();
+      showSuccess('Theme Changed', 'Switched to Light theme');
+    },
+    keywords: ['color', 'style']
+  }
+];
+
+function openCommandPalette() {
+  if (!commandPaletteModal) {
+    commandPaletteModal = document.getElementById('command-palette-modal');
+    commandPaletteInput = document.getElementById('command-palette-input');
+    commandPaletteResults = document.getElementById('command-palette-results');
+
+    // Overlay click to close
+    commandPaletteModal.querySelector('.command-palette-overlay').addEventListener('click', closeCommandPalette);
+
+    // Input event listener for filtering
+    commandPaletteInput.addEventListener('input', (e) => {
+      filterCommands(e.target.value);
+    });
+  }
+
+  commandPaletteModal.style.display = 'flex';
+  commandPaletteInput.value = '';
+  selectedCommandIndex = 0;
+
+  // Show all commands initially
+  filterCommands('');
+
+  // Focus the input after a brief delay to ensure modal is visible
+  setTimeout(() => {
+    commandPaletteInput.focus();
+  }, 50);
+}
+
+function closeCommandPalette() {
+  if (commandPaletteModal) {
+    commandPaletteModal.style.display = 'none';
+    commandPaletteInput.value = '';
+  }
+}
+
+function filterCommands(searchTerm) {
+  const term = searchTerm.toLowerCase().trim();
+
+  if (term === '') {
+    filteredCommands = [...commands];
+  } else {
+    filteredCommands = commands.filter(cmd => {
+      const titleMatch = cmd.title.toLowerCase().includes(term);
+      const descMatch = cmd.description.toLowerCase().includes(term);
+      const categoryMatch = cmd.category.toLowerCase().includes(term);
+      const keywordMatch = cmd.keywords && cmd.keywords.some(k => k.includes(term));
+
+      return titleMatch || descMatch || categoryMatch || keywordMatch;
+    });
+  }
+
+  selectedCommandIndex = 0;
+  renderCommandResults();
+}
+
+function renderCommandResults() {
+  if (filteredCommands.length === 0) {
+    commandPaletteResults.innerHTML = `
+      <div class="command-palette-empty">
+        <svg class="command-palette-empty-icon" viewBox="0 0 48 48" fill="none">
+          <circle cx="20" cy="20" r="16" stroke="currentColor" stroke-width="3"/>
+          <path d="M32 32l10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          <path d="M20 14v12M20 30h.02" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <p class="command-palette-empty-text">No commands found</p>
+      </div>
+    `;
+    return;
+  }
+
+  // Group commands by category
+  const grouped = {};
+  filteredCommands.forEach(cmd => {
+    if (!grouped[cmd.category]) {
+      grouped[cmd.category] = [];
+    }
+    grouped[cmd.category].push(cmd);
+  });
+
+  let html = '';
+  Object.keys(grouped).forEach((category, catIndex) => {
+    html += `<div class="command-palette-section">${category}</div>`;
+
+    grouped[category].forEach((cmd, cmdIndex) => {
+      const globalIndex = filteredCommands.indexOf(cmd);
+      const isSelected = globalIndex === selectedCommandIndex;
+
+      html += `
+        <div class="command-item ${isSelected ? 'selected' : ''}" data-index="${globalIndex}">
+          <div class="command-item-icon">${cmd.icon}</div>
+          <div class="command-item-content">
+            <div class="command-item-title">${cmd.title}</div>
+            <div class="command-item-description">${cmd.description}</div>
+          </div>
+          ${cmd.shortcut ? `
+            <div class="command-item-shortcut">
+              ${cmd.shortcut.map(key => `<kbd>${key}</kbd>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+      `;
+    });
+  });
+
+  commandPaletteResults.innerHTML = html;
+
+  // Add click handlers
+  commandPaletteResults.querySelectorAll('.command-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const index = parseInt(item.dataset.index);
+      executeCommand(filteredCommands[index]);
+    });
+  });
+
+  // Scroll selected item into view
+  const selectedItem = commandPaletteResults.querySelector('.command-item.selected');
+  if (selectedItem) {
+    selectedItem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function executeCommand(command) {
+  if (command && command.action) {
+    closeCommandPalette();
+    command.action();
+  }
+}
+
+function handleCommandPaletteKeydown(e) {
+  if (!commandPaletteModal || commandPaletteModal.style.display === 'none') return;
+
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeCommandPalette();
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedCommandIndex = Math.min(selectedCommandIndex + 1, filteredCommands.length - 1);
+    renderCommandResults();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedCommandIndex = Math.max(selectedCommandIndex - 1, 0);
+    renderCommandResults();
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (filteredCommands.length > 0) {
+      executeCommand(filteredCommands[selectedCommandIndex]);
+    }
+  }
+}
+
+// Auto-save & Recovery System
+let autoSaveTimeout;
+const AUTO_SAVE_DELAY = 1000; // Save after 1 second of inactivity
+
+function getAutoSaveKey() {
+  if (!currentCharacter) return null;
+  return `claudia-draft-${currentCharacter.id}`;
+}
+
+function autoSaveMessageInput() {
+  const key = getAutoSaveKey();
+  if (!key || !messageInput) return;
+
+  const content = messageInput.value.trim();
+
+  if (content === '') {
+    // Clear the draft if input is empty
+    localStorage.removeItem(key);
+  } else {
+    // Save the draft
+    const draft = {
+      content,
+      timestamp: Date.now(),
+      characterId: currentCharacter.id,
+      characterName: currentCharacter.name
+    };
+    localStorage.setItem(key, JSON.stringify(draft));
+  }
+}
+
+function loadAutoSavedDraft() {
+  const key = getAutoSaveKey();
+  if (!key || !messageInput) return;
+
+  try {
+    const savedDraft = localStorage.getItem(key);
+    if (!savedDraft) return;
+
+    const draft = JSON.parse(savedDraft);
+
+    // Check if draft is not too old (older than 7 days)
+    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+    const age = Date.now() - draft.timestamp;
+
+    if (age > maxAge) {
+      // Draft is too old, remove it
+      localStorage.removeItem(key);
+      return;
+    }
+
+    // Restore the draft
+    if (draft.content && draft.content.trim() !== '') {
+      messageInput.value = draft.content;
+
+      // Auto-resize the textarea
+      messageInput.style.height = 'auto';
+      messageInput.style.height = messageInput.scrollHeight + 'px';
+
+      // Show notification
+      const draftAge = formatDraftAge(age);
+      showInfo('Draft Recovered', `Unsent message from ${draftAge} ago has been restored.`, 4000);
+    }
+  } catch (error) {
+    console.error('Failed to load auto-saved draft:', error);
+  }
+}
+
+function clearAutoSavedDraft() {
+  const key = getAutoSaveKey();
+  if (!key) return;
+  localStorage.removeItem(key);
+}
+
+function formatDraftAge(milliseconds) {
+  const seconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} day${days > 1 ? 's' : ''}`;
+  if (hours > 0) return `${hours} hour${hours > 1 ? 's' : ''}`;
+  if (minutes > 0) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+  return 'a few seconds';
+}
+
+function setupAutoSave() {
+  if (!messageInput) return;
+
+  // Auto-save on input with debouncing
+  messageInput.addEventListener('input', () => {
+    // Clear existing timeout
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout);
+    }
+
+    // Set new timeout to save after delay
+    autoSaveTimeout = setTimeout(() => {
+      autoSaveMessageInput();
+    }, AUTO_SAVE_DELAY);
+  });
+
+  // Also save on blur (when user clicks away)
+  messageInput.addEventListener('blur', () => {
+    autoSaveMessageInput();
+  });
+}
+
 // Apply view mode
 function applyViewMode(mode) {
   const body = document.body;
@@ -206,14 +711,14 @@ async function exportChatHistory() {
   try {
     setStatus('Exporting chat...', 'default');
     const filePath = await invoke('export_chat_history');
-    setStatus('Chat exported successfully!', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    setStatus('Ready');
+    showSuccess('Chat Exported', `Successfully exported to ${filePath}`, 4000);
     console.log('Chat exported to:', filePath);
   } catch (error) {
     console.error('Export failed:', error);
     if (error && !error.toString().includes('cancelled')) {
-      setStatus(`Export failed: ${error}`, 'error');
-      setTimeout(() => setStatus('Ready'), 3000);
+      setStatus('Ready');
+      showError('Export Failed', `Failed to export chat: ${error}`);
     } else {
       setStatus('Ready');
     }
@@ -229,15 +734,15 @@ async function importChatHistory() {
     // Reload the chat history
     await loadChatHistory();
 
-    setStatus(`Imported ${messageCount} messages successfully!`, 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    setStatus('Ready');
+    showSuccess('Chat Imported', `Successfully imported ${messageCount} messages!`);
   } catch (error) {
     console.error('Import failed:', error);
     if (error === 'No file selected' || error.toString().includes('cancelled')) {
       setStatus('Ready');
     } else {
-      setStatus(`Import failed: ${error}`, 'error');
-      setTimeout(() => setStatus('Ready'), 3000);
+      setStatus('Ready');
+      showError('Import Failed', `Failed to import chat: ${error}`);
     }
   }
 }
@@ -1024,11 +1529,10 @@ async function handleDeleteMessage(messageDiv) {
     await invoke('delete_message_at_index', { messageIndex });
     messageDiv.remove();
     await updateTokenCount();
-    setStatus('Message deleted', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    showSuccess('Message Deleted', 'The message has been deleted successfully.');
   } catch (error) {
     console.error('Failed to delete message:', error);
-    setStatus(`Delete failed: ${error}`, 'error');
+    showError('Delete Failed', `Failed to delete message: ${error}`);
   }
 }
 
@@ -1055,13 +1559,13 @@ async function handleCreateBranch(messageDiv) {
       branchName: branchName.trim()
     });
 
-    setStatus(`Created branch: ${branch.name}`, 'success');
+    showSuccess('Branch Created', `Created new branch: ${branch.name}`);
 
     // Switch to the new branch
     await handleSwitchBranch(branch.id);
   } catch (error) {
     console.error('Failed to create branch:', error);
-    setStatus(`Branch creation failed: ${error}`, 'error');
+    showError('Branch Creation Failed', `Failed to create branch: ${error}`);
   }
 }
 
@@ -1501,6 +2005,9 @@ async function handleSubmit(e) {
 
   messageInput.value = '';
   autoResize(messageInput);
+
+  // Clear the auto-saved draft since message is being sent
+  clearAutoSavedDraft();
 
   await sendMessage(message);
 }
@@ -1986,6 +2493,9 @@ async function loadCharacters() {
 
     await loadChatHistory();
     await updateBranchIndicator();
+
+    // Load auto-saved draft for this character
+    loadAutoSavedDraft();
   } catch (error) {
     console.error('Failed to load characters:', error);
     addMessage(`Failed to load characters: ${error}`, false);
@@ -2076,63 +2586,51 @@ async function handleNewCharacter() {
 // Handle character deletion
 async function handleDeleteCharacter() {
   if (!currentCharacter || currentCharacter.id === 'default') {
-    addMessage('Cannot delete the default character.', false);
+    showWarning('Cannot Delete', 'The default character cannot be deleted.');
     return;
   }
 
   if (confirm(`Are you sure you want to delete ${currentCharacter.name}? This cannot be undone.`)) {
     try {
+      const characterName = currentCharacter.name;
       await invoke('delete_character', { characterId: currentCharacter.id });
       await loadCharacters();
       hideSettings();
+      showSuccess('Character Deleted', `${characterName} has been deleted successfully.`);
     } catch (error) {
       console.error('Failed to delete character:', error);
-      addMessage(`Failed to delete character: ${error}`, false);
+      showError('Delete Failed', `Failed to delete character: ${error}`);
     }
   }
 }
 
 // Handle character card import
 async function handleImportCharacter() {
-  const characterMsg = document.getElementById('character-message');
   try {
     const importedCharacter = await invoke('import_character_card');
-    characterMsg.textContent = `Successfully imported ${importedCharacter.name}!`;
-    characterMsg.className = 'validation-message success';
+    showSuccess('Character Imported', `${importedCharacter.name} has been imported successfully!`);
 
     // Reload characters and switch to the imported one
     await loadCharacters();
     await loadCharacterSettings();
-
-    setTimeout(() => {
-      characterMsg.style.display = 'none';
-    }, 3000);
   } catch (error) {
     console.error('Failed to import character:', error);
     if (error && !error.toString().includes('No file selected') && !error.toString().includes('cancelled')) {
-      characterMsg.textContent = `Failed to import: ${error}`;
-      characterMsg.className = 'validation-message error';
+      showError('Import Failed', `Failed to import character: ${error}`);
     }
   }
 }
 
 // Handle character card export
 async function handleExportCharacter() {
-  const characterMsg = document.getElementById('character-message');
   try {
     const characterId = document.getElementById('character-settings-select').value;
     const outputPath = await invoke('export_character_card', { characterId });
-    characterMsg.textContent = `Successfully exported to ${outputPath}`;
-    characterMsg.className = 'validation-message success';
-
-    setTimeout(() => {
-      characterMsg.style.display = 'none';
-    }, 3000);
+    showSuccess('Character Exported', `Successfully exported to ${outputPath}`, 4000);
   } catch (error) {
     console.error('Failed to export character:', error);
     if (error && !error.toString().includes('cancelled')) {
-      characterMsg.textContent = `Failed to export: ${error}`;
-      characterMsg.className = 'validation-message error';
+      showError('Export Failed', `Failed to export character: ${error}`);
     }
   }
 }
@@ -2207,11 +2705,11 @@ async function clearHistory() {
     } else {
       addMessage('Conversation cleared. Ready to chat.', false, true);
     }
-    setStatus('History cleared', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    setStatus('Ready');
+    showSuccess('History Cleared', 'Conversation history has been cleared.');
   } catch (error) {
-    setStatus('Failed to clear history', 'error');
-    addMessage(`Failed to clear history: ${error}`, false);
+    setStatus('Ready');
+    showError('Clear Failed', `Failed to clear history: ${error}`);
   }
 }
 
@@ -2289,8 +2787,7 @@ async function handleSaveCharacter(e) {
   const characterMsg = document.getElementById('character-message');
 
   if (!name || !systemPrompt) {
-    characterMsg.textContent = 'Name and System Prompt are required';
-    characterMsg.className = 'validation-message error';
+    showWarning('Missing Fields', 'Name and System Prompt are required.');
     return;
   }
 
@@ -2315,17 +2812,11 @@ async function handleSaveCharacter(e) {
       creatorNotes,
       avatarPath: pendingAvatarPath
     });
-    characterMsg.textContent = 'Character saved successfully';
-    characterMsg.className = 'validation-message success';
 
     await loadCharacters();
-
-    setTimeout(() => {
-      characterMsg.style.display = 'none';
-    }, 3000);
+    showSuccess('Character Saved', `${name} has been saved successfully.`);
   } catch (error) {
-    characterMsg.textContent = `Failed to save: ${error}`;
-    characterMsg.className = 'validation-message error';
+    showError('Save Failed', `Failed to save character: ${error}`);
   } finally {
     saveBtn.disabled = false;
     saveBtn.classList.remove('loading');
@@ -2759,11 +3250,10 @@ async function handleSaveAuthorsNote() {
     updateFeatureBadges();
 
     // Show success message
-    setStatus('Author\'s Note saved', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    showSuccess('Author\'s Note Saved', 'Your author\'s note has been saved successfully.');
   } catch (error) {
     console.error('Failed to save Author\'s Note:', error);
-    setStatus('Failed to save Author\'s Note', 'error');
+    showError('Save Failed', `Failed to save author's note: ${error}`);
   }
 }
 
@@ -2794,11 +3284,10 @@ async function handleSavePersona() {
     updateFeatureBadges();
 
     // Show success message
-    setStatus('Persona saved', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    showSuccess('Persona Saved', 'Your persona has been saved successfully.');
   } catch (error) {
     console.error('Failed to save Persona:', error);
-    setStatus('Failed to save Persona', 'error');
+    showError('Save Failed', `Failed to save persona: ${error}`);
   }
 }
 
@@ -2826,11 +3315,10 @@ async function handleSaveExamples() {
     updateFeatureBadges();
 
     // Show success message
-    setStatus('Message Examples settings saved', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+    showSuccess('Examples Saved', 'Message examples settings have been saved.');
   } catch (error) {
     console.error('Failed to save Message Examples settings:', error);
-    setStatus('Failed to save Message Examples settings', 'error');
+    showError('Save Failed', `Failed to save message examples settings: ${error}`);
   }
 }
 
@@ -3810,6 +4298,9 @@ window.addEventListener('DOMContentLoaded', () => {
   // ESC key to close modal
   // Global keyboard shortcuts
   document.addEventListener('keydown', (e) => {
+    // Handle command palette keydown (for arrow keys, enter, escape)
+    handleCommandPaletteKeydown(e);
+
     // Escape key handling
     if (e.key === 'Escape') {
       // Close new character modal
@@ -3895,6 +4386,13 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + P - Open command palette
+    if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+      e.preventDefault();
+      openCommandPalette();
+      return;
+    }
+
     // Ctrl/Cmd + / - Toggle roleplay panel
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
@@ -3917,6 +4415,9 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSavedTheme();
   loadSavedViewMode();
   loadSavedFontSize();
+
+  // Setup auto-save for message input
+  setupAutoSave();
 
   loadExistingConfig();
 });

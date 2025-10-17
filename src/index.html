@@ -733,6 +733,33 @@
       </footer>
     </div>
 
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Command Palette -->
+    <div id="command-palette-modal" class="command-palette-modal" style="display: none;">
+      <div class="command-palette-overlay"></div>
+      <div class="command-palette-content">
+        <div class="command-palette-search">
+          <svg class="command-palette-search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2"/>
+            <path d="M12.5 12.5L17 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <input
+            type="text"
+            id="command-palette-input"
+            class="command-palette-input"
+            placeholder="Type a command or search..."
+            autocomplete="off"
+          />
+          <kbd class="command-palette-hint">Esc to close</kbd>
+        </div>
+        <div id="command-palette-results" class="command-palette-results">
+          <!-- Command results will be dynamically populated here -->
+        </div>
+      </div>
+    </div>
+
     <!-- Avatar zoom modal -->
     <div id="avatar-modal" class="avatar-modal" style="display: none;">
       <div class="avatar-modal-overlay"></div>

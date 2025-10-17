@@ -62,6 +62,7 @@ Config stored in `~/.config/claudia/config.json`
 - **Left/Right Arrow** - Navigate between response alternatives
 - **Escape** - Close panels/modals, cancel editing
 - **Ctrl+K** - Focus message input
+- **Ctrl+P** - Open command palette (quick access to all actions)
 - **Ctrl+/** - Toggle Roleplay Tools panel
 
 ## Roadmap
