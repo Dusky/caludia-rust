@@ -17,11 +17,13 @@
 - Regex Scripts (global and character-scoped text transformations)
 - Chat History Import/Export (JSON format)
 - Enhanced Message Controls (delete, pin, hide, continue, regenerate any message)
+- Token Counter (real-time display with per-section breakdown)
+- Message Examples (character card examples injected into context)
 
-### 🎯 Current Focus: Advanced Roleplay Features
-**Next Up:** Implementing Message Examples Usage to properly inject character card examples into context, or exploring Character Expressions for visual immersion.
+### 🎯 Current Focus: Advanced Chat Management
+**Next Up:** Implementing Chat Branching/Checkpoints to enable non-linear conversation exploration with the ability to save conversation states, create branches from any point, and switch between different conversation paths.
 
-**Recent Completion:** Enhanced Message Controls - complete granular control over conversation history including delete, pin, hide, continue incomplete messages, and regenerate any message (not just the last one).
+**Recent Completion:** Message Examples - character card message examples are now parsed, processed with template variable replacement, and injected into context at configurable positions to teach the AI the character's voice and writing style.
 
 ## Phase 1: Core Roleplay Infrastructure (High Priority)
 **Goal: Enable basic roleplay-focused prompt engineering**
@@ -74,11 +76,11 @@
 
 **Why Important:** Visual representation of character emotions dramatically enhances immersion and makes conversations feel more alive.
 
-### 3. Message Examples in Context
-- [ ] Actually use mes_example field from character cards
-- [ ] Format and inject into prompt properly
-- [ ] Position control in context
-- [ ] Token budget allocation for examples
+### 3. Message Examples in Context ✅
+- [x] Actually use mes_example field from character cards
+- [x] Format and inject into prompt properly
+- [x] Position control in context
+- [x] Token budget allocation for examples
 
 **Why Important:** Message examples help the AI understand the character's voice and writing style, leading to more accurate portrayals.
 
