@@ -2554,50 +2554,104 @@ async function handleApplyPreset() {
 
 // Create custom preset
 async function handleCreatePreset() {
-  const name = prompt('Enter a name for your custom preset:');
-  if (!name || !name.trim()) return;
+  // Check if form already exists
+  if (document.getElementById('preset-create-form')) return;
 
-  const description = prompt('Enter a description for your preset:');
-  if (!description || !description.trim()) return;
+  const container = document.getElementById('presets-tab').querySelector('.roleplay-content');
+  const createBtn = document.getElementById('create-preset-btn');
 
-  const systemAdditions = prompt('Enter system additions (press Cancel to skip):', '');
-  const authorsNoteDefault = prompt('Enter default Author\'s Note (press Cancel to skip):', '');
+  // Create inline form
+  const formDiv = document.createElement('div');
+  formDiv.id = 'preset-create-form';
+  formDiv.style.background = 'var(--bg-secondary)';
+  formDiv.style.border = '2px solid var(--accent)';
+  formDiv.style.borderRadius = '8px';
+  formDiv.style.padding = '16px';
+  formDiv.style.marginBottom = '16px';
 
-  try {
-    // Generate a simple ID from the name
-    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  formDiv.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Create Custom Preset</div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Name *</label>
+        <input type="text" id="preset-create-name" placeholder="My Custom Preset" style="width: 100%;" />
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Description *</label>
+        <textarea id="preset-create-desc" placeholder="What this preset does..." rows="3" style="width: 100%;"></textarea>
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">System Additions (optional)</label>
+        <textarea id="preset-create-system" placeholder="Additional text to prepend to system prompt..." rows="3" style="width: 100%;"></textarea>
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Default Author's Note (optional)</label>
+        <textarea id="preset-create-note" placeholder="Default Author's Note if user hasn't set one..." rows="3" style="width: 100%;"></textarea>
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button type="button" class="worldinfo-btn" id="preset-create-cancel">Cancel</button>
+        <button type="button" class="worldinfo-btn" id="preset-create-save" style="background: var(--accent); color: white;">Create</button>
+      </div>
+    </div>
+  `;
 
-    const preset = {
-      id: id,
-      name: name.trim(),
-      description: description.trim(),
-      system_additions: systemAdditions || '',
-      authors_note_default: authorsNoteDefault || '',
-      instructions: [],
-      format_hints: {
-        wi_format: '[{content}]',
-        scenario_format: '[Scenario: {content}]',
-        personality_format: '[{char}\'s personality: {content}]'
-      }
-    };
+  container.insertBefore(formDiv, createBtn);
+  document.getElementById('preset-create-name').focus();
 
-    await invoke('save_custom_preset', { preset });
+  // Handle cancel
+  document.getElementById('preset-create-cancel').addEventListener('click', () => {
+    formDiv.remove();
+  });
 
-    setStatus('Custom preset created', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+  // Handle save
+  document.getElementById('preset-create-save').addEventListener('click', async () => {
+    const name = document.getElementById('preset-create-name').value.trim();
+    const description = document.getElementById('preset-create-desc').value.trim();
+    const systemAdditions = document.getElementById('preset-create-system').value.trim();
+    const authorsNoteDefault = document.getElementById('preset-create-note').value.trim();
 
-    // Reload presets
-    await loadPresets();
+    if (!name || !description) {
+      alert('Name and description are required');
+      return;
+    }
 
-    // Select the new preset
-    document.getElementById('preset-select').value = id;
-    await handlePresetSelect(id);
-  } catch (error) {
-    console.error('Failed to create preset:', error);
-    alert(`Failed to create preset: ${error}`);
-    setStatus('Failed to create preset', 'error');
-    setTimeout(() => setStatus('Ready'), 2000);
-  }
+    try {
+      // Generate a simple ID from the name
+      const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+      const preset = {
+        id: id,
+        name,
+        description,
+        system_additions: systemAdditions || '',
+        authors_note_default: authorsNoteDefault || '',
+        instructions: [],
+        format_hints: {
+          wi_format: '[{content}]',
+          scenario_format: '[Scenario: {content}]',
+          personality_format: '[{char}\'s personality: {content}]'
+        }
+      };
+
+      await invoke('save_custom_preset', { preset });
+
+      formDiv.remove();
+      setStatus('Custom preset created', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
+
+      // Reload presets
+      await loadPresets();
+
+      // Select the new preset
+      document.getElementById('preset-select').value = id;
+      await handlePresetSelect(id);
+    } catch (error) {
+      console.error('Failed to create preset:', error);
+      alert(`Failed to create preset: ${error}`);
+      setStatus('Failed to create preset', 'error');
+      setTimeout(() => setStatus('Ready'), 2000);
+    }
+  });
 }
 
 // Render instruction blocks list
@@ -3118,30 +3172,74 @@ async function deletePreset() {
 async function duplicatePreset() {
   if (!currentEditingPreset) return;
 
-  const newName = prompt(`Enter a name for the duplicated preset:`, `${currentEditingPreset.name} (Copy)`);
-  if (!newName || !newName.trim()) return;
+  // Check if form already exists
+  if (document.getElementById('preset-duplicate-form')) return;
 
-  try {
-    const duplicatedPreset = await invoke('duplicate_preset', {
-      sourcePresetId: currentEditingPreset.id,
-      newName: newName.trim()
-    });
+  const presetInfo = document.getElementById('preset-info');
+  const formDiv = document.createElement('div');
+  formDiv.id = 'preset-duplicate-form';
+  formDiv.style.background = 'var(--bg-secondary)';
+  formDiv.style.border = '2px solid var(--accent)';
+  formDiv.style.borderRadius = '8px';
+  formDiv.style.padding = '16px';
+  formDiv.style.marginBottom = '16px';
 
-    setStatus('Preset duplicated successfully', 'success');
-    setTimeout(() => setStatus('Ready'), 2000);
+  formDiv.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Duplicate Preset</div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">New Preset Name *</label>
+        <input type="text" id="preset-duplicate-name" placeholder="My Preset (Copy)" value="${currentEditingPreset.name} (Copy)" style="width: 100%;" />
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button type="button" class="worldinfo-btn" id="preset-duplicate-cancel">Cancel</button>
+        <button type="button" class="worldinfo-btn" id="preset-duplicate-save" style="background: var(--accent); color: white;">Duplicate</button>
+      </div>
+    </div>
+  `;
 
-    // Reload presets
-    await loadPresets();
+  presetInfo.parentNode.insertBefore(formDiv, presetInfo.nextSibling);
+  document.getElementById('preset-duplicate-name').focus();
+  document.getElementById('preset-duplicate-name').select();
 
-    // Select the new preset
-    document.getElementById('preset-select').value = duplicatedPreset.id;
-    await handlePresetSelect(duplicatedPreset.id);
-  } catch (error) {
-    console.error('Failed to duplicate preset:', error);
-    alert(`Failed to duplicate preset: ${error}`);
-    setStatus('Failed to duplicate preset', 'error');
-    setTimeout(() => setStatus('Ready'), 2000);
-  }
+  // Cancel button
+  document.getElementById('preset-duplicate-cancel').addEventListener('click', () => {
+    formDiv.remove();
+  });
+
+  // Duplicate button
+  document.getElementById('preset-duplicate-save').addEventListener('click', async () => {
+    const newName = document.getElementById('preset-duplicate-name').value.trim();
+    if (!newName) {
+      alert('Please enter a preset name');
+      return;
+    }
+
+    try {
+      const duplicatedPreset = await invoke('duplicate_preset', {
+        sourcePresetId: currentEditingPreset.id,
+        newName: newName
+      });
+
+      setStatus('Preset duplicated successfully', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
+
+      // Remove form
+      formDiv.remove();
+
+      // Reload presets
+      await loadPresets();
+
+      // Select the new preset
+      document.getElementById('preset-select').value = duplicatedPreset.id;
+      await handlePresetSelect(duplicatedPreset.id);
+    } catch (error) {
+      console.error('Failed to duplicate preset:', error);
+      alert(`Failed to duplicate preset: ${error}`);
+      setStatus('Failed to duplicate preset', 'error');
+      setTimeout(() => setStatus('Ready'), 2000);
+    }
+  });
 }
 
 // Restore built-in preset to default
