@@ -1639,6 +1639,14 @@ function setupKeyboardShortcuts() {
 // Token Counter
 let tokenUpdateTimeout = null;
 
+// Helper function to format token counts
+function formatTokenCount(count) {
+  if (count >= 1000) {
+    return (count / 1000).toFixed(1) + 'k';
+  }
+  return count.toString();
+}
+
 async function updateTokenCount() {
   // Debounce token count updates
   if (tokenUpdateTimeout) {
@@ -1653,11 +1661,23 @@ async function updateTokenCount() {
         currentInput
       });
 
-      // Update total display
+      // Update total display with color coding
       const tokenCounter = document.getElementById('token-counter');
       const tokenCountTotal = document.getElementById('token-count-total');
-      tokenCountTotal.textContent = `${tokenData.total} tokens`;
-      tokenCounter.style.display = 'flex';
+      const contextLimit = 200000; // Claude 200k context
+      const percentage = (tokenData.total / contextLimit) * 100;
+
+      // Format: "2.5k / 200k tokens"
+      tokenCountTotal.textContent = `${formatTokenCount(tokenData.total)} / ${formatTokenCount(contextLimit)} tokens`;
+
+      // Apply color coding based on usage
+      if (percentage < 50) {
+        tokenCountTotal.style.color = '#4ade80'; // Green
+      } else if (percentage < 80) {
+        tokenCountTotal.style.color = '#facc15'; // Yellow
+      } else {
+        tokenCountTotal.style.color = '#f87171'; // Red
+      }
 
       // Update breakdown
       document.getElementById('token-system').textContent = tokenData.system_prompt;
@@ -1671,8 +1691,10 @@ async function updateTokenCount() {
       document.getElementById('token-total-detail').textContent = tokenData.total;
     } catch (error) {
       console.error('Failed to update token count:', error);
-      // Hide token counter on error
-      document.getElementById('token-counter').style.display = 'none';
+      // Keep counter visible, just show 0
+      const tokenCountTotal = document.getElementById('token-count-total');
+      tokenCountTotal.textContent = '0 / 200k tokens';
+      tokenCountTotal.style.color = 'var(--text-secondary)';
     }
   }, 300); // Update after 300ms of no typing
 }
