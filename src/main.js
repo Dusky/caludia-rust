@@ -1773,20 +1773,66 @@ async function handleCharacterSwitch() {
 
 // Handle new character creation
 async function handleNewCharacter() {
-  const name = prompt('Enter a name for the new character:');
-  if (!name) return;
+  const modal = document.getElementById('new-character-modal');
+  const overlay = modal.querySelector('.new-character-overlay');
+  const form = document.getElementById('new-character-form');
+  const nameInput = document.getElementById('new-character-name');
+  const systemPromptInput = document.getElementById('new-character-system-prompt');
+  const closeBtn = document.getElementById('close-new-character-btn');
+  const cancelBtn = document.getElementById('cancel-new-character-btn');
 
-  const systemPrompt = prompt('Enter the system prompt for the new character:', 'You are a helpful AI assistant.');
-  if (!systemPrompt) return;
+  // Reset form
+  form.reset();
+  systemPromptInput.value = 'You are a helpful AI assistant.';
 
-  try {
-    const newCharacter = await invoke('create_character', { name, systemPrompt });
-    await loadCharacters();
-    characterSelect.value = newCharacter.id;
-  } catch (error) {
-    console.error('Failed to create character:', error);
-    addMessage(`Failed to create character: ${error}`, false);
-  }
+  // Show modal
+  modal.style.display = 'flex';
+
+  // Focus name input after a brief delay to ensure it's visible
+  setTimeout(() => nameInput.focus(), 100);
+
+  // Handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    const name = nameInput.value.trim();
+    const systemPrompt = systemPromptInput.value.trim();
+
+    if (!name || !systemPrompt) return;
+
+    try {
+      const newCharacter = await invoke('create_character', { name, systemPrompt });
+      await loadCharacters();
+      characterSelect.value = newCharacter.id;
+
+      // Hide modal
+      modal.style.display = 'none';
+
+      // Remove event listeners
+      form.removeEventListener('submit', handleSubmit);
+      overlay.removeEventListener('click', handleClose);
+      closeBtn.removeEventListener('click', handleClose);
+      cancelBtn.removeEventListener('click', handleClose);
+    } catch (error) {
+      console.error('Failed to create character:', error);
+      addMessage(`Failed to create character: ${error}`, false);
+    }
+  };
+
+  // Handle close
+  const handleClose = () => {
+    modal.style.display = 'none';
+    form.removeEventListener('submit', handleSubmit);
+    overlay.removeEventListener('click', handleClose);
+    closeBtn.removeEventListener('click', handleClose);
+    cancelBtn.removeEventListener('click', handleClose);
+  };
+
+  // Attach event listeners
+  form.addEventListener('submit', handleSubmit);
+  overlay.addEventListener('click', handleClose);
+  closeBtn.addEventListener('click', handleClose);
+  cancelBtn.addEventListener('click', handleClose);
 }
 
 // Handle character deletion
@@ -3528,6 +3574,13 @@ window.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     // Escape key handling
     if (e.key === 'Escape') {
+      // Close new character modal
+      const newCharacterModal = document.getElementById('new-character-modal');
+      if (newCharacterModal && newCharacterModal.style.display !== 'none') {
+        document.getElementById('cancel-new-character-btn').click();
+        return;
+      }
+
       // Close avatar modal
       if (avatarModal.style.display !== 'none') {
         hideAvatarModal();

@@ -740,5 +740,50 @@
         <img id="avatar-modal-img" src="" alt="Avatar" />
       </div>
     </div>
+
+    <!-- New Character modal -->
+    <div id="new-character-modal" class="new-character-modal" style="display: none;">
+      <div class="new-character-overlay"></div>
+      <div class="new-character-content">
+        <div class="new-character-header">
+          <h3>Create New Character</h3>
+          <button id="close-new-character-btn" class="icon-btn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <form id="new-character-form">
+          <div class="form-group">
+            <label for="new-character-name">Character Name</label>
+            <input
+              type="text"
+              id="new-character-name"
+              placeholder="Enter a name for the new character"
+              required
+              autofocus
+            />
+          </div>
+          <div class="form-group">
+            <label for="new-character-system-prompt">System Prompt</label>
+            <textarea
+              id="new-character-system-prompt"
+              placeholder="You are a helpful AI assistant..."
+              rows="6"
+              required
+            ></textarea>
+          </div>
+          <div class="new-character-actions">
+            <button type="button" id="cancel-new-character-btn" class="btn-secondary">
+              Cancel
+            </button>
+            <button type="submit" class="btn-primary">
+              Create
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   </body>
 </html>
