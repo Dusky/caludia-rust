@@ -651,6 +651,98 @@ function setupAutoSave() {
   });
 }
 
+// Drag and Drop System
+let dragDropOverlay;
+let dragCounter = 0; // Track nested drag events
+
+function setupDragAndDrop() {
+  dragDropOverlay = document.getElementById('drag-drop-overlay');
+
+  // Prevent default drag behaviors on the entire document
+  document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+
+  // Show overlay when dragging file into window
+  document.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    dragCounter++;
+
+    // Only show overlay if dragging files
+    if (e.dataTransfer && e.dataTransfer.types.includes('Files')) {
+      document.body.classList.add('drag-over');
+      if (dragDropOverlay) {
+        dragDropOverlay.classList.add('active');
+      }
+    }
+  });
+
+  // Hide overlay when dragging leaves window
+  document.addEventListener('dragleave', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    dragCounter--;
+
+    // Only hide when completely leaving the window
+    if (dragCounter === 0) {
+      document.body.classList.remove('drag-over');
+      if (dragDropOverlay) {
+        dragDropOverlay.classList.remove('active');
+      }
+    }
+  });
+
+  // Handle file drop
+  document.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Reset drag state
+    dragCounter = 0;
+    document.body.classList.remove('drag-over');
+    if (dragDropOverlay) {
+      dragDropOverlay.classList.remove('active');
+    }
+
+    // Get dropped files
+    const files = e.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0]; // Only handle first file
+    const fileName = file.name.toLowerCase();
+
+    // Detect file type and show appropriate message
+    if (fileName.endsWith('.png')) {
+      showInfo(
+        'Character Card Import',
+        'To import character cards, please use the "Import Character Card" button in Settings > Character tab.',
+        5000
+      );
+    } else if (fileName.endsWith('.json')) {
+      showInfo(
+        'Chat History Import',
+        'To import chat history, please use the "Import" button at the top of the chat.',
+        5000
+      );
+    } else {
+      showWarning(
+        'Unsupported File Type',
+        'Please drop a PNG character card or JSON chat history file.',
+        4000
+      );
+    }
+  });
+}
+
 // Apply view mode
 function applyViewMode(mode) {
   const body = document.body;
@@ -4418,6 +4510,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Setup auto-save for message input
   setupAutoSave();
+
+  // Setup drag and drop file handling
+  setupDragAndDrop();
 
   loadExistingConfig();
 });
