@@ -1261,6 +1261,24 @@ body {
   border-color: var(--accent);
 }
 
+/* Fix theming for textareas with inline styles */
+#preset-system-editable,
+#preset-authors-note-editable {
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px;
+  padding: 12px;
+  color: var(--text-primary) !important;
+  font-family: inherit;
+  resize: vertical;
+}
+
+#preset-system-editable:focus,
+#preset-authors-note-editable:focus {
+  outline: none;
+  border-color: var(--accent) !important;
+}
+
 .form-group select {
   -webkit-appearance: none;
   -moz-appearance: none;
