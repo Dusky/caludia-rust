@@ -1661,23 +1661,13 @@ async function updateTokenCount() {
         currentInput
       });
 
-      // Update total display with color coding
+      // Update total display
       const tokenCounter = document.getElementById('token-counter');
       const tokenCountTotal = document.getElementById('token-count-total');
       const contextLimit = 200000; // Claude 200k context
-      const percentage = (tokenData.total / contextLimit) * 100;
 
       // Format: "2.5k / 200k tokens"
       tokenCountTotal.textContent = `${formatTokenCount(tokenData.total)} / ${formatTokenCount(contextLimit)} tokens`;
-
-      // Apply color coding based on usage
-      if (percentage < 50) {
-        tokenCountTotal.style.color = '#4ade80'; // Green
-      } else if (percentage < 80) {
-        tokenCountTotal.style.color = '#facc15'; // Yellow
-      } else {
-        tokenCountTotal.style.color = '#f87171'; // Red
-      }
 
       // Update breakdown
       document.getElementById('token-system').textContent = tokenData.system_prompt;
@@ -1694,7 +1684,6 @@ async function updateTokenCount() {
       // Keep counter visible, just show 0
       const tokenCountTotal = document.getElementById('token-count-total');
       tokenCountTotal.textContent = '0 / 200k tokens';
-      tokenCountTotal.style.color = 'var(--text-secondary)';
     }
   }, 300); // Update after 300ms of no typing
 }
