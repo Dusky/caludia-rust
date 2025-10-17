@@ -172,6 +172,45 @@ body {
   gap: 8px;
 }
 
+/* Feature Badges */
+.feature-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.feature-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.feature-badge:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.feature-badge-icon {
+  width: 10px;
+  height: 10px;
+  opacity: 0.8;
+}
+
+.feature-badge-count {
+  font-weight: 600;
+  color: var(--accent);
+}
+
 .icon-btn {
   width: 28px;
   height: 28px;

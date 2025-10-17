@@ -2082,8 +2082,98 @@ async function loadRoleplaySettings() {
 
     // Load Presets
     await loadPresets();
+
+    // Update feature badges
+    updateFeatureBadges();
   } catch (error) {
     console.error('Failed to load roleplay settings:', error);
+  }
+}
+
+// Update feature badges in header
+function updateFeatureBadges() {
+  const badgesContainer = document.getElementById('feature-badges');
+  if (!badgesContainer || !currentRoleplaySettings) {
+    if (badgesContainer) badgesContainer.innerHTML = '';
+    return;
+  }
+
+  badgesContainer.innerHTML = '';
+
+  // World Info badge - show count of enabled entries
+  const worldInfoEntries = (currentRoleplaySettings.world_info || []).filter(entry => entry.enabled);
+  if (worldInfoEntries.length > 0) {
+    const badge = document.createElement('div');
+    badge.className = 'feature-badge';
+    badge.title = `${worldInfoEntries.length} World Info ${worldInfoEntries.length === 1 ? 'entry' : 'entries'} active`;
+    badge.innerHTML = `
+      <svg class="feature-badge-icon" viewBox="0 0 16 16" fill="none">
+        <path d="M2 4h12M2 8h12M2 12h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>WI: <span class="feature-badge-count">${worldInfoEntries.length}</span></span>
+    `;
+    badgesContainer.appendChild(badge);
+  }
+
+  // Persona badge
+  if (currentRoleplaySettings.persona_enabled && currentRoleplaySettings.persona_name) {
+    const badge = document.createElement('div');
+    badge.className = 'feature-badge';
+    badge.title = `Persona: ${currentRoleplaySettings.persona_name}`;
+    badge.innerHTML = `
+      <svg class="feature-badge-icon" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M3 13c0-2.5 2-4 5-4s5 1.5 5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>${currentRoleplaySettings.persona_name}</span>
+    `;
+    badgesContainer.appendChild(badge);
+  }
+
+  // Preset badge
+  const presetSelect = document.getElementById('preset-select');
+  if (presetSelect && presetSelect.value) {
+    const presetName = presetSelect.options[presetSelect.selectedIndex]?.text || presetSelect.value;
+    const badge = document.createElement('div');
+    badge.className = 'feature-badge';
+    badge.title = `Active Preset: ${presetName}`;
+    badge.innerHTML = `
+      <svg class="feature-badge-icon" viewBox="0 0 16 16" fill="none">
+        <rect x="3" y="3" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M6 7h4M6 9h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>${presetName}</span>
+    `;
+    badgesContainer.appendChild(badge);
+  }
+
+  // Message Examples badge
+  if (currentRoleplaySettings.examples_enabled) {
+    const badge = document.createElement('div');
+    badge.className = 'feature-badge';
+    badge.title = 'Message Examples enabled';
+    badge.innerHTML = `
+      <svg class="feature-badge-icon" viewBox="0 0 16 16" fill="none">
+        <path d="M3 6l2 2-2 2M7 10h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Examples</span>
+    `;
+    badgesContainer.appendChild(badge);
+  }
+
+  // Author's Note badge
+  if (currentRoleplaySettings.authors_note_enabled && currentRoleplaySettings.authors_note) {
+    const badge = document.createElement('div');
+    badge.className = 'feature-badge';
+    badge.title = "Author's Note enabled";
+    badge.innerHTML = `
+      <svg class="feature-badge-icon" viewBox="0 0 16 16" fill="none">
+        <path d="M3 3h10v10H3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M6 6h4M6 9h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span>A/N</span>
+    `;
+    badgesContainer.appendChild(badge);
   }
 }
 
@@ -2334,6 +2424,9 @@ async function handleToggleWorldInfoEntry(entryId, enabled) {
 
     // Update local settings
     entry.enabled = enabled;
+
+    // Update feature badges
+    updateFeatureBadges();
   } catch (error) {
     console.error('Failed to toggle World Info entry:', error);
     alert(`Failed to toggle entry: ${error}`);
@@ -2372,6 +2465,15 @@ async function handleSaveAuthorsNote() {
       enabled
     });
 
+    // Update currentRoleplaySettings
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.authors_note = content;
+      currentRoleplaySettings.authors_note_enabled = enabled;
+    }
+
+    // Update feature badges
+    updateFeatureBadges();
+
     // Show success message
     setStatus('Author\'s Note saved', 'success');
     setTimeout(() => setStatus('Ready'), 2000);
@@ -2397,6 +2499,16 @@ async function handleSavePersona() {
       enabled
     });
 
+    // Update currentRoleplaySettings
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.persona_name = name;
+      currentRoleplaySettings.persona_description = description;
+      currentRoleplaySettings.persona_enabled = enabled;
+    }
+
+    // Update feature badges
+    updateFeatureBadges();
+
     // Show success message
     setStatus('Persona saved', 'success');
     setTimeout(() => setStatus('Ready'), 2000);
@@ -2419,6 +2531,15 @@ async function handleSaveExamples() {
       enabled,
       position
     });
+
+    // Update currentRoleplaySettings
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.examples_enabled = enabled;
+      currentRoleplaySettings.examples_position = position;
+    }
+
+    // Update feature badges
+    updateFeatureBadges();
 
     // Show success message
     setStatus('Message Examples settings saved', 'success');
@@ -2604,6 +2725,9 @@ async function handleApplyPreset() {
     if (currentRoleplaySettings) {
       currentRoleplaySettings.active_preset_id = presetId;
     }
+
+    // Update feature badges
+    updateFeatureBadges();
 
     setStatus(presetId ? 'Preset applied' : 'Preset removed', 'success');
     setTimeout(() => setStatus('Ready'), 2000);
