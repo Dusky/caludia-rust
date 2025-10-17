@@ -1855,6 +1855,41 @@ body.view-comfortable .message-content pre {
   word-wrap: break-word;
 }
 
+.worldinfo-edit-form,
+.worldinfo-inline-edit {
+  background: var(--bg-secondary);
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.worldinfo-edit-form input,
+.worldinfo-edit-form textarea,
+.worldinfo-inline-edit input,
+.worldinfo-inline-edit textarea {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.worldinfo-edit-form input:focus,
+.worldinfo-edit-form textarea:focus,
+.worldinfo-inline-edit input:focus,
+.worldinfo-inline-edit textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.worldinfo-edit-form textarea,
+.worldinfo-inline-edit textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
 .header-left-controls {
   display: flex;
   gap: 8px;

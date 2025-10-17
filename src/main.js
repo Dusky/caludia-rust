@@ -2098,63 +2098,158 @@ function renderWorldInfoList(entries) {
 
 // Add new World Info entry
 async function handleAddWorldInfoEntry() {
-  const keys = prompt('Enter keywords (comma-separated):\nExample: John, John Smith');
-  if (!keys) return;
+  const listContainer = document.getElementById('worldinfo-list');
 
-  const content = prompt('Enter the content to inject when keywords are found:');
-  if (!content) return;
+  // Check if form already exists
+  if (document.getElementById('worldinfo-add-form')) return;
 
-  const priorityStr = prompt('Enter priority (higher = injected first, default 0):', '0');
-  const priority = parseInt(priorityStr) || 0;
+  // Create inline form
+  const formDiv = document.createElement('div');
+  formDiv.id = 'worldinfo-add-form';
+  formDiv.className = 'worldinfo-entry worldinfo-edit-form';
 
-  try {
-    const keysArray = keys.split(',').map(k => k.trim()).filter(k => k);
-    await invoke('add_world_info_entry', {
-      characterId: currentCharacter.id,
-      keys: keysArray,
-      content: content.trim(),
-      priority,
-      caseSensitive: false
-    });
+  formDiv.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Add World Info Entry</div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Keywords (comma-separated)</label>
+        <input type="text" id="wi-add-keys" placeholder="John, John Smith" style="width: 100%;" />
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Content</label>
+        <textarea id="wi-add-content" placeholder="Information to inject when keywords are found..." rows="4" style="width: 100%;"></textarea>
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Priority</label>
+        <input type="number" id="wi-add-priority" value="0" min="0" style="width: 100px;" />
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button type="button" class="worldinfo-btn" id="wi-add-cancel">Cancel</button>
+        <button type="button" class="worldinfo-btn" id="wi-add-save" style="background: var(--accent); color: white;">Save</button>
+      </div>
+    </div>
+  `;
 
-    // Reload settings
-    await loadRoleplaySettings();
-  } catch (error) {
-    console.error('Failed to add World Info entry:', error);
-    alert(`Failed to add entry: ${error}`);
-  }
+  listContainer.prepend(formDiv);
+
+  // Focus first input
+  document.getElementById('wi-add-keys').focus();
+
+  // Handle cancel
+  document.getElementById('wi-add-cancel').addEventListener('click', () => {
+    formDiv.remove();
+  });
+
+  // Handle save
+  document.getElementById('wi-add-save').addEventListener('click', async () => {
+    const keys = document.getElementById('wi-add-keys').value.trim();
+    const content = document.getElementById('wi-add-content').value.trim();
+    const priority = parseInt(document.getElementById('wi-add-priority').value) || 0;
+
+    if (!keys || !content) {
+      alert('Keywords and content are required');
+      return;
+    }
+
+    try {
+      const keysArray = keys.split(',').map(k => k.trim()).filter(k => k);
+      await invoke('add_world_info_entry', {
+        characterId: currentCharacter.id,
+        keys: keysArray,
+        content: content,
+        priority,
+        caseSensitive: false
+      });
+
+      formDiv.remove();
+      await loadRoleplaySettings();
+    } catch (error) {
+      console.error('Failed to add World Info entry:', error);
+      alert(`Failed to add entry: ${error}`);
+    }
+  });
 }
 
 // Edit World Info entry
 async function handleEditWorldInfoEntry(entry) {
-  const keys = prompt('Edit keywords (comma-separated):', entry.keys.join(', '));
-  if (keys === null) return;
+  const entryDiv = document.querySelector(`.worldinfo-entry[data-entry-id="${entry.id}"]`);
+  if (!entryDiv) return;
 
-  const content = prompt('Edit content:', entry.content);
-  if (content === null) return;
+  // Check if already editing
+  if (entryDiv.querySelector('.worldinfo-inline-edit')) return;
 
-  const priorityStr = prompt('Edit priority:', entry.priority.toString());
-  if (priorityStr === null) return;
-  const priority = parseInt(priorityStr) || 0;
+  // Hide normal content
+  const header = entryDiv.querySelector('.worldinfo-entry-header');
+  const content = entryDiv.querySelector('.worldinfo-entry-content');
+  header.style.display = 'none';
+  content.style.display = 'none';
 
-  try {
-    const keysArray = keys.split(',').map(k => k.trim()).filter(k => k);
-    await invoke('update_world_info_entry', {
-      characterId: currentCharacter.id,
-      entryId: entry.id,
-      keys: keysArray,
-      content: content.trim(),
-      enabled: entry.enabled,
-      priority,
-      caseSensitive: entry.case_sensitive
-    });
+  // Create inline edit form
+  const editForm = document.createElement('div');
+  editForm.className = 'worldinfo-inline-edit';
+  editForm.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+      <div style="font-weight: 600; color: var(--text-primary); margin-bottom: 4px;">Edit Entry</div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Keywords (comma-separated)</label>
+        <input type="text" class="wi-edit-keys" value="${entry.keys.join(', ')}" style="width: 100%;" />
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Content</label>
+        <textarea class="wi-edit-content" rows="4" style="width: 100%;">${entry.content}</textarea>
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Priority</label>
+        <input type="number" class="wi-edit-priority" value="${entry.priority || 0}" min="0" style="width: 100px;" />
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end;">
+        <button type="button" class="worldinfo-btn wi-edit-cancel">Cancel</button>
+        <button type="button" class="worldinfo-btn wi-edit-save" style="background: var(--accent); color: white;">Save</button>
+      </div>
+    </div>
+  `;
 
-    // Reload settings
-    await loadRoleplaySettings();
-  } catch (error) {
-    console.error('Failed to update World Info entry:', error);
-    alert(`Failed to update entry: ${error}`);
-  }
+  entryDiv.appendChild(editForm);
+
+  // Focus first input
+  editForm.querySelector('.wi-edit-keys').focus();
+
+  // Handle cancel
+  editForm.querySelector('.wi-edit-cancel').addEventListener('click', () => {
+    header.style.display = '';
+    content.style.display = '';
+    editForm.remove();
+  });
+
+  // Handle save
+  editForm.querySelector('.wi-edit-save').addEventListener('click', async () => {
+    const keys = editForm.querySelector('.wi-edit-keys').value.trim();
+    const contentText = editForm.querySelector('.wi-edit-content').value.trim();
+    const priority = parseInt(editForm.querySelector('.wi-edit-priority').value) || 0;
+
+    if (!keys || !contentText) {
+      alert('Keywords and content are required');
+      return;
+    }
+
+    try {
+      const keysArray = keys.split(',').map(k => k.trim()).filter(k => k);
+      await invoke('update_world_info_entry', {
+        characterId: currentCharacter.id,
+        entryId: entry.id,
+        keys: keysArray,
+        content: contentText,
+        enabled: entry.enabled,
+        priority,
+        caseSensitive: entry.case_sensitive
+      });
+
+      await loadRoleplaySettings();
+    } catch (error) {
+      console.error('Failed to update World Info entry:', error);
+      alert(`Failed to update entry: ${error}`);
+    }
+  });
 }
 
 // Toggle World Info entry enabled state
@@ -2781,45 +2876,147 @@ function renderInstructionBlocks(instructions, isReadOnly) {
 function addInstructionBlock() {
   if (!currentEditingPreset) return;
 
-  const name = prompt('Enter instruction block name:');
-  if (!name || !name.trim()) return;
+  const listContainer = document.getElementById('preset-instructions-list');
 
-  const content = prompt('Enter instruction block content:');
-  if (!content || !content.trim()) return;
+  // Check if form already exists
+  if (document.getElementById('instruction-add-form')) return;
 
-  // Generate ID and determine order
-  const id = `inst_${Date.now()}`;
-  const maxOrder = currentEditingPreset.instructions.length > 0
-    ? Math.max(...currentEditingPreset.instructions.map(i => i.order))
-    : 0;
+  // Create inline form
+  const formDiv = document.createElement('div');
+  formDiv.id = 'instruction-add-form';
+  formDiv.style.background = 'var(--bg-secondary)';
+  formDiv.style.border = '2px solid var(--accent)';
+  formDiv.style.borderRadius = '6px';
+  formDiv.style.padding = '12px';
+  formDiv.style.marginBottom = '8px';
 
-  const newInstruction = {
-    id,
-    name: name.trim(),
-    content: content.trim(),
-    enabled: true,
-    order: maxOrder + 1
-  };
+  formDiv.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-weight: 500; font-size: 11px; color: var(--text-primary);">Add Instruction Block</div>
+      <div>
+        <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Name</label>
+        <input type="text" id="inst-add-name" placeholder="Block name..." style="width: 100%; padding: 6px; font-size: 11px;" />
+      </div>
+      <div>
+        <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Content</label>
+        <textarea id="inst-add-content" placeholder="Instruction content..." rows="4" style="width: 100%; padding: 6px; font-size: 11px;"></textarea>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button type="button" class="worldinfo-btn" id="inst-add-cancel" style="font-size: 11px; padding: 4px 8px;">Cancel</button>
+        <button type="button" class="worldinfo-btn" id="inst-add-save" style="background: var(--accent); color: white; font-size: 11px; padding: 4px 8px;">Add</button>
+      </div>
+    </div>
+  `;
 
-  currentEditingPreset.instructions.push(newInstruction);
+  listContainer.prepend(formDiv);
+  document.getElementById('inst-add-name').focus();
 
-  // Re-render
-  renderInstructionBlocks(currentEditingPreset.instructions, false);
+  // Handle cancel
+  document.getElementById('inst-add-cancel').addEventListener('click', () => {
+    formDiv.remove();
+  });
+
+  // Handle save
+  document.getElementById('inst-add-save').addEventListener('click', () => {
+    const name = document.getElementById('inst-add-name').value.trim();
+    const content = document.getElementById('inst-add-content').value.trim();
+
+    if (!name || !content) {
+      alert('Name and content are required');
+      return;
+    }
+
+    // Generate ID and determine order
+    const id = `inst_${Date.now()}`;
+    const maxOrder = currentEditingPreset.instructions.length > 0
+      ? Math.max(...currentEditingPreset.instructions.map(i => i.order))
+      : 0;
+
+    const newInstruction = {
+      id,
+      name,
+      content,
+      enabled: true,
+      order: maxOrder + 1
+    };
+
+    currentEditingPreset.instructions.push(newInstruction);
+    formDiv.remove();
+
+    // Re-render
+    renderInstructionBlocks(currentEditingPreset.instructions, false);
+  });
 }
 
 // Edit instruction block
 function editInstruction(instruction) {
-  const newName = prompt('Edit instruction block name:', instruction.name);
-  if (newName === null) return;
+  // Find the instruction block div
+  const listContainer = document.getElementById('preset-instructions-list');
+  const blocks = Array.from(listContainer.children);
+  const blockDiv = blocks.find(el => {
+    const header = el.querySelector('[style*="cursor: pointer"]');
+    return header && header.textContent.includes(instruction.name);
+  });
 
-  const newContent = prompt('Edit instruction block content:', instruction.content);
-  if (newContent === null) return;
+  if (!blockDiv) return;
 
-  instruction.name = newName.trim();
-  instruction.content = newContent.trim();
+  // Check if already editing
+  if (blockDiv.querySelector('.instruction-edit-form')) return;
 
-  // Re-render
-  renderInstructionBlocks(currentEditingPreset.instructions, false);
+  // Hide original content
+  const header = blockDiv.querySelector('[style*="cursor: pointer"]');
+  const content = blockDiv.querySelector('.instruction-content');
+  header.style.display = 'none';
+  content.style.display = 'none';
+
+  // Create edit form
+  const editForm = document.createElement('div');
+  editForm.className = 'instruction-edit-form';
+  editForm.style.padding = '8px';
+  editForm.innerHTML = `
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-weight: 500; font-size: 11px; color: var(--text-primary);">Edit Instruction Block</div>
+      <div>
+        <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Name</label>
+        <input type="text" class="inst-edit-name" value="${instruction.name}" style="width: 100%; padding: 6px; font-size: 11px;" />
+      </div>
+      <div>
+        <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Content</label>
+        <textarea class="inst-edit-content" rows="4" style="width: 100%; padding: 6px; font-size: 11px;">${instruction.content}</textarea>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button type="button" class="worldinfo-btn inst-edit-cancel" style="font-size: 11px; padding: 4px 8px;">Cancel</button>
+        <button type="button" class="worldinfo-btn inst-edit-save" style="background: var(--accent); color: white; font-size: 11px; padding: 4px 8px;">Save</button>
+      </div>
+    </div>
+  `;
+
+  blockDiv.appendChild(editForm);
+  editForm.querySelector('.inst-edit-name').focus();
+
+  // Handle cancel
+  editForm.querySelector('.inst-edit-cancel').addEventListener('click', () => {
+    header.style.display = '';
+    content.style.display = '';
+    editForm.remove();
+  });
+
+  // Handle save
+  editForm.querySelector('.inst-edit-save').addEventListener('click', () => {
+    const newName = editForm.querySelector('.inst-edit-name').value.trim();
+    const newContent = editForm.querySelector('.inst-edit-content').value.trim();
+
+    if (!newName || !newContent) {
+      alert('Name and content are required');
+      return;
+    }
+
+    instruction.name = newName;
+    instruction.content = newContent;
+
+    // Re-render
+    renderInstructionBlocks(currentEditingPreset.instructions, false);
+  });
 }
 
 // Delete instruction block
