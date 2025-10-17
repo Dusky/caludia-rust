@@ -481,6 +481,37 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
       editBtn.addEventListener('click', () => handleEditMessage(messageDiv, content));
       actionsDiv.appendChild(editBtn);
 
+      // Pin button
+      const pinBtn = document.createElement('button');
+      pinBtn.className = 'message-action-btn message-pin-btn';
+      pinBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 11V5M4.5 5L7 2.5L9.5 5M7 11L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      pinBtn.title = 'Pin message';
+      pinBtn.addEventListener('click', () => handleTogglePin(messageDiv));
+      actionsDiv.appendChild(pinBtn);
+
+      // Hide button
+      const hideBtn = document.createElement('button');
+      hideBtn.className = 'message-action-btn message-hide-btn';
+      hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 7C1 7 3 3 7 3C11 3 13 7 13 7C13 7 11 11 7 11C3 11 1 7 1 7Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.5"/>
+      </svg>`;
+      hideBtn.title = 'Hide message';
+      hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
+      actionsDiv.appendChild(hideBtn);
+
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'message-action-btn message-delete-btn';
+      deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4L10.5 11C10.5 11.5523 10.0523 12 9.5 12H4.5C3.94772 12 3.5 11.5523 3.5 11L3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      deleteBtn.title = 'Delete message';
+      deleteBtn.addEventListener('click', () => handleDeleteMessage(messageDiv));
+      actionsDiv.appendChild(deleteBtn);
+
       messageDiv.appendChild(contentDiv);
       messageDiv.appendChild(actionsDiv);
     } else {
@@ -494,6 +525,47 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
       regenerateBtn.title = 'Regenerate response';
       regenerateBtn.addEventListener('click', () => handleRegenerateMessage(messageDiv));
       actionsDiv.appendChild(regenerateBtn);
+
+      // Continue button
+      const continueBtn = document.createElement('button');
+      continueBtn.className = 'message-action-btn message-continue-btn';
+      continueBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 7H11M11 7L7 3M11 7L7 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      continueBtn.title = 'Continue message';
+      continueBtn.addEventListener('click', () => handleContinueMessage(messageDiv));
+      actionsDiv.appendChild(continueBtn);
+
+      // Pin button
+      const pinBtn = document.createElement('button');
+      pinBtn.className = 'message-action-btn message-pin-btn';
+      pinBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 11V5M4.5 5L7 2.5L9.5 5M7 11L7 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      pinBtn.title = 'Pin message';
+      pinBtn.addEventListener('click', () => handleTogglePin(messageDiv));
+      actionsDiv.appendChild(pinBtn);
+
+      // Hide button
+      const hideBtn = document.createElement('button');
+      hideBtn.className = 'message-action-btn message-hide-btn';
+      hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 7C1 7 3 3 7 3C11 3 13 7 13 7C13 7 11 11 7 11C3 11 1 7 1 7Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.5"/>
+      </svg>`;
+      hideBtn.title = 'Hide message';
+      hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
+      actionsDiv.appendChild(hideBtn);
+
+      // Delete button
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'message-action-btn message-delete-btn';
+      deleteBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4L10.5 11C10.5 11.5523 10.0523 12 9.5 12H4.5C3.94772 12 3.5 11.5523 3.5 11L3 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      deleteBtn.title = 'Delete message';
+      deleteBtn.addEventListener('click', () => handleDeleteMessage(messageDiv));
+      actionsDiv.appendChild(deleteBtn);
 
       // Create swipe wrapper
       const swipeWrapper = document.createElement('div');
@@ -695,21 +767,39 @@ async function handleEditMessage(messageDiv, originalContent) {
 
 // Handle regenerating an assistant message
 async function handleRegenerateMessage(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
   const regenerateBtn = messageDiv.querySelector('.message-action-btn');
   regenerateBtn.disabled = true;
   regenerateBtn.classList.add('loading');
 
   try {
-    // Get the last user message
-    const lastUserMessage = await invoke('get_last_user_message');
+    setStatus('Regenerating response...', 'default');
 
-    // Generate new response
-    await generateSwipe(messageDiv, lastUserMessage);
+    // Use the new regenerate_at_index command which works on any message
+    const swipeInfo = await invoke('regenerate_at_index', { messageIndex });
+
+    // Update the message content
+    const contentDiv = messageDiv.querySelector('.message-content');
+    renderAssistantContent(contentDiv, swipeInfo.content);
+
+    // Update swipe controls
+    updateSwipeControls(messageDiv, swipeInfo.current, swipeInfo.total);
+
+    setStatus('Regeneration complete', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
   } catch (error) {
     console.error('Failed to regenerate message:', error);
+    setStatus(`Regeneration failed: ${error}`, 'error');
+  } finally {
     regenerateBtn.disabled = false;
     regenerateBtn.classList.remove('loading');
-    addMessage(`Error regenerating message: ${error}`, false);
   }
 }
 
@@ -850,6 +940,139 @@ function addCopyButtonToCode(block) {
     });
     pre.style.position = 'relative';
     pre.appendChild(copyBtn);
+  }
+}
+
+// Handle deleting a message
+async function handleDeleteMessage(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  // Confirm deletion
+  if (!confirm('Are you sure you want to delete this message? This cannot be undone.')) {
+    return;
+  }
+
+  try {
+    await invoke('delete_message_at_index', { messageIndex });
+    messageDiv.remove();
+    await updateTokenCount();
+    setStatus('Message deleted', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to delete message:', error);
+    setStatus(`Delete failed: ${error}`, 'error');
+  }
+}
+
+// Handle toggling message pin status
+async function handleTogglePin(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  try {
+    const isPinned = await invoke('toggle_message_pin', { messageIndex });
+
+    // Update visual indicator
+    const pinBtn = messageDiv.querySelector('.message-pin-btn');
+    if (isPinned) {
+      messageDiv.classList.add('pinned');
+      pinBtn.classList.add('active');
+      pinBtn.title = 'Unpin message';
+    } else {
+      messageDiv.classList.remove('pinned');
+      pinBtn.classList.remove('active');
+      pinBtn.title = 'Pin message';
+    }
+  } catch (error) {
+    console.error('Failed to toggle pin:', error);
+    setStatus(`Pin toggle failed: ${error}`, 'error');
+  }
+}
+
+// Handle toggling message hidden status
+async function handleToggleHidden(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  try {
+    const isHidden = await invoke('toggle_message_hidden', { messageIndex });
+
+    // Update visual indicator
+    const hideBtn = messageDiv.querySelector('.message-hide-btn');
+    if (isHidden) {
+      messageDiv.classList.add('hidden-message');
+      hideBtn.classList.add('active');
+      hideBtn.title = 'Unhide message';
+      // Update icon to "eye-off"
+      hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M10 5L11.5 3.5M3.5 10.5L5 9M1 13L13 1M5.5 6C5.19 6.31 5 6.74 5 7.22C5 8.2 5.8 9 6.78 9C7.26 9 7.69 8.81 8 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>`;
+    } else {
+      messageDiv.classList.remove('hidden-message');
+      hideBtn.classList.remove('active');
+      hideBtn.title = 'Hide message';
+      // Update icon back to "eye"
+      hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M1 7C1 7 3 3 7 3C11 3 13 7 13 7C13 7 11 11 7 11C3 11 1 7 1 7Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="7" cy="7" r="2" stroke="currentColor" stroke-width="1.5"/>
+      </svg>`;
+    }
+
+    await updateTokenCount();
+  } catch (error) {
+    console.error('Failed to toggle hidden:', error);
+    setStatus(`Hide toggle failed: ${error}`, 'error');
+  }
+}
+
+// Handle continuing an incomplete message
+async function handleContinueMessage(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  const continueBtn = messageDiv.querySelector('.message-continue-btn');
+  continueBtn.disabled = true;
+  continueBtn.classList.add('loading');
+
+  try {
+    setStatus('Continuing message...', 'default');
+    const continuedText = await invoke('continue_message', { messageIndex });
+
+    // The backend appends to the message, so we just need to reload the content
+    const contentDiv = messageDiv.querySelector('.message-content');
+    const swipeInfo = await invoke('get_swipe_info', { messageIndex });
+    renderAssistantContent(contentDiv, swipeInfo.content);
+
+    setStatus('Message continued', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+    await updateTokenCount();
+  } catch (error) {
+    console.error('Failed to continue message:', error);
+    setStatus(`Continue failed: ${error}`, 'error');
+  } finally {
+    continueBtn.disabled = false;
+    continueBtn.classList.remove('loading');
   }
 }
 
@@ -1581,6 +1804,29 @@ async function loadChatHistory() {
     } else {
       history.forEach((msg, index) => {
         const messageDiv = addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
+
+        // Apply pinned state
+        if (msg.pinned && messageDiv) {
+          messageDiv.classList.add('pinned');
+          const pinBtn = messageDiv.querySelector('.message-pin-btn');
+          if (pinBtn) {
+            pinBtn.classList.add('active');
+            pinBtn.title = 'Unpin message';
+          }
+        }
+
+        // Apply hidden state
+        if (msg.hidden && messageDiv) {
+          messageDiv.classList.add('hidden-message');
+          const hideBtn = messageDiv.querySelector('.message-hide-btn');
+          if (hideBtn) {
+            hideBtn.classList.add('active');
+            hideBtn.title = 'Unhide message';
+            hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M10 5L11.5 3.5M3.5 10.5L5 9M1 13L13 1M5.5 6C5.19 6.31 5 6.74 5 7.22C5 8.2 5.8 9 6.78 9C7.26 9 7.69 8.81 8 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>`;
+          }
+        }
 
         // Update swipe controls for assistant messages with swipe info
         if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {

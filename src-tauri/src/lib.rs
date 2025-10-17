@@ -180,6 +180,10 @@ struct Message {
     current_swipe: usize,
     #[serde(default)]
     timestamp: i64, // Unix timestamp in milliseconds
+    #[serde(default)]
+    pinned: bool, // Whether this message is pinned to always stay in context
+    #[serde(default)]
+    hidden: bool, // Whether this message is temporarily hidden from view
 }
 
 impl Message {
@@ -195,6 +199,8 @@ impl Message {
             swipes: vec![content],
             current_swipe: 0,
             timestamp,
+            pinned: false,
+            hidden: false,
         }
     }
 
@@ -210,6 +216,8 @@ impl Message {
             swipes: vec![content],
             current_swipe: 0,
             timestamp,
+            pinned: false,
+            hidden: false,
         }
     }
 
@@ -1633,6 +1641,242 @@ fn get_last_user_message() -> Result<String, String> {
 }
 
 #[tauri::command]
+fn delete_message_at_index(message_index: usize) -> Result<(), String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    history.messages.remove(message_index);
+    save_history(&character.id, &history)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_message_pin(message_index: usize) -> Result<bool, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    history.messages[message_index].pinned = !history.messages[message_index].pinned;
+    let new_state = history.messages[message_index].pinned;
+    save_history(&character.id, &history)?;
+
+    Ok(new_state)
+}
+
+#[tauri::command]
+fn toggle_message_hidden(message_index: usize) -> Result<bool, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    history.messages[message_index].hidden = !history.messages[message_index].hidden;
+    let new_state = history.messages[message_index].hidden;
+    save_history(&character.id, &history)?;
+
+    Ok(new_state)
+}
+
+#[tauri::command]
+async fn continue_message(message_index: usize) -> Result<String, String> {
+    let config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    // Make sure we're continuing an assistant message
+    if history.messages[message_index].role != "assistant" {
+        return Err("Can only continue assistant messages".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+
+    // Load roleplay settings and build context up to the message we're continuing
+    let roleplay_settings = load_roleplay_settings(&character.id);
+    let messages_up_to = &history.messages[..=message_index];
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, messages_up_to, &roleplay_settings);
+
+    // Build API messages (same pattern as generate_response_only)
+    let processed_system_prompt = replace_template_variables(&character.system_prompt, &character, &roleplay_settings);
+    let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
+    api_messages[0].role = "system".to_string();
+
+    // Add existing history up to the message we're continuing
+    for msg in messages_up_to {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note
+    if let Some(note) = authors_note {
+        if api_messages.len() > (note_depth + 1) {
+            let insert_pos = api_messages.len().saturating_sub(note_depth);
+            let mut note_msg = Message::new_user(note);
+            note_msg.role = "system".to_string();
+            api_messages.insert(insert_pos, note_msg);
+        }
+    }
+
+    // Convert to API format
+    let api_request = ChatRequest {
+        model: config.model.clone(),
+        messages: api_messages,
+        max_tokens: 4096,
+    };
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", config.api_key))
+        .json(&api_request)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("API error: {}", error_text));
+    }
+
+    let response_json: ChatResponse = response.json().await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let content = response_json.choices.first()
+        .map(|c| &c.message.content)
+        .ok_or_else(|| "No content in response".to_string())?
+        .to_string();
+
+    // Append the new content to the existing message
+    let current_content = history.messages[message_index].get_content().to_string();
+    let continued_content = format!("{}{}", current_content, content);
+
+    // Update the current swipe
+    let swipe_index = history.messages[message_index].current_swipe;
+    history.messages[message_index].swipes[swipe_index] = continued_content.clone();
+    history.messages[message_index].content = continued_content.clone();
+
+    save_history(&character.id, &history)?;
+
+    Ok(content)
+}
+
+#[tauri::command]
+async fn regenerate_at_index(message_index: usize) -> Result<SwipeInfo, String> {
+    let config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    // Make sure we're regenerating an assistant message
+    if history.messages[message_index].role != "assistant" {
+        return Err("Can only regenerate assistant messages".to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+
+    // Load roleplay settings and build context up to (but not including) the message we're regenerating
+    let roleplay_settings = load_roleplay_settings(&character.id);
+    let messages_before = &history.messages[..message_index];
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, messages_before, &roleplay_settings);
+
+    // Build API messages
+    let processed_system_prompt = replace_template_variables(&character.system_prompt, &character, &roleplay_settings);
+    let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
+    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
+    api_messages[0].role = "system".to_string();
+
+    // Add existing history up to the message we're regenerating
+    for msg in messages_before {
+        let mut api_msg = Message::new_user(msg.get_content().to_string());
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
+
+    // Insert Author's Note
+    if let Some(note) = authors_note {
+        if api_messages.len() > (note_depth + 1) {
+            let insert_pos = api_messages.len().saturating_sub(note_depth);
+            let mut note_msg = Message::new_user(note);
+            note_msg.role = "system".to_string();
+            api_messages.insert(insert_pos, note_msg);
+        }
+    }
+
+    // Convert to API format
+    let api_request = ChatRequest {
+        model: config.model.clone(),
+        messages: api_messages,
+        max_tokens: 4096,
+    };
+
+    let response = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", config.api_key))
+        .json(&api_request)
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("API error: {}", error_text));
+    }
+
+    let response_json: ChatResponse = response.json().await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+
+    let content = response_json.choices.first()
+        .map(|c| &c.message.content)
+        .ok_or_else(|| "No content in response".to_string())?
+        .to_string();
+
+    // Add as a new swipe to this message
+    history.messages[message_index].swipes.push(content.clone());
+    let new_swipe_index = history.messages[message_index].swipes.len() - 1;
+    history.messages[message_index].current_swipe = new_swipe_index;
+    history.messages[message_index].content = content.clone();
+
+    save_history(&character.id, &history)?;
+
+    Ok(SwipeInfo {
+        content,
+        current: new_swipe_index,
+        total: history.messages[message_index].swipes.len(),
+    })
+}
+
+#[tauri::command]
 async fn generate_response_only() -> Result<String, String> {
     let config = load_config().ok_or_else(|| "API not configured".to_string())?;
     let character = get_active_character();
@@ -2938,6 +3182,11 @@ pub fn run() {
             truncate_history_from,
             remove_last_assistant_message,
             get_last_user_message,
+            delete_message_at_index,
+            toggle_message_pin,
+            toggle_message_hidden,
+            continue_message,
+            regenerate_at_index,
             add_swipe_to_last_assistant,
             navigate_swipe,
             get_swipe_info,

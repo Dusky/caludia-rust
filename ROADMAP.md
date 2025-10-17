@@ -16,11 +16,12 @@
 - User Personas (identity management with chat/character locking)
 - Regex Scripts (global and character-scoped text transformations)
 - Chat History Import/Export (JSON format)
+- Enhanced Message Controls (delete, pin, hide, continue, regenerate any message)
 
-### 🎯 Current Focus: Token Counter & Context Management
-**Next Up:** Implementing token counter with real-time display and per-section breakdown to provide visibility into context usage. This is a critical feature for debugging prompt issues and optimizing context allocation.
+### 🎯 Current Focus: Advanced Roleplay Features
+**Next Up:** Implementing Message Examples Usage to properly inject character card examples into context, or exploring Character Expressions for visual immersion.
 
-**Recent Completion:** Prompt Presets System with editable built-in presets, instruction block management, and restore-to-default functionality.
+**Recent Completion:** Enhanced Message Controls - complete granular control over conversation history including delete, pin, hide, continue incomplete messages, and regenerate any message (not just the last one).
 
 ## Phase 1: Core Roleplay Infrastructure (High Priority)
 **Goal: Enable basic roleplay-focused prompt engineering**
@@ -43,11 +44,11 @@
 
 **Why Important:** Author's Note is considered better than system prompts for roleplay because it appears closer to the actual conversation, reducing AI tendency to ignore or forget instructions.
 
-### 3. Jailbreak Templates
-- [ ] Add jailbreak template field in settings
-- [ ] Preset jailbreak templates for roleplay
-- [ ] Per-character jailbreak override option
-- [ ] Template preview and testing
+### 3. Jailbreak Templates ✅ (Implemented as Prompt Presets)
+- [x] Add jailbreak template field in settings (Prompt Presets with system additions)
+- [x] Preset jailbreak templates for roleplay (Built-in presets: Default, Roleplay, Creative Writing, Assistant)
+- [x] Per-character jailbreak override option (Active preset per character)
+- [x] Template preview and testing (Editable instruction blocks with live preview)
 
 **Why Important:** Many roleplay scenarios require specific prompting to work well with API safety filters and to maintain character consistency.
 
@@ -94,13 +95,13 @@
 
 **Why Important:** Roleplay often involves exploring "what if" scenarios. Branching lets you explore different conversation paths without losing previous progress.
 
-### 2. Enhanced Message Controls
-- [ ] Delete individual messages (not just clearing all)
-- [ ] Regenerate any message (not just last)
-- [ ] Continue incomplete messages
-- [ ] Message pinning (keep certain messages in context)
-- [ ] Message folding/hiding
-- [ ] Bulk message operations
+### 2. Enhanced Message Controls ✅
+- [x] Delete individual messages (not just clearing all)
+- [x] Regenerate any message (not just last)
+- [x] Continue incomplete messages
+- [x] Message pinning (keep certain messages in context)
+- [x] Message folding/hiding
+- [ ] Bulk message operations (deferred - nice to have)
 
 **Why Important:** Fine-grained control over conversation history allows users to craft the perfect roleplay session.
 
@@ -147,14 +148,14 @@
 ## Phase 5: Context & Token Management (Medium Priority)
 **Goal: Visibility and control over context usage**
 
-### 1. Token Counter
-- [ ] Real-time token count display
-- [ ] Per-section breakdown (system, history, WI, etc.)
-- [ ] Visual context budget indicator
-- [ ] Dotted line showing context cutoff in chat
-- [ ] Warning when approaching limit
+### 1. Token Counter ✅
+- [x] Real-time token count display
+- [x] Per-section breakdown (system, history, WI, etc.)
+- [ ] Visual context budget indicator (deferred)
+- [ ] Dotted line showing context cutoff in chat (deferred)
+- [ ] Warning when approaching limit (deferred)
 
-**Why Important:** Understanding what's in context and what's being cut is crucial for debugging issues and optimizing prompts.
+**Why Important:** Understanding what's in context and what's being cut is crucial for debugging issues and optimizing prompts. Core functionality complete - visual enhancements can be added later.
 
 ### 2. Context Templates
 - [ ] Customizable prompt assembly order

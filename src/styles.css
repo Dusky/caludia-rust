@@ -383,6 +383,56 @@ body {
   height: 14px;
 }
 
+/* Enhanced message control buttons */
+.message-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.8) !important;
+  color: white !important;
+}
+
+.message-pin-btn.active,
+.message-hide-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.message-pin-btn.active:hover,
+.message-hide-btn.active:hover {
+  background: var(--accent-hover);
+}
+
+/* Pinned message indicator */
+.message.pinned::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+.message.pinned .message-content {
+  border-left: 2px solid var(--accent);
+}
+
+/* Hidden message styling */
+.message.hidden-message {
+  opacity: 0.4;
+  filter: blur(2px);
+  transition: all 0.2s ease;
+}
+
+.message.hidden-message:hover {
+  opacity: 0.7;
+  filter: blur(1px);
+}
+
+.message.hidden-message .message-actions {
+  opacity: 1 !important;
+}
+
 /* Swipe navigation */
 .swipe-controls {
   display: flex;
