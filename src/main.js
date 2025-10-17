@@ -481,6 +481,16 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
       editBtn.addEventListener('click', () => handleEditMessage(messageDiv, content));
       actionsDiv.appendChild(editBtn);
 
+      // Branch button
+      const branchBtn = document.createElement('button');
+      branchBtn.className = 'message-action-btn';
+      branchBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 2V12M2 2C2.82843 2 3.5 2.67157 3.5 3.5C3.5 4.32843 2.82843 5 2 5M2 2C1.17157 2 0.5 2.67157 0.5 3.5C0.5 4.32843 1.17157 5 2 5M2 5V7M2 7C2 9 3 10 5 10H10.5M2 7V12M10.5 10C10.5 10.8284 11.1716 11.5 12 11.5C12.8284 11.5 13.5 10.8284 13.5 10C13.5 9.17157 12.8284 8.5 12 8.5C11.1716 8.5 10.5 9.17157 10.5 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      branchBtn.title = 'Create branch from here';
+      branchBtn.addEventListener('click', () => handleCreateBranch(messageDiv));
+      actionsDiv.appendChild(branchBtn);
+
       // Copy message button
       const copyBtn = document.createElement('button');
       copyBtn.className = 'message-action-btn';
@@ -556,6 +566,16 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
       continueBtn.title = 'Continue message';
       continueBtn.addEventListener('click', () => handleContinueMessage(messageDiv));
       actionsDiv.appendChild(continueBtn);
+
+      // Branch button
+      const branchBtn = document.createElement('button');
+      branchBtn.className = 'message-action-btn';
+      branchBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 2V12M2 2C2.82843 2 3.5 2.67157 3.5 3.5C3.5 4.32843 2.82843 5 2 5M2 2C1.17157 2 0.5 2.67157 0.5 3.5C0.5 4.32843 1.17157 5 2 5M2 5V7M2 7C2 9 3 10 5 10H10.5M2 7V12M10.5 10C10.5 10.8284 11.1716 11.5 12 11.5C12.8284 11.5 13.5 10.8284 13.5 10C13.5 9.17157 12.8284 8.5 12 8.5C11.1716 8.5 10.5 9.17157 10.5 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      branchBtn.title = 'Create branch from here';
+      branchBtn.addEventListener('click', () => handleCreateBranch(messageDiv));
+      actionsDiv.appendChild(branchBtn);
 
       // Pin button
       const pinBtn = document.createElement('button');
@@ -1009,6 +1029,95 @@ async function handleDeleteMessage(messageDiv) {
   } catch (error) {
     console.error('Failed to delete message:', error);
     setStatus(`Delete failed: ${error}`, 'error');
+  }
+}
+
+// Handle creating a new branch from a message
+async function handleCreateBranch(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  // Prompt for branch name
+  const branchName = prompt('Enter a name for the new branch:', `Branch ${Date.now()}`);
+  if (!branchName || branchName.trim() === '') {
+    return;
+  }
+
+  try {
+    // Create branch from this message index
+    const branch = await invoke('create_branch', {
+      messageIndex: messageIndex + 1, // +1 because we want to branch AFTER this message
+      branchName: branchName.trim()
+    });
+
+    setStatus(`Created branch: ${branch.name}`, 'success');
+
+    // Switch to the new branch
+    await handleSwitchBranch(branch.id);
+  } catch (error) {
+    console.error('Failed to create branch:', error);
+    setStatus(`Branch creation failed: ${error}`, 'error');
+  }
+}
+
+// Handle switching to a different branch
+async function handleSwitchBranch(branchId) {
+  try {
+    // Switch the active branch
+    const messages = await invoke('switch_branch', { branchId });
+
+    // Clear current messages
+    messagesContainer.innerHTML = '';
+
+    // Reload messages from the new branch (same pattern as loadChatHistory)
+    messages.forEach((msg) => {
+      const messageDiv = addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
+
+      // Apply pinned state
+      if (msg.pinned && messageDiv) {
+        messageDiv.classList.add('pinned');
+        const pinBtn = messageDiv.querySelector('.message-pin-btn');
+        if (pinBtn) {
+          pinBtn.classList.add('active');
+          pinBtn.title = 'Unpin message';
+        }
+      }
+
+      // Apply hidden state
+      if (msg.hidden && messageDiv) {
+        messageDiv.classList.add('hidden-message');
+        const hideBtn = messageDiv.querySelector('.message-hide-btn');
+        if (hideBtn) {
+          hideBtn.classList.add('active');
+          hideBtn.title = 'Unhide message';
+          hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M10 5L11.5 3.5M3.5 10.5L5 9M1 13L13 1M5.5 6C5.19 6.31 5 6.74 5 7.22C5 8.2 5.8 9 6.78 9C7.26 9 7.69 8.81 8 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>`;
+        }
+      }
+
+      // Update swipe controls for assistant messages with swipe info
+      if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {
+        updateSwipeControls(messageDiv, msg.current_swipe || 0, msg.swipes.length);
+      }
+    });
+
+    // Update token count
+    await updateTokenCount();
+
+    // Update branch indicator
+    await updateBranchIndicator();
+
+    setStatus('Switched branch', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to switch branch:', error);
+    setStatus(`Branch switch failed: ${error}`, 'error');
   }
 }
 
@@ -1714,6 +1823,134 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// Update branch indicator in header
+async function updateBranchIndicator() {
+  try {
+    const branchId = await invoke('get_active_branch_id');
+    const branches = await invoke('list_branches');
+    const activeBranch = branches.find(b => b.id === branchId);
+
+    const featureBadges = document.getElementById('feature-badges');
+
+    // Remove existing branch badge
+    const existingBadge = featureBadges.querySelector('.branch-badge');
+    if (existingBadge) {
+      existingBadge.remove();
+    }
+
+    // Add new branch badge if not on main
+    if (activeBranch && activeBranch.id !== 'main') {
+      const branchBadge = document.createElement('div');
+      branchBadge.className = 'branch-badge';
+      branchBadge.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+          <path d="M2 2V12M2 2C2.82843 2 3.5 2.67157 3.5 3.5C3.5 4.32843 2.82843 5 2 5M2 2C1.17157 2 0.5 2.67157 0.5 3.5C0.5 4.32843 1.17157 5 2 5M2 5V7M2 7C2 9 3 10 5 10H10.5M2 7V12M10.5 10C10.5 10.8284 11.1716 11.5 12 11.5C12.8284 11.5 13.5 10.8284 13.5 10C13.5 9.17157 12.8284 8.5 12 8.5C11.1716 8.5 10.5 9.17157 10.5 10Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>${activeBranch.name}</span>
+      `;
+      branchBadge.title = `Branch: ${activeBranch.name} (click to manage branches)`;
+      branchBadge.style.cursor = 'pointer';
+      branchBadge.addEventListener('click', openBranchManager);
+      featureBadges.appendChild(branchBadge);
+    }
+  } catch (error) {
+    console.error('Failed to update branch indicator:', error);
+  }
+}
+
+// Open branch manager modal
+async function openBranchManager() {
+  try {
+    const branches = await invoke('list_branches');
+    const activeBranchId = await invoke('get_active_branch_id');
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'branch-manager-modal';
+    modal.innerHTML = `
+      <div class="branch-manager-overlay"></div>
+      <div class="branch-manager-content">
+        <div class="branch-manager-header">
+          <h3>Branch Manager</h3>
+          <button class="icon-btn" id="close-branch-manager">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="branch-list">
+          ${branches.map(branch => `
+            <div class="branch-item ${branch.id === activeBranchId ? 'active' : ''}" data-branch-id="${branch.id}">
+              <div class="branch-info">
+                <div class="branch-name">${branch.name}</div>
+                <div class="branch-meta">${new Date(branch.created_at).toLocaleString()}</div>
+              </div>
+              <div class="branch-actions">
+                ${branch.id === activeBranchId ? '<span class="branch-active-label">Active</span>' : `<button class="btn-secondary branch-switch-btn" data-branch-id="${branch.id}">Switch</button>`}
+                ${branch.id !== 'main' ? `<button class="btn-secondary branch-rename-btn" data-branch-id="${branch.id}">Rename</button>` : ''}
+                ${branch.id !== 'main' && branch.id !== activeBranchId ? `<button class="btn-danger branch-delete-btn" data-branch-id="${branch.id}">Delete</button>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('#close-branch-manager').addEventListener('click', () => modal.remove());
+    modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+    modal.querySelectorAll('.branch-switch-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const branchId = e.target.dataset.branchId;
+        modal.remove();
+        await handleSwitchBranch(branchId);
+      });
+    });
+
+    modal.querySelectorAll('.branch-rename-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const branchId = e.target.dataset.branchId;
+        const branch = branches.find(b => b.id === branchId);
+        const newName = prompt('Enter new branch name:', branch.name);
+        if (newName && newName.trim() !== '') {
+          try {
+            await invoke('rename_branch', { branchId, newName: newName.trim() });
+            modal.remove();
+            await updateBranchIndicator();
+            setStatus('Branch renamed', 'success');
+          } catch (error) {
+            setStatus(`Rename failed: ${error}`, 'error');
+          }
+        }
+      });
+    });
+
+    modal.querySelectorAll('.branch-delete-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const branchId = e.target.dataset.branchId;
+        const branch = branches.find(b => b.id === branchId);
+        if (confirm(`Delete branch "${branch.name}"? This cannot be undone.`)) {
+          try {
+            await invoke('delete_branch', { branchId });
+            modal.remove();
+            await updateBranchIndicator();
+            setStatus('Branch deleted', 'success');
+          } catch (error) {
+            setStatus(`Delete failed: ${error}`, 'error');
+          }
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Failed to open branch manager:', error);
+    setStatus(`Failed to open branch manager: ${error}`, 'error');
+  }
+}
+
 // Load characters and populate dropdown
 async function loadCharacters() {
   console.log('Loading characters...');
@@ -1748,6 +1985,7 @@ async function loadCharacters() {
     }
 
     await loadChatHistory();
+    await updateBranchIndicator();
   } catch (error) {
     console.error('Failed to load characters:', error);
     addMessage(`Failed to load characters: ${error}`, false);

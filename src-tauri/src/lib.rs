@@ -507,6 +507,47 @@ struct ChatHistory {
     messages: Vec<Message>,
 }
 
+// New branching structures
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Branch {
+    id: String,
+    name: String,
+    created_at: i64, // Unix timestamp in milliseconds
+    #[serde(default)]
+    parent_branch_id: Option<String>,
+    #[serde(default)]
+    diverge_at_index: usize, // Message index in parent where this branch diverged
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct BranchedChatHistory {
+    #[serde(default = "default_branches")]
+    branches: Vec<Branch>,
+    #[serde(default = "default_active_branch")]
+    active_branch_id: String,
+    #[serde(default)]
+    branch_messages: std::collections::HashMap<String, Vec<Message>>,
+}
+
+fn default_branches() -> Vec<Branch> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    vec![Branch {
+        id: "main".to_string(),
+        name: "Main".to_string(),
+        created_at: timestamp,
+        parent_branch_id: None,
+        diverge_at_index: 0,
+    }]
+}
+
+fn default_active_branch() -> String {
+    "main".to_string()
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ChatRequest {
     model: String,
@@ -951,21 +992,61 @@ fn save_config(config: &ApiConfig) -> Result<(), String> {
     Ok(())
 }
 
-fn load_history(character_id: &str) -> ChatHistory {
+// Load branched history (with backward compatibility)
+fn load_branched_history(character_id: &str) -> BranchedChatHistory {
     let path = get_character_history_path(character_id);
-    if let Ok(contents) = fs::read_to_string(path) {
-        let mut history: ChatHistory = serde_json::from_str(&contents).unwrap_or(ChatHistory { messages: vec![] });
-        // Migrate old messages to new format
-        for msg in &mut history.messages {
-            msg.migrate();
+    if let Ok(contents) = fs::read_to_string(&path) {
+        // Try to load as new branched format first
+        if let Ok(mut branched) = serde_json::from_str::<BranchedChatHistory>(&contents) {
+            // Migrate old messages to new format
+            for messages in branched.branch_messages.values_mut() {
+                for msg in messages {
+                    msg.migrate();
+                }
+            }
+            return branched;
         }
-        history
-    } else {
-        ChatHistory { messages: vec![] }
+
+        // Fall back to old linear format and migrate
+        if let Ok(mut old_history) = serde_json::from_str::<ChatHistory>(&contents) {
+            for msg in &mut old_history.messages {
+                msg.migrate();
+            }
+
+            // Convert to branched format
+            let mut branch_messages = HashMap::new();
+            branch_messages.insert("main".to_string(), old_history.messages);
+
+            return BranchedChatHistory {
+                branches: default_branches(),
+                active_branch_id: "main".to_string(),
+                branch_messages,
+            };
+        }
+    }
+
+    // Return empty history with main branch
+    let mut branch_messages = HashMap::new();
+    branch_messages.insert("main".to_string(), vec![]);
+
+    BranchedChatHistory {
+        branches: default_branches(),
+        active_branch_id: "main".to_string(),
+        branch_messages,
     }
 }
 
-fn save_history(character_id: &str, history: &ChatHistory) -> Result<(), String> {
+// Legacy function - returns active branch messages
+fn load_history(character_id: &str) -> ChatHistory {
+    let branched = load_branched_history(character_id);
+    let messages = branched.branch_messages
+        .get(&branched.active_branch_id)
+        .cloned()
+        .unwrap_or_default();
+    ChatHistory { messages }
+}
+
+fn save_branched_history(character_id: &str, history: &BranchedChatHistory) -> Result<(), String> {
     let path = get_character_history_path(character_id);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -973,6 +1054,13 @@ fn save_history(character_id: &str, history: &ChatHistory) -> Result<(), String>
     let contents = serde_json::to_string_pretty(history).map_err(|e| e.to_string())?;
     fs::write(path, contents).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// Legacy function - saves to active branch
+fn save_history(character_id: &str, history: &ChatHistory) -> Result<(), String> {
+    let mut branched = load_branched_history(character_id);
+    branched.branch_messages.insert(branched.active_branch_id.clone(), history.messages.clone());
+    save_branched_history(character_id, &branched)
 }
 
 fn load_character(character_id: &str) -> Option<Character> {
@@ -3299,6 +3387,153 @@ async fn export_character_card(app_handle: tauri::AppHandle, character_id: Strin
     Ok(output_path.to_string_lossy().to_string())
 }
 
+// ============================================================================
+// Branch Management Commands
+// ============================================================================
+
+#[tauri::command]
+fn create_branch(message_index: usize, branch_name: String) -> Result<Branch, String> {
+    let character = get_active_character();
+    let mut branched = load_branched_history(&character.id);
+
+    // Generate new branch ID
+    let branch_id = Uuid::new_v4().to_string();
+
+    // Get current branch messages
+    let current_messages = branched.branch_messages
+        .get(&branched.active_branch_id)
+        .ok_or_else(|| "Active branch not found".to_string())?;
+
+    // Validate message index
+    if message_index > current_messages.len() {
+        return Err(format!("Invalid message index: {}", message_index));
+    }
+
+    // Create new branch
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let new_branch = Branch {
+        id: branch_id.clone(),
+        name: branch_name,
+        created_at: timestamp,
+        parent_branch_id: Some(branched.active_branch_id.clone()),
+        diverge_at_index: message_index,
+    };
+
+    // Copy messages up to divergence point
+    let branch_messages: Vec<Message> = current_messages[..message_index].to_vec();
+
+    // Add branch and its messages
+    branched.branches.push(new_branch.clone());
+    branched.branch_messages.insert(branch_id.clone(), branch_messages);
+
+    // Save and return
+    save_branched_history(&character.id, &branched)?;
+    Ok(new_branch)
+}
+
+#[tauri::command]
+fn switch_branch(branch_id: String) -> Result<Vec<Message>, String> {
+    let character = get_active_character();
+    let mut branched = load_branched_history(&character.id);
+
+    // Verify branch exists
+    if !branched.branch_messages.contains_key(&branch_id) {
+        return Err(format!("Branch '{}' not found", branch_id));
+    }
+
+    // Switch active branch
+    branched.active_branch_id = branch_id.clone();
+    save_branched_history(&character.id, &branched)?;
+
+    // Return messages for the new active branch
+    let messages = branched.branch_messages
+        .get(&branch_id)
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(messages)
+}
+
+#[tauri::command]
+fn delete_branch(branch_id: String) -> Result<(), String> {
+    let character = get_active_character();
+    let mut branched = load_branched_history(&character.id);
+
+    // Cannot delete main branch
+    if branch_id == "main" {
+        return Err("Cannot delete main branch".to_string());
+    }
+
+    // Cannot delete active branch
+    if branch_id == branched.active_branch_id {
+        return Err("Cannot delete active branch. Switch to another branch first.".to_string());
+    }
+
+    // Remove branch
+    branched.branches.retain(|b| b.id != branch_id);
+    branched.branch_messages.remove(&branch_id);
+
+    // Also remove any child branches that depended on this one
+    let mut branches_to_remove = vec![];
+    for branch in &branched.branches {
+        if branch.parent_branch_id.as_ref() == Some(&branch_id) {
+            branches_to_remove.push(branch.id.clone());
+        }
+    }
+
+    for child_id in branches_to_remove {
+        branched.branches.retain(|b| b.id != child_id);
+        branched.branch_messages.remove(&child_id);
+    }
+
+    save_branched_history(&character.id, &branched)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn list_branches() -> Result<Vec<Branch>, String> {
+    let character = get_active_character();
+    let branched = load_branched_history(&character.id);
+    Ok(branched.branches)
+}
+
+#[tauri::command]
+fn rename_branch(branch_id: String, new_name: String) -> Result<(), String> {
+    let character = get_active_character();
+    let mut branched = load_branched_history(&character.id);
+
+    // Find and rename the branch
+    let branch = branched.branches.iter_mut()
+        .find(|b| b.id == branch_id)
+        .ok_or_else(|| format!("Branch '{}' not found", branch_id))?;
+
+    branch.name = new_name;
+    save_branched_history(&character.id, &branched)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn get_active_branch_id() -> Result<String, String> {
+    let character = get_active_character();
+    let branched = load_branched_history(&character.id);
+    Ok(branched.active_branch_id)
+}
+
+#[tauri::command]
+fn get_branch_info(branch_id: String) -> Result<Branch, String> {
+    let character = get_active_character();
+    let branched = load_branched_history(&character.id);
+
+    branched.branches.iter()
+        .find(|b| b.id == branch_id)
+        .cloned()
+        .ok_or_else(|| format!("Branch '{}' not found", branch_id))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3362,7 +3597,14 @@ pub fn run() {
             update_world_info_entry,
             delete_world_info_entry,
             export_world_info,
-            import_world_info
+            import_world_info,
+            create_branch,
+            switch_branch,
+            delete_branch,
+            list_branches,
+            rename_branch,
+            get_active_branch_id,
+            get_branch_info
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
