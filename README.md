@@ -57,8 +57,12 @@ Config stored in `~/.config/claudia/config.json`
 
 - **Enter** - Send message
 - **Shift+Enter** - New line
-- **Up Arrow** - Edit last user message
-- **Left/Right Arrow** - Swipe between responses
+- **Ctrl+Enter** - Send message (alternative)
+- **Up Arrow** - Edit last user message (when input is at start)
+- **Left/Right Arrow** - Navigate between response alternatives
+- **Escape** - Close panels/modals, cancel editing
+- **Ctrl+K** - Focus message input
+- **Ctrl+/** - Toggle Roleplay Tools panel
 
 ## Roadmap
 

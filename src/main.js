@@ -481,6 +481,27 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
       editBtn.addEventListener('click', () => handleEditMessage(messageDiv, content));
       actionsDiv.appendChild(editBtn);
 
+      // Copy message button
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'message-action-btn';
+      copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M5 3V2C5 1.44772 5.44772 1 6 1H12C12.5523 1 13 1.44772 13 2V8C13 8.55228 12.5523 9 12 9H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>`;
+      copyBtn.title = 'Copy message';
+      copyBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(content);
+        // Visual feedback
+        const originalHTML = copyBtn.innerHTML;
+        copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 7l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+        setTimeout(() => {
+          copyBtn.innerHTML = originalHTML;
+        }, 2000);
+      });
+      actionsDiv.appendChild(copyBtn);
+
       // Pin button
       const pinBtn = document.createElement('button');
       pinBtn.className = 'message-action-btn message-pin-btn';
@@ -556,6 +577,27 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
       hideBtn.title = 'Hide message';
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
+
+      // Copy message button
+      const copyMsgBtn = document.createElement('button');
+      copyMsgBtn.className = 'message-action-btn';
+      copyMsgBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M5 3V2C5 1.44772 5.44772 1 6 1H12C12.5523 1 13 1.44772 13 2V8C13 8.55228 12.5523 9 12 9H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>`;
+      copyMsgBtn.title = 'Copy message';
+      copyMsgBtn.addEventListener('click', () => {
+        navigator.clipboard.writeText(content);
+        // Visual feedback
+        const originalHTML = copyMsgBtn.innerHTML;
+        copyMsgBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 7l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>`;
+        setTimeout(() => {
+          copyMsgBtn.innerHTML = originalHTML;
+        }, 2000);
+      });
+      actionsDiv.appendChild(copyMsgBtn);
 
       // Delete button
       const deleteBtn = document.createElement('button');
@@ -3337,9 +3379,98 @@ window.addEventListener('DOMContentLoaded', () => {
   avatarModalOverlay.addEventListener('click', hideAvatarModal);
 
   // ESC key to close modal
+  // Global keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && avatarModal.style.display !== 'none') {
-      hideAvatarModal();
+    // Escape key handling
+    if (e.key === 'Escape') {
+      // Close avatar modal
+      if (avatarModal.style.display !== 'none') {
+        hideAvatarModal();
+        return;
+      }
+
+      // Close roleplay panel
+      const roleplayPanel = document.getElementById('roleplay-panel');
+      if (roleplayPanel && roleplayPanel.classList.contains('active')) {
+        document.getElementById('close-roleplay-btn').click();
+        return;
+      }
+
+      // Close settings panel
+      const settingsPanel = document.getElementById('settings-panel');
+      if (settingsPanel && settingsPanel.classList.contains('active')) {
+        document.getElementById('close-settings-btn').click();
+        return;
+      }
+
+      // Cancel message editing
+      const editActions = document.querySelector('.message-edit-actions');
+      if (editActions) {
+        const cancelBtn = editActions.querySelector('.message-edit-cancel');
+        if (cancelBtn) cancelBtn.click();
+        return;
+      }
+    }
+
+    // Up Arrow - Edit last user message (when input is focused and empty/at start)
+    if (e.key === 'ArrowUp' && e.target === messageInput && messageInput.selectionStart === 0) {
+      const messages = document.querySelectorAll('.message.user');
+      if (messages.length > 0) {
+        const lastUserMessage = messages[messages.length - 1];
+        const editBtn = lastUserMessage.querySelector('.message-action-btn[title="Edit message"]');
+        if (editBtn) {
+          e.preventDefault();
+          editBtn.click();
+        }
+      }
+      return;
+    }
+
+    // Left Arrow - Previous swipe (when not in input)
+    if (e.key === 'ArrowLeft' && e.target !== messageInput && !e.target.matches('input, textarea, select')) {
+      const lastAssistantMessage = [...document.querySelectorAll('.message.assistant')].pop();
+      if (lastAssistantMessage) {
+        const prevBtn = lastAssistantMessage.querySelector('.swipe-prev');
+        if (prevBtn && !prevBtn.disabled) {
+          e.preventDefault();
+          prevBtn.click();
+        }
+      }
+      return;
+    }
+
+    // Right Arrow - Next swipe (when not in input)
+    if (e.key === 'ArrowRight' && e.target !== messageInput && !e.target.matches('input, textarea, select')) {
+      const lastAssistantMessage = [...document.querySelectorAll('.message.assistant')].pop();
+      if (lastAssistantMessage) {
+        const nextBtn = lastAssistantMessage.querySelector('.swipe-next');
+        if (nextBtn && !nextBtn.disabled) {
+          e.preventDefault();
+          nextBtn.click();
+        }
+      }
+      return;
+    }
+
+    // Ctrl/Cmd + K - Focus message input
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      messageInput.focus();
+      return;
+    }
+
+    // Ctrl/Cmd + / - Toggle roleplay panel
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      document.getElementById('roleplay-btn').click();
+      return;
+    }
+
+    // Ctrl/Cmd + Enter - Send message (alternative to Enter)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && e.target === messageInput) {
+      e.preventDefault();
+      handleSubmit(e);
+      return;
     }
   });
 
