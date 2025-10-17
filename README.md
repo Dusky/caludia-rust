@@ -63,6 +63,7 @@ Config stored in `~/.config/claudia/config.json`
 - **Escape** - Close panels/modals, cancel editing
 - **Ctrl+K** - Focus message input
 - **Ctrl+P** - Open command palette (quick access to all actions)
+- **Ctrl+F** - Search in chat history
 - **Ctrl+/** - Toggle Roleplay Tools panel
 
 ## Roadmap

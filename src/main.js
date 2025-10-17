@@ -743,6 +743,198 @@ function setupDragAndDrop() {
   });
 }
 
+// Chat Search System
+let chatSearchBar;
+let chatSearchInput;
+let chatSearchCurrent;
+let chatSearchTotal;
+let chatSearchPrevBtn;
+let chatSearchNextBtn;
+let chatSearchCloseBtn;
+let searchMatches = [];
+let currentMatchIndex = -1;
+
+function setupChatSearch() {
+  chatSearchBar = document.getElementById('chat-search-bar');
+  chatSearchInput = document.getElementById('chat-search-input');
+  chatSearchCurrent = document.getElementById('chat-search-current');
+  chatSearchTotal = document.getElementById('chat-search-total');
+  chatSearchPrevBtn = document.getElementById('chat-search-prev');
+  chatSearchNextBtn = document.getElementById('chat-search-next');
+  chatSearchCloseBtn = document.getElementById('chat-search-close');
+
+  // Search input listener
+  chatSearchInput.addEventListener('input', () => {
+    performSearch(chatSearchInput.value);
+  });
+
+  // Navigation buttons
+  chatSearchPrevBtn.addEventListener('click', () => {
+    navigateToMatch('prev');
+  });
+
+  chatSearchNextBtn.addEventListener('click', () => {
+    navigateToMatch('next');
+  });
+
+  // Close button
+  chatSearchCloseBtn.addEventListener('click', () => {
+    closeChatSearch();
+  });
+
+  // Enter key to navigate forward
+  chatSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateToMatch(e.shiftKey ? 'prev' : 'next');
+    }
+  });
+}
+
+function openChatSearch() {
+  if (chatSearchBar) {
+    chatSearchBar.style.display = 'block';
+    chatSearchInput.focus();
+    chatSearchInput.select();
+  }
+}
+
+function closeChatSearch() {
+  if (chatSearchBar) {
+    chatSearchBar.style.display = 'none';
+    chatSearchInput.value = '';
+    clearSearchHighlights();
+    searchMatches = [];
+    currentMatchIndex = -1;
+    updateSearchCounter();
+  }
+}
+
+function performSearch(searchTerm) {
+  clearSearchHighlights();
+  searchMatches = [];
+  currentMatchIndex = -1;
+
+  if (!searchTerm || searchTerm.trim() === '') {
+    updateSearchCounter();
+    return;
+  }
+
+  const term = searchTerm.toLowerCase();
+  const messages = messagesContainer.querySelectorAll('.message');
+
+  messages.forEach((message, messageIndex) => {
+    const content = message.querySelector('.message-content');
+    if (!content) return;
+
+    // Get all text nodes recursively
+    const textNodes = [];
+    const getTextNodes = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        textNodes.push(node);
+      } else {
+        node.childNodes.forEach(getTextNodes);
+      }
+    };
+    getTextNodes(content);
+
+    // Search and highlight in each text node
+    textNodes.forEach((textNode) => {
+      const text = textNode.textContent;
+      const lowerText = text.toLowerCase();
+      let startIndex = 0;
+      let matchIndex;
+
+      while ((matchIndex = lowerText.indexOf(term, startIndex)) !== -1) {
+        // Split the text node and wrap the match
+        const before = text.substring(0, matchIndex);
+        const match = text.substring(matchIndex, matchIndex + term.length);
+        const after = text.substring(matchIndex + term.length);
+
+        const beforeNode = document.createTextNode(before);
+        const matchNode = document.createElement('mark');
+        matchNode.className = 'search-highlight';
+        matchNode.textContent = match;
+        const afterNode = document.createTextNode(after);
+
+        const parent = textNode.parentNode;
+        parent.insertBefore(beforeNode, textNode);
+        parent.insertBefore(matchNode, textNode);
+        parent.insertBefore(afterNode, textNode);
+        parent.removeChild(textNode);
+
+        searchMatches.push({ element: matchNode, message });
+
+        // Continue searching in the "after" text
+        textNode = afterNode;
+        startIndex = 0;
+      }
+    });
+  });
+
+  // Navigate to first match if any
+  if (searchMatches.length > 0) {
+    currentMatchIndex = 0;
+    highlightCurrentMatch();
+  }
+
+  updateSearchCounter();
+}
+
+function clearSearchHighlights() {
+  const highlights = messagesContainer.querySelectorAll('.search-highlight');
+  highlights.forEach((highlight) => {
+    const parent = highlight.parentNode;
+    const text = document.createTextNode(highlight.textContent);
+    parent.replaceChild(text, highlight);
+    parent.normalize(); // Merge adjacent text nodes
+  });
+}
+
+function navigateToMatch(direction) {
+  if (searchMatches.length === 0) return;
+
+  if (direction === 'next') {
+    currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+  } else if (direction === 'prev') {
+    currentMatchIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+  }
+
+  highlightCurrentMatch();
+  updateSearchCounter();
+}
+
+function highlightCurrentMatch() {
+  // Remove active class from all matches
+  searchMatches.forEach((match) => {
+    match.element.classList.remove('active');
+  });
+
+  // Add active class to current match
+  if (currentMatchIndex >= 0 && currentMatchIndex < searchMatches.length) {
+    const currentMatch = searchMatches[currentMatchIndex];
+    currentMatch.element.classList.add('active');
+
+    // Scroll to the match
+    currentMatch.element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center'
+    });
+  }
+}
+
+function updateSearchCounter() {
+  if (chatSearchCurrent && chatSearchTotal) {
+    chatSearchCurrent.textContent = searchMatches.length > 0 ? currentMatchIndex + 1 : 0;
+    chatSearchTotal.textContent = searchMatches.length;
+  }
+
+  // Enable/disable navigation buttons
+  const hasMatches = searchMatches.length > 0;
+  if (chatSearchPrevBtn) chatSearchPrevBtn.disabled = !hasMatches;
+  if (chatSearchNextBtn) chatSearchNextBtn.disabled = !hasMatches;
+}
+
 // Apply view mode
 function applyViewMode(mode) {
   const body = document.body;
@@ -4395,6 +4587,12 @@ window.addEventListener('DOMContentLoaded', () => {
 
     // Escape key handling
     if (e.key === 'Escape') {
+      // Close chat search
+      if (chatSearchBar && chatSearchBar.style.display !== 'none') {
+        closeChatSearch();
+        return;
+      }
+
       // Close new character modal
       const newCharacterModal = document.getElementById('new-character-modal');
       if (newCharacterModal && newCharacterModal.style.display !== 'none') {
@@ -4485,6 +4683,13 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + F - Open chat search
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      openChatSearch();
+      return;
+    }
+
     // Ctrl/Cmd + / - Toggle roleplay panel
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
@@ -4513,6 +4718,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Setup drag and drop file handling
   setupDragAndDrop();
+
+  // Setup chat search
+  setupChatSearch();
 
   loadExistingConfig();
 });
