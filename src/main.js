@@ -1561,6 +1561,7 @@ function setupAppControls() {
   document.getElementById('add-worldinfo-btn').addEventListener('click', handleAddWorldInfoEntry);
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
+  document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
 
   // Setup recursion depth change handler
   document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
@@ -1622,6 +1623,7 @@ async function updateTokenCount() {
       document.getElementById('token-persona').textContent = tokenData.persona;
       document.getElementById('token-worldinfo').textContent = tokenData.world_info;
       document.getElementById('token-authorsnote').textContent = tokenData.authors_note;
+      document.getElementById('token-examples').textContent = tokenData.message_examples;
       document.getElementById('token-history').textContent = tokenData.message_history;
       document.getElementById('token-input').textContent = tokenData.current_input;
       document.getElementById('token-total-detail').textContent = tokenData.total;
@@ -2012,6 +2014,10 @@ async function loadRoleplaySettings() {
     document.getElementById('persona-description').value = settings.persona_description || '';
     document.getElementById('persona-enabled').checked = settings.persona_enabled || false;
 
+    // Load Message Examples
+    document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
+    document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+
     // Load Presets
     await loadPresets();
   } catch (error) {
@@ -2240,6 +2246,29 @@ async function handleSavePersona() {
   } catch (error) {
     console.error('Failed to save Persona:', error);
     setStatus('Failed to save Persona', 'error');
+  }
+}
+
+// Save Message Examples Settings
+async function handleSaveExamples() {
+  if (!currentCharacter) return;
+
+  const enabled = document.getElementById('examples-enabled').checked;
+  const position = document.getElementById('examples-position').value;
+
+  try {
+    await invoke('update_examples_settings', {
+      characterId: currentCharacter.id,
+      enabled,
+      position
+    });
+
+    // Show success message
+    setStatus('Message Examples settings saved', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to save Message Examples settings:', error);
+    setStatus('Failed to save Message Examples settings', 'error');
   }
 }
 

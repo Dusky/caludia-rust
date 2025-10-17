@@ -153,8 +153,33 @@
                 Enable Author's Note
               </label>
             </div>
-            <button type="button" id="save-authors-note-btn" class="btn-primary" style="width: 100%;">
+            <button type="button" id="save-authors-note-btn" class="btn-primary" style="width: 100%; margin-bottom: 20px;">
               Save Author's Note
+            </button>
+
+            <!-- Message Examples Section -->
+            <div class="form-group" style="border-top: 1px solid var(--border); padding-top: 16px;">
+              <label>Message Examples</label>
+              <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">
+                Use character card's message examples to teach the AI the character's voice and style.
+              </p>
+              <label>
+                <input type="checkbox" id="examples-enabled" />
+                Enable Message Examples
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="examples-position">Examples Position</label>
+              <select id="examples-position" style="width: 100%;">
+                <option value="after_system">After System Prompt (Recommended)</option>
+                <option value="before_history">Before Message History</option>
+              </select>
+              <p style="color: var(--text-secondary); font-size: 11px; margin-top: 4px;">
+                Where to inject examples in the context. After system prompt works best for most models.
+              </p>
+            </div>
+            <button type="button" id="save-examples-btn" class="btn-primary" style="width: 100%;">
+              Save Examples Settings
             </button>
           </div>
         </div>
@@ -670,6 +695,10 @@
             <div class="token-breakdown-item">
               <span>Author's Note:</span>
               <span id="token-authorsnote">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Message Examples:</span>
+              <span id="token-examples">0</span>
             </div>
             <div class="token-breakdown-item">
               <span>Message History:</span>

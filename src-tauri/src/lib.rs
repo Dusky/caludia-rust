@@ -291,6 +291,10 @@ struct RoleplaySettings {
     recursion_depth: usize, // Max depth for recursive World Info activation (default 3)
     #[serde(default)]
     active_preset_id: Option<String>, // Selected prompt preset for this character
+    #[serde(default)]
+    examples_enabled: bool, // Whether to include message examples from character card
+    #[serde(default = "default_examples_position")]
+    examples_position: String, // Where to insert examples: "after_system" or "before_history"
 }
 
 fn default_authors_note_depth() -> usize {
@@ -299,6 +303,10 @@ fn default_authors_note_depth() -> usize {
 
 fn default_scan_depth() -> usize {
     20
+}
+
+fn default_examples_position() -> String {
+    "after_system".to_string() // Insert examples after system prompt, before history
 }
 
 fn default_recursion_depth() -> usize {
@@ -318,6 +326,8 @@ impl Default for RoleplaySettings {
             scan_depth: default_scan_depth(),
             recursion_depth: default_recursion_depth(),
             active_preset_id: None, // No preset selected by default
+            examples_enabled: false, // Message examples disabled by default
+            examples_position: default_examples_position(), // After system prompt by default
         }
     }
 }
@@ -1310,6 +1320,74 @@ fn replace_template_variables(
     result
 }
 
+// Parse mes_example field from character card into Message objects
+fn parse_message_examples(
+    mes_example: &str,
+    character: &Character,
+    settings: &RoleplaySettings,
+) -> Vec<Message> {
+    let mut examples = Vec::new();
+
+    // Split by <START> tag to get individual example blocks
+    let blocks: Vec<&str> = mes_example
+        .split("<START>")
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    for block in blocks {
+        // Process each line in the block
+        for line in block.lines() {
+            let line = line.trim();
+            if line.is_empty() {
+                continue;
+            }
+
+            // Replace template variables
+            let processed_line = replace_template_variables(line, character, settings);
+
+            // Determine role based on prefix ({{user}}: or {{char}}:)
+            // After replacement, it will be the actual names
+            let user_name = if settings.persona_enabled {
+                settings.persona_name.as_deref().unwrap_or("User")
+            } else {
+                "User"
+            };
+
+            if processed_line.starts_with(&format!("{}:", user_name)) {
+                // User message
+                let content = processed_line
+                    .trim_start_matches(&format!("{}:", user_name))
+                    .trim()
+                    .to_string();
+                examples.push(Message::new_user(content));
+            } else if processed_line.starts_with(&format!("{}:", character.name)) {
+                // Assistant message
+                let content = processed_line
+                    .trim_start_matches(&format!("{}:", character.name))
+                    .trim()
+                    .to_string();
+                examples.push(Message::new_assistant(content));
+            } else if processed_line.contains(':') {
+                // Fallback: split on first colon
+                let parts: Vec<&str> = processed_line.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let speaker = parts[0].trim();
+                    let content = parts[1].trim().to_string();
+
+                    if speaker == user_name {
+                        examples.push(Message::new_user(content));
+                    } else {
+                        examples.push(Message::new_assistant(content));
+                    }
+                }
+            }
+        }
+    }
+
+    examples
+}
+
 // Build injected context from roleplay settings
 fn build_roleplay_context(
     character: &Character,
@@ -1397,6 +1475,29 @@ fn build_api_messages(
     let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
     let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
     api_messages[0].role = "system".to_string();
+
+    // Insert message examples if enabled
+    if roleplay_settings.examples_enabled {
+        if let Some(ref mes_example) = character.mes_example {
+            if !mes_example.is_empty() {
+                let examples = parse_message_examples(mes_example, character, roleplay_settings);
+
+                // Insert examples based on position setting
+                match roleplay_settings.examples_position.as_str() {
+                    "after_system" => {
+                        // Insert right after system message (position 1)
+                        for (i, example) in examples.into_iter().enumerate() {
+                            api_messages.insert(1 + i, example);
+                        }
+                    }
+                    "before_history" | _ => {
+                        // Insert at end (before history gets added)
+                        api_messages.extend(examples);
+                    }
+                }
+            }
+        }
+    }
 
     // Add history messages with current swipe content
     for msg in &history.messages {
@@ -2631,6 +2732,18 @@ fn update_persona(
 }
 
 #[tauri::command]
+fn update_examples_settings(
+    character_id: String,
+    enabled: bool,
+    position: String,
+) -> Result<(), String> {
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.examples_enabled = enabled;
+    settings.examples_position = position;
+    save_roleplay_settings(&character_id, &settings)
+}
+
+#[tauri::command]
 fn update_recursion_depth(
     character_id: String,
     depth: usize,
@@ -2797,6 +2910,7 @@ struct TokenBreakdown {
     persona: usize,
     world_info: usize,
     authors_note: usize,
+    message_examples: usize,
     message_history: usize,
     current_input: usize,
     estimated_max_tokens: usize,
@@ -2887,6 +3001,19 @@ fn get_token_count(character_id: Option<String>, current_input: String) -> Resul
         0
     };
 
+    // Count message examples
+    let mut examples_tokens = 0;
+    if roleplay_settings.examples_enabled {
+        if let Some(ref mes_example) = character.mes_example {
+            if !mes_example.is_empty() {
+                let examples = parse_message_examples(mes_example, &character, &roleplay_settings);
+                for example in examples {
+                    examples_tokens += count_tokens(example.get_content());
+                }
+            }
+        }
+    }
+
     // Count message history
     let mut history_tokens = 0;
     for msg in &history.messages {
@@ -2898,7 +3025,7 @@ fn get_token_count(character_id: Option<String>, current_input: String) -> Resul
 
     // Calculate total
     let total = system_prompt_tokens + preset_tokens + persona_tokens + world_info_tokens +
-                authors_note_tokens + history_tokens + input_tokens;
+                authors_note_tokens + examples_tokens + history_tokens + input_tokens;
 
     // Estimate remaining tokens for response (assuming 16k context with 4k max response)
     let estimated_max_tokens = if total < 12000 { 4096 } else { 16384 - total };
@@ -2910,6 +3037,7 @@ fn get_token_count(character_id: Option<String>, current_input: String) -> Resul
         persona: persona_tokens,
         world_info: world_info_tokens,
         authors_note: authors_note_tokens,
+        message_examples: examples_tokens,
         message_history: history_tokens,
         current_input: input_tokens,
         estimated_max_tokens,
@@ -3211,6 +3339,7 @@ pub fn run() {
             update_roleplay_depths,
             update_authors_note,
             update_persona,
+            update_examples_settings,
             update_recursion_depth,
             get_presets,
             get_preset,
