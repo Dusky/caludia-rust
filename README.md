@@ -1,37 +1,36 @@
 # Claudia
 
-Beautiful AI roleplay desktop companion built with Tauri and Rust.
-
-## Vision
-
-Claudia aims to be a lightweight, desktop-native alternative to SillyTavern, focusing on roleplay and character-based interactions while maintaining a clean, modern interface.
+Desktop AI chat application built with Tauri and Rust, focused on roleplay and character-based interactions.
 
 ## Features
 
-### Core Chat Features
-- 🎨 **Beautiful glassmorphic UI** - Modern design with gradient backgrounds
-- 🔧 **Bring-your-own-API** - Supports any Anthropic-compatible API
-- ✅ **API validation** - Automatic model detection via /v1/models
-- 💬 **Full conversation context** - AI remembers your entire conversation
-- 💾 **Persistent chat history** - Conversations saved per character
-- 🎯 **Streaming responses** - Real-time token display (optional)
+### Chat
+- Streaming responses with real-time display
+- Full markdown rendering with syntax highlighting
+- Message swipes (multiple response alternatives)
+- Edit and regenerate from any message
+- Per-character conversation history
+- Copy code blocks with one click
 
-### Character System
-- 🎭 **Multiple characters** - Switch between different AI personas
-- 🖼️ **Character avatars** - Upload custom images with zoom preview
-- 📇 **V2/V3 character cards** - Import/export Tavern-compatible cards
-- ✏️ **Full character editor** - All v2/v3 fields supported (description, scenario, examples, etc.)
+### Characters
+- V2/V3 character card import/export (PNG format)
+- Multiple characters with avatar support
+- Full character editor (description, personality, scenario, examples, etc.)
+- Character-specific chat history
 
-### Advanced Chat Features
-- 🔄 **Message swipes** - Generate multiple responses and swipe between them
-- ✏️ **Message editing** - Edit messages and regenerate from any point
-- 🔀 **Chat branching** - Explore alternate conversation paths
+### Roleplay Tools
+- World Info/Lorebook system with keyword detection and priority
+- Author's Note with configurable positioning
+- User Personas with chat/character locking
+- Prompt Presets with instruction blocks
+- Message Examples from character cards
+- Regex Scripts for text transformations
+- Token counter with per-section breakdown
 
-### Message Display
-- 📝 **Full markdown rendering** - Headers, lists, tables, links, blockquotes
-- 🎨 **Syntax highlighting** - Beautiful code blocks with highlight.js
-- 📋 **Copy code blocks** - One-click copy button on hover
-- ✨ **Smooth animations** - Elegant message transitions
+### API
+- Bring-your-own-API (Anthropic-compatible)
+- Automatic model detection via /v1/models
+- API validation and error handling
 
 ## Running
 
@@ -40,59 +39,44 @@ npm install
 npm run dev
 ```
 
-Build:
+Build for production:
 ```bash
 npm run build
 ```
 
-**Note**: The dev script includes `WEBKIT_DISABLE_DMABUF_RENDERER=1` to fix Wayland compatibility issues on KDE Plasma.
-
 ## Configuration
 
-On first launch, click settings and configure:
+On first launch, configure in Settings:
 - Base URL (e.g., https://api.anthropic.com)
 - API Key
-- Model (validated from /v1/models endpoint)
+- Model
 
-- Config stored in `~/.config/claudia/config.json`
-- Chat history stored in `~/.config/claudia/history.json`
+Config stored in `~/.config/claudia/config.json`
 
-## Usage
+## Keyboard Shortcuts
 
-### Keyboard Shortcuts
 - **Enter** - Send message
-- **Shift+Enter** - New line in message
+- **Shift+Enter** - New line
 - **Up Arrow** - Edit last user message
-- **Left/Right Arrow** - Swipe between alternative responses
-
-### Character Management
-- **Character Dropdown** - Switch between characters
-- **Settings → Character Tab** - Edit current character
-- **Import v2 Card** - Import Tavern character cards (PNG format)
-- **Export v2 Card** - Export character as Tavern-compatible card
-
-### Interface
-- **Drag header** - Move window around your desktop
-- **Trash icon** - Clear conversation history
-- **Settings icon** - Configure API settings
-- **Minimize/Maximize** - Window controls
+- **Left/Right Arrow** - Swipe between responses
 
 ## Roadmap
 
-Claudia is being developed to become a full-featured roleplay platform comparable to SillyTavern. See [ROADMAP.md](ROADMAP.md) for detailed plans including:
+See [ROADMAP.md](ROADMAP.md) for detailed development plans.
 
-**Coming Soon:**
-- 📚 World Info/Lorebooks for dynamic context
-- 📝 Author's Note for better prompt control
-- 👤 User Personas for identity management
-- 😊 Character Expression Sprites
-- 🔢 Token Counter and context visualization
-- 👥 Group Chats with multiple characters
-- ⚡ Quick Replies and macro system
+**Current Focus:** Chat Branching/Checkpoints for non-linear conversation exploration
 
-**Current Version:** v0.1.0 - Basic character chat with swipes and card import/export
-**Next Version:** v0.2.0 - Roleplay Foundation (World Info, Author's Note, Token Counter)
+**Upcoming:**
+- Chat branching with timeline visualization
+- Character expression sprites
+- Group chats with multiple characters
+- Quick replies and macro system
+- Context templates for different model formats
 
-## Contributing
+## Development
 
-This is a personal project, but feedback and suggestions are welcome! If you encounter bugs or have feature requests, please open an issue on GitHub.
+Built with:
+- Tauri 2.0
+- Rust backend
+- Vanilla JavaScript frontend
+- tiktoken-rs for token counting
