@@ -314,12 +314,12 @@
 
 **Why Important:** Right-click is muscle memory for desktop users. Faster than hovering to reveal action buttons.
 
-### 7. Better Feedback & Confirmations
-- [ ] Confirmation dialogs for destructive actions (delete character, clear chat)
-- [ ] Loading spinners for API calls
-- [ ] Progress bars for file imports
-- [ ] "Saving..." / "Saved" indicators
-- [ ] Success messages for completed actions
+### 7. Better Feedback & Confirmations ✅
+- [x] Confirmation dialogs for destructive actions (delete character, clear chat)
+- [x] Loading spinners for API calls
+- [x] Progress bars for file imports
+- [x] "Saving..." / "Saved" indicators
+- [x] Success messages for completed actions
 
 **Why Important:** Users should never wonder if an action succeeded or is still processing. Clear feedback prevents confusion and repeated clicks.
 
