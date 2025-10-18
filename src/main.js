@@ -3296,6 +3296,8 @@ function setupAppControls() {
 
   // Setup roleplay panel buttons
   document.getElementById('add-worldinfo-btn').addEventListener('click', handleAddWorldInfoEntry);
+  document.getElementById('import-worldinfo-btn').addEventListener('click', handleImportWorldInfo);
+  document.getElementById('export-worldinfo-btn').addEventListener('click', handleExportWorldInfo);
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
   document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
@@ -4401,6 +4403,60 @@ async function handleDeleteWorldInfoEntry(entryId) {
   } catch (error) {
     console.error('Failed to delete World Info entry:', error);
     alert(`Failed to delete entry: ${error}`);
+  }
+}
+
+// Import World Info
+async function handleImportWorldInfo() {
+  if (!currentCharacter) {
+    alert('Please select a character first');
+    return;
+  }
+
+  // Ask user if they want to merge or replace
+  const merge = confirm('Merge with existing entries?\n\nClick OK to merge, or Cancel to replace all existing entries.');
+
+  try {
+    const entryCount = await invoke('import_world_info', {
+      characterId: currentCharacter.id,
+      merge: merge
+    });
+
+    alert(`Successfully imported ${entryCount} World Info ${entryCount === 1 ? 'entry' : 'entries'}`);
+
+    // Reload settings to show imported entries
+    await loadRoleplaySettings();
+  } catch (error) {
+    console.error('Failed to import World Info:', error);
+    if (error !== 'No file selected') {
+      alert(`Failed to import World Info: ${error}`);
+    }
+  }
+}
+
+// Export World Info
+async function handleExportWorldInfo() {
+  if (!currentCharacter) {
+    alert('Please select a character first');
+    return;
+  }
+
+  // Ask user which format to export
+  const useSillyTavern = confirm('Export format:\n\nClick OK for SillyTavern format\nClick Cancel for Claudia native format');
+  const format = useSillyTavern ? 'sillytavern' : 'native';
+
+  try {
+    const outputPath = await invoke('export_world_info', {
+      characterId: currentCharacter.id,
+      format: format
+    });
+
+    alert(`World Info exported successfully to:\n${outputPath}`);
+  } catch (error) {
+    console.error('Failed to export World Info:', error);
+    if (error !== 'Save cancelled') {
+      alert(`Failed to export World Info: ${error}`);
+    }
   }
 }
 

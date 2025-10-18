@@ -184,9 +184,17 @@
               <p style="color: var(--text-secondary); font-size: 11px; margin-bottom: 12px;">
                 Maximum depth for cascading World Info activation. When a World Info entry is triggered, its content is scanned for additional keywords up to this depth. (Default: 3)
               </p>
-              <button type="button" id="add-worldinfo-btn" class="btn-secondary" style="width: 100%;">
+              <button type="button" id="add-worldinfo-btn" class="btn-secondary" style="width: 100%; margin-bottom: 8px;">
                 + Add Entry
               </button>
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <button type="button" id="import-worldinfo-btn" class="btn-secondary" style="flex: 1; font-size: 12px; padding: 8px;">
+                  Import
+                </button>
+                <button type="button" id="export-worldinfo-btn" class="btn-secondary" style="flex: 1; font-size: 12px; padding: 8px;">
+                  Export
+                </button>
+              </div>
             </div>
             <div id="worldinfo-list" class="worldinfo-list">
               <!-- World info entries will be added here -->

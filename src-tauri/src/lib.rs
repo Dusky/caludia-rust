@@ -3241,7 +3241,11 @@ fn delete_world_info_entry(
 
 // Export World Info entries to JSON
 #[tauri::command]
-async fn export_world_info(app_handle: tauri::AppHandle, character_id: String) -> Result<String, String> {
+async fn export_world_info(
+    app_handle: tauri::AppHandle,
+    character_id: String,
+    format: String, // "native" or "sillytavern"
+) -> Result<String, String> {
     use tauri_plugin_dialog::DialogExt;
 
     let settings = load_roleplay_settings(&character_id);
@@ -3267,9 +3271,19 @@ async fn export_world_info(app_handle: tauri::AppHandle, character_id: String) -
         return Err("Save cancelled".to_string());
     };
 
-    // Write world info to JSON file
-    let contents = serde_json::to_string_pretty(&settings.world_info)
-        .map_err(|e| format!("Failed to serialize World Info: {}", e))?;
+    // Serialize based on format
+    let contents = match format.as_str() {
+        "sillytavern" => {
+            let st_data = convert_to_sillytavern_format(&settings.world_info);
+            serde_json::to_string_pretty(&st_data)
+                .map_err(|e| format!("Failed to serialize World Info: {}", e))?
+        }
+        _ => {
+            // Default to native format
+            serde_json::to_string_pretty(&settings.world_info)
+                .map_err(|e| format!("Failed to serialize World Info: {}", e))?
+        }
+    };
 
     fs::write(&output_path, contents)
         .map_err(|e| format!("Failed to write file: {}", e))?;
@@ -3278,30 +3292,46 @@ async fn export_world_info(app_handle: tauri::AppHandle, character_id: String) -
 }
 
 // SillyTavern World Info format structs
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SillyTavernWorldInfoEntry {
-    #[allow(dead_code)]
-    uid: Option<u32>,
+    uid: u32,
     key: Vec<String>,
     #[serde(default)]
     keysecondary: Vec<String>,
-    #[allow(dead_code)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     comment: Option<String>,
     content: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     disable: Option<bool>,
     #[serde(default)]
     order: i32,
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     case_sensitive: Option<bool>,
-    // We ignore many other fields that SillyTavern uses but we don't need
+    // SillyTavern has many other fields with defaults we need to include for compatibility
+    #[serde(default)]
+    constant: bool,
+    #[serde(default)]
+    selective: bool,
+    #[serde(default)]
+    vectorized: bool,
+    #[serde(default = "default_depth")]
+    depth: i32,
+    #[serde(default = "default_probability")]
+    probability: i32,
+    #[serde(default)]
+    position: i32,
 }
 
-#[derive(Debug, Deserialize)]
+// Default values for SillyTavern fields
+fn default_depth() -> i32 { 4 }
+fn default_probability() -> i32 { 100 }
+
+#[derive(Debug, Serialize, Deserialize)]
 struct SillyTavernWorldInfo {
     entries: std::collections::HashMap<String, SillyTavernWorldInfoEntry>,
 }
 
-// Convert SillyTavern World Info entry to our format
+// Convert SillyTavern World Info entry to our format (import)
 fn convert_sillytavern_entry(st_entry: SillyTavernWorldInfoEntry) -> WorldInfoEntry {
     // Combine primary and secondary keys
     let mut all_keys = st_entry.key;
@@ -3315,6 +3345,36 @@ fn convert_sillytavern_entry(st_entry: SillyTavernWorldInfoEntry) -> WorldInfoEn
         case_sensitive: st_entry.case_sensitive.unwrap_or(false),
         priority: st_entry.order, // SillyTavern uses 'order' for priority
         use_regex: false,
+    }
+}
+
+// Convert our World Info format to SillyTavern format (export)
+fn convert_to_sillytavern_format(entries: &[WorldInfoEntry]) -> SillyTavernWorldInfo {
+    let mut st_entries = std::collections::HashMap::new();
+
+    for (index, entry) in entries.iter().enumerate() {
+        let st_entry = SillyTavernWorldInfoEntry {
+            uid: index as u32,
+            key: entry.keys.clone(),
+            keysecondary: vec![],
+            comment: None,
+            content: entry.content.clone(),
+            disable: Some(!entry.enabled), // We use 'enabled', SillyTavern uses 'disable'
+            order: entry.priority,
+            case_sensitive: if entry.case_sensitive { Some(true) } else { None },
+            constant: false,
+            selective: true,
+            vectorized: false,
+            depth: 4,
+            probability: 100,
+            position: 0,
+        };
+
+        st_entries.insert(index.to_string(), st_entry);
+    }
+
+    SillyTavernWorldInfo {
+        entries: st_entries,
     }
 }
 
