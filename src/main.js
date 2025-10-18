@@ -3295,9 +3295,30 @@ function setupAppControls() {
   }
 
   // Setup roleplay panel buttons
-  document.getElementById('add-worldinfo-btn').addEventListener('click', handleAddWorldInfoEntry);
-  document.getElementById('import-worldinfo-btn').addEventListener('click', handleImportWorldInfo);
-  document.getElementById('export-worldinfo-btn').addEventListener('click', handleExportWorldInfo);
+  const addWorldInfoBtn = document.getElementById('add-worldinfo-btn');
+  if (addWorldInfoBtn) {
+    addWorldInfoBtn.addEventListener('click', handleAddWorldInfoEntry);
+    console.log('Add world info button listener attached');
+  } else {
+    console.error('add-worldinfo-btn not found');
+  }
+
+  const importWorldInfoBtn = document.getElementById('import-worldinfo-btn');
+  if (importWorldInfoBtn) {
+    importWorldInfoBtn.addEventListener('click', handleImportWorldInfo);
+    console.log('Import world info button listener attached');
+  } else {
+    console.error('import-worldinfo-btn not found');
+  }
+
+  const exportWorldInfoBtn = document.getElementById('export-worldinfo-btn');
+  if (exportWorldInfoBtn) {
+    exportWorldInfoBtn.addEventListener('click', handleExportWorldInfo);
+    console.log('Export world info button listener attached');
+  } else {
+    console.error('export-worldinfo-btn not found');
+  }
+
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
   document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
@@ -4408,28 +4429,34 @@ async function handleDeleteWorldInfoEntry(entryId) {
 
 // Import World Info
 async function handleImportWorldInfo() {
+  console.log('handleImportWorldInfo called');
+
   if (!currentCharacter) {
-    alert('Please select a character first');
+    await window.__TAURI__.dialog.message('Please select a character first');
     return;
   }
 
   // Ask user if they want to merge or replace
-  const merge = confirm('Merge with existing entries?\n\nClick OK to merge, or Cancel to replace all existing entries.');
+  const merge = await window.__TAURI__.dialog.confirm('Merge with existing entries?\n\nClick OK to merge, or Cancel to replace all existing entries.');
+
+  console.log('User selected merge:', merge);
 
   try {
+    console.log('Calling import_world_info...');
     const entryCount = await invoke('import_world_info', {
       characterId: currentCharacter.id,
       merge: merge
     });
 
-    alert(`Successfully imported ${entryCount} World Info ${entryCount === 1 ? 'entry' : 'entries'}`);
+    console.log('Import successful, count:', entryCount);
+    await window.__TAURI__.dialog.message(`Successfully imported ${entryCount} World Info ${entryCount === 1 ? 'entry' : 'entries'}`);
 
     // Reload settings to show imported entries
     await loadRoleplaySettings();
   } catch (error) {
     console.error('Failed to import World Info:', error);
     if (error !== 'No file selected') {
-      alert(`Failed to import World Info: ${error}`);
+      await window.__TAURI__.dialog.message(`Failed to import World Info: ${error}`);
     }
   }
 }
@@ -4437,12 +4464,12 @@ async function handleImportWorldInfo() {
 // Export World Info
 async function handleExportWorldInfo() {
   if (!currentCharacter) {
-    alert('Please select a character first');
+    await window.__TAURI__.dialog.message('Please select a character first');
     return;
   }
 
   // Ask user which format to export
-  const useSillyTavern = confirm('Export format:\n\nClick OK for SillyTavern format\nClick Cancel for Claudia native format');
+  const useSillyTavern = await window.__TAURI__.dialog.confirm('Export format:\n\nClick OK for SillyTavern format\nClick Cancel for Claudia native format');
   const format = useSillyTavern ? 'sillytavern' : 'native';
 
   try {
@@ -4451,11 +4478,11 @@ async function handleExportWorldInfo() {
       format: format
     });
 
-    alert(`World Info exported successfully to:\n${outputPath}`);
+    await window.__TAURI__.dialog.message(`World Info exported successfully to:\n${outputPath}`);
   } catch (error) {
     console.error('Failed to export World Info:', error);
     if (error !== 'Save cancelled') {
-      alert(`Failed to export World Info: ${error}`);
+      await window.__TAURI__.dialog.message(`Failed to export World Info: ${error}`);
     }
   }
 }
