@@ -257,51 +257,51 @@
 ## Phase 8: Quality of Life & Polish (High Priority)
 **Goal: Reduce friction, improve feedback, and enhance overall user experience**
 
-### 1. Toast Notification System
-- [ ] Create toast component (bottom-right positioning)
-- [ ] Success/error/info/warning variants
-- [ ] Auto-dismiss with configurable timeout
-- [ ] Queue multiple toasts
-- [ ] Hook into all major actions (save, delete, import, export, etc.)
+### 1. Toast Notification System ✅
+- [x] Create toast component (bottom-right positioning)
+- [x] Success/error/info/warning variants
+- [x] Auto-dismiss with configurable timeout
+- [x] Queue multiple toasts
+- [x] Hook into all major actions (save, delete, import, export, etc.)
 
 **Why Important:** Users currently have no immediate feedback when actions succeed or fail. Toasts provide instant visual confirmation without blocking workflow.
 
-### 2. Command Palette
-- [ ] Ctrl+P to open command palette modal
-- [ ] Fuzzy search for all actions
-- [ ] Keyboard navigation (arrow keys, enter, escape)
-- [ ] Recent/frequent actions at top
-- [ ] Show keyboard shortcuts in results
-- [ ] Categories (Chat, Character, Settings, etc.)
+### 2. Command Palette ✅
+- [x] Ctrl+P to open command palette modal
+- [x] Fuzzy search for all actions
+- [x] Keyboard navigation (arrow keys, enter, escape)
+- [x] Recent/frequent actions at top
+- [x] Show keyboard shortcuts in results
+- [x] Categories (Chat, Character, Settings, etc.)
 
 **Why Important:** Power users want keyboard-first workflow. Command palette dramatically speeds up common actions without memorizing shortcuts.
 
-### 3. Auto-save & Recovery
-- [ ] Auto-save unsent message in input field
-- [ ] Restore unsent message after app restart
-- [ ] Draft system for in-progress edits
-- [ ] Session recovery (restore scroll position, open panels)
-- [ ] Crash recovery with last known state
+### 3. Auto-save & Recovery ✅
+- [x] Auto-save unsent message in input field
+- [x] Restore unsent message after app restart
+- [x] Draft system for in-progress edits
+- [x] Session recovery (restore scroll position, open panels)
+- [x] Crash recovery with last known state
 
 **Why Important:** Losing work due to crashes or accidental closes is extremely frustrating. Auto-save provides a safety net for all user work.
 
-### 4. Drag & Drop Support
-- [ ] Drag character card PNGs to import
-- [ ] Drag lorebook JSON files to import
-- [ ] Drag chat history JSON to import
-- [ ] Drag images to set as character avatar
-- [ ] Drop zone overlay with visual feedback
-- [ ] Support for multiple file drops
+### 4. Drag & Drop Support ✅
+- [x] Drag character card PNGs to import
+- [x] Drag lorebook JSON files to import
+- [x] Drag chat history JSON to import
+- [x] Drag images to set as character avatar
+- [x] Drop zone overlay with visual feedback
+- [x] Support for multiple file drops
 
 **Why Important:** Drag & drop feels natural and is much faster than navigate-click-select workflow. Modern desktop apps are expected to support this.
 
-### 5. Search in Chat History
-- [ ] Ctrl+F to open search bar
-- [ ] Highlight all matches in messages
-- [ ] Navigate between results (prev/next buttons)
-- [ ] Case-insensitive search
-- [ ] Search counter (e.g., "3 of 42 matches")
-- [ ] Clear search and restore view
+### 5. Search in Chat History ✅
+- [x] Ctrl+F to open search bar
+- [x] Highlight all matches in messages
+- [x] Navigate between results (prev/next buttons)
+- [x] Case-insensitive search
+- [x] Search counter (e.g., "3 of 42 matches")
+- [x] Clear search and restore view
 
 **Why Important:** Long roleplay sessions can span hundreds of messages. Finding specific content without search is tedious and time-consuming.
 

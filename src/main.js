@@ -935,6 +935,262 @@ function updateSearchCounter() {
   if (chatSearchNextBtn) chatSearchNextBtn.disabled = !hasMatches;
 }
 
+// Context Menu System
+let contextMenu = null;
+let contextMenuTarget = null;
+
+function setupContextMenu() {
+  contextMenu = document.getElementById('context-menu');
+
+  // Global click to close context menu
+  document.addEventListener('click', (e) => {
+    if (contextMenu && !contextMenu.contains(e.target)) {
+      hideContextMenu();
+    }
+  });
+
+  // Prevent default context menu on messages
+  messagesContainer.addEventListener('contextmenu', (e) => {
+    const message = e.target.closest('.message');
+    if (message) {
+      e.preventDefault();
+      showMessageContextMenu(e, message);
+    }
+  });
+
+  // Context menu on message input
+  const messageInput = document.getElementById('message-input');
+  if (messageInput) {
+    messageInput.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showInputContextMenu(e);
+    });
+  }
+
+  // Escape to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && contextMenu && contextMenu.style.display !== 'none') {
+      hideContextMenu();
+    }
+  });
+}
+
+function showMessageContextMenu(e, message) {
+  const isUserMessage = message.classList.contains('user');
+  const isAssistantMessage = message.classList.contains('assistant');
+  const messageIndex = Array.from(messagesContainer.children).indexOf(message);
+
+  const items = [];
+
+  // Copy message
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><rect x="3" y="3" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M6 3V2a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-1" stroke="currentColor" stroke-width="1.5"/></svg>',
+    text: 'Copy Message',
+    action: () => copyMessageText(message)
+  });
+
+  items.push({ separator: true });
+
+  // Edit message
+  if (isUserMessage) {
+    items.push({
+      icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M11 2l3 3-8 8H3v-3l8-8z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+      text: 'Edit Message',
+      action: () => editMessageFromContext(message)
+    });
+  }
+
+  // Regenerate
+  if (isAssistantMessage) {
+    items.push({
+      icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M13 7a5 5 0 1 0-1.5 3.5M13 4v3h-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      text: 'Regenerate',
+      action: () => regenerateFromContext(message)
+    });
+  }
+
+  // Branch from here
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M5 2v7M5 9a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM11 2v3.5M11 5.5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 7h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    text: 'Branch from Here',
+    action: () => branchFromContext(message)
+  });
+
+  items.push({ separator: true });
+
+  // Pin/Unpin
+  const isPinned = message.classList.contains('pinned');
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M8 2v6M5 5l3-3 3 3M8 8v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    text: isPinned ? 'Unpin Message' : 'Pin Message',
+    action: () => togglePinFromContext(message)
+  });
+
+  // Hide/Show
+  const isHidden = message.classList.contains('hidden-message');
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M1 8s2-5 7-5 7 5 7 5-2 5-7 5-7-5-7-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/></svg>',
+    text: isHidden ? 'Show Message' : 'Hide Message',
+    action: () => toggleHideFromContext(message)
+  });
+
+  items.push({ separator: true });
+
+  // Delete
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M3 4h10M6 4V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1M5 4v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    text: 'Delete Message',
+    danger: true,
+    action: () => deleteMessageFromContext(message)
+  });
+
+  showContextMenuAt(e.clientX, e.clientY, items);
+  contextMenuTarget = message;
+}
+
+function showInputContextMenu(e) {
+  const messageInput = document.getElementById('message-input');
+
+  const items = [];
+
+  // Paste
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><rect x="5" y="2" width="6" height="2" rx="1" stroke="currentColor" stroke-width="1.5"/><path d="M4 3H3a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1h-1" stroke="currentColor" stroke-width="1.5"/></svg>',
+    text: 'Paste',
+    action: async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        messageInput.value += text;
+        messageInput.focus();
+      } catch (err) {
+        console.error('Failed to paste:', err);
+      }
+    }
+  });
+
+  // Clear
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    text: 'Clear Input',
+    action: () => {
+      messageInput.value = '';
+      messageInput.focus();
+    }
+  });
+
+  showContextMenuAt(e.clientX, e.clientY, items);
+}
+
+function showContextMenuAt(x, y, items) {
+  if (!contextMenu) return;
+
+  const itemsContainer = contextMenu.querySelector('.context-menu-items');
+  itemsContainer.innerHTML = '';
+
+  items.forEach(item => {
+    if (item.separator) {
+      const separator = document.createElement('div');
+      separator.className = 'context-menu-separator';
+      itemsContainer.appendChild(separator);
+    } else {
+      const button = document.createElement('button');
+      button.className = 'context-menu-item';
+      if (item.danger) button.classList.add('danger');
+      if (item.disabled) button.classList.add('disabled');
+
+      button.innerHTML = `
+        <span class="context-menu-item-icon">${item.icon}</span>
+        <span class="context-menu-item-text">${item.text}</span>
+        ${item.shortcut ? `<span class="context-menu-item-shortcut">${item.shortcut}</span>` : ''}
+      `;
+
+      button.addEventListener('click', () => {
+        item.action();
+        hideContextMenu();
+      });
+
+      itemsContainer.appendChild(button);
+    }
+  });
+
+  // Position the menu
+  contextMenu.style.display = 'block';
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+
+  // Adjust if menu goes off-screen
+  const rect = contextMenu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) {
+    contextMenu.style.left = `${window.innerWidth - rect.width - 10}px`;
+  }
+  if (rect.bottom > window.innerHeight) {
+    contextMenu.style.top = `${window.innerHeight - rect.height - 10}px`;
+  }
+}
+
+function hideContextMenu() {
+  if (contextMenu) {
+    contextMenu.style.display = 'none';
+    contextMenuTarget = null;
+  }
+}
+
+// Context menu action helpers
+function copyMessageText(message) {
+  const content = message.querySelector('.message-content');
+  if (content) {
+    const text = content.innerText || content.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      showSuccess('Copied to Clipboard', 'Message text copied successfully');
+    }).catch(err => {
+      showError('Copy Failed', 'Could not copy message to clipboard');
+      console.error('Failed to copy:', err);
+    });
+  }
+}
+
+function editMessageFromContext(message) {
+  const editBtn = message.querySelector('.message-edit-btn');
+  if (editBtn) {
+    editBtn.click();
+  }
+}
+
+function regenerateFromContext(message) {
+  const regenBtn = message.querySelector('.message-regen-btn');
+  if (regenBtn) {
+    regenBtn.click();
+  }
+}
+
+function branchFromContext(message) {
+  const branchBtn = message.querySelector('.message-branch-btn');
+  if (branchBtn) {
+    branchBtn.click();
+  }
+}
+
+function togglePinFromContext(message) {
+  const pinBtn = message.querySelector('.message-pin-btn');
+  if (pinBtn) {
+    pinBtn.click();
+  }
+}
+
+function toggleHideFromContext(message) {
+  const hideBtn = message.querySelector('.message-hide-btn');
+  if (hideBtn) {
+    hideBtn.click();
+  }
+}
+
+function deleteMessageFromContext(message) {
+  const deleteBtn = message.querySelector('.message-delete-btn');
+  if (deleteBtn) {
+    deleteBtn.click();
+  }
+}
+
 // Apply view mode
 function applyViewMode(mode) {
   const body = document.body;
@@ -4721,6 +4977,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Setup chat search
   setupChatSearch();
+
+  // Setup context menu
+  setupContextMenu();
 
   loadExistingConfig();
 });
