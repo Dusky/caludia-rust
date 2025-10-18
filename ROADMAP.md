@@ -337,12 +337,12 @@
 
 **Status:** Frontend infrastructure complete with keyboard shortcuts and command palette entries. Backend support needed for actual undo operations (message restoration functions).
 
-### 9. Settings Search
-- [ ] Search bar at top of settings panel
-- [ ] Fuzzy search across all setting names and descriptions
-- [ ] Highlight matching settings
-- [ ] Collapse/expand sections based on matches
-- [ ] "Recently changed" section
+### 9. Settings Search ✅
+- [x] Search bar at top of settings panel
+- [x] Fuzzy search across all setting names and descriptions
+- [x] Highlight matching settings
+- [x] Collapse/expand sections based on matches
+- [ ] "Recently changed" section (deferred - nice to have)
 
 **Why Important:** With 22+ features, finding specific settings is tedious. Search makes configuration much faster.
 
