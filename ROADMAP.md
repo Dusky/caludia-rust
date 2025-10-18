@@ -346,15 +346,19 @@
 
 **Why Important:** With 22+ features, finding specific settings is tedious. Search makes configuration much faster.
 
-### 10. Character Management Enhancements
+### 10. Character Management Enhancements (Partially Implemented)
 - [ ] Recent characters quick-switch dropdown
-- [ ] Character search/filter by name or tags
+- [x] Character search/filter by name
+- [ ] Character search/filter by tags
 - [ ] Character folders/categories
 - [ ] Duplicate character (as template)
 - [ ] Favorite/star characters
-- [ ] Sort options (name, date created, last used)
+- [x] Sort options (name A-Z/Z-A, date created newest/oldest)
+- [ ] Sort by last used (requires backend tracking)
 
 **Why Important:** Managing 10+ characters becomes messy. Better organization tools scale with user's character collection.
+
+**Status:** Basic character search and sorting implemented. Filter panel toggles from header with real-time search by name and multiple sort options. Advanced features like folders, favorites, and tag filtering deferred for future implementation.
 
 ### 11. Enhanced Keyboard Support
 - [ ] Full keyboard navigation in all modals (Tab, Arrow keys, Enter)
