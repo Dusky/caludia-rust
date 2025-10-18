@@ -1272,7 +1272,6 @@ async fn save_api_config(base_url: String, api_key: String, model: String, strea
 
 #[tauri::command]
 fn get_api_config() -> Result<ApiConfig, String> {
-    println!("Getting API config...");
     load_config().ok_or_else(|| "No config found".to_string())
 }
 
@@ -2411,7 +2410,6 @@ fn delete_character(character_id: String) -> Result<(), String> {
 
 #[tauri::command]
 fn list_characters() -> Result<Vec<Character>, String> {
-    println!("Listing characters...");
     let dir = get_characters_dir();
     if !dir.exists() {
         return Ok(vec![]);
@@ -2427,7 +2425,6 @@ fn list_characters() -> Result<Vec<Character>, String> {
             }
         }
     }
-    println!("Found {} characters", characters.len());
     Ok(characters)
 }
 
