@@ -1191,6 +1191,145 @@ function deleteMessageFromContext(message) {
   }
 }
 
+// Confirmation Dialog System
+function showConfirmDialog(options) {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('confirm-modal');
+    const overlay = modal.querySelector('.confirm-overlay');
+    const icon = document.getElementById('confirm-icon');
+    const title = document.getElementById('confirm-title');
+    const message = document.getElementById('confirm-message');
+    const cancelBtn = document.getElementById('confirm-cancel-btn');
+    const confirmBtn = document.getElementById('confirm-confirm-btn');
+
+    // Set content
+    title.textContent = options.title || 'Confirm';
+    message.textContent = options.message || 'Are you sure?';
+    confirmBtn.textContent = options.confirmText || 'Confirm';
+
+    // Set icon
+    const iconType = options.type || 'danger';
+    icon.className = `confirm-icon ${iconType}`;
+
+    const iconSvgs = {
+      danger: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      warning: '<svg viewBox="0 0 24 24" fill="none"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      info: '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 16v-4m0-4h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    };
+    icon.innerHTML = iconSvgs[iconType] || iconSvgs.danger;
+
+    // Set button style
+    confirmBtn.className = `btn-primary ${iconType === 'danger' ? 'danger' : ''}`;
+
+    // Show modal
+    modal.style.display = 'flex';
+
+    // Handle confirm
+    const handleConfirm = () => {
+      cleanup();
+      resolve(true);
+    };
+
+    // Handle cancel
+    const handleCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    // Handle overlay click
+    const handleOverlayClick = () => {
+      cleanup();
+      resolve(false);
+    };
+
+    // Handle escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        resolve(false);
+      }
+    };
+
+    // Cleanup function
+    const cleanup = () => {
+      modal.style.display = 'none';
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      overlay.removeEventListener('click', handleOverlayClick);
+      document.removeEventListener('keydown', handleEscape);
+    };
+
+    // Add event listeners
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    overlay.addEventListener('click', handleOverlayClick);
+    document.addEventListener('keydown', handleEscape);
+  });
+}
+
+// Loading Indicator System
+let loadingOverlay = null;
+
+function showLoading(text = 'Loading...') {
+  if (!loadingOverlay) {
+    loadingOverlay = document.createElement('div');
+    loadingOverlay.className = 'loading-overlay';
+    loadingOverlay.innerHTML = `
+      <div class="loading-content">
+        <div class="loading-spinner-large"></div>
+        <p class="loading-text">${text}</p>
+      </div>
+    `;
+    document.body.appendChild(loadingOverlay);
+  } else {
+    loadingOverlay.querySelector('.loading-text').textContent = text;
+    loadingOverlay.style.display = 'flex';
+  }
+}
+
+function hideLoading() {
+  if (loadingOverlay) {
+    loadingOverlay.style.display = 'none';
+  }
+}
+
+// Saving Indicator System
+function showSavingIndicator(buttonElement) {
+  let indicator = buttonElement.nextElementSibling;
+
+  if (!indicator || !indicator.classList.contains('saving-indicator')) {
+    indicator = document.createElement('span');
+    indicator.className = 'saving-indicator';
+    indicator.innerHTML = `
+      <div class="saving-indicator-spinner"></div>
+      <span>Saving...</span>
+    `;
+    buttonElement.parentNode.insertBefore(indicator, buttonElement.nextSibling);
+  }
+
+  indicator.classList.remove('saved');
+  indicator.querySelector('span').textContent = 'Saving...';
+  indicator.classList.add('show');
+
+  return indicator;
+}
+
+function showSavedIndicator(indicator) {
+  indicator.classList.add('saved');
+  indicator.querySelector('span').textContent = 'Saved!';
+  indicator.querySelector('.saving-indicator-spinner').style.display = 'none';
+
+  setTimeout(() => {
+    indicator.classList.remove('show');
+    setTimeout(() => {
+      indicator.classList.remove('saved');
+      if (indicator.querySelector('.saving-indicator-spinner')) {
+        indicator.querySelector('.saving-indicator-spinner').style.display = 'block';
+      }
+    }, 200);
+  }, 2000);
+}
+
 // Apply view mode
 function applyViewMode(mode) {
   const body = document.body;
@@ -2980,14 +3119,22 @@ async function openBranchManager() {
       btn.addEventListener('click', async (e) => {
         const branchId = e.target.dataset.branchId;
         const branch = branches.find(b => b.id === branchId);
-        if (confirm(`Delete branch "${branch.name}"? This cannot be undone.`)) {
+
+        const confirmed = await showConfirmDialog({
+          type: 'danger',
+          title: 'Delete Branch?',
+          message: `Are you sure you want to delete the branch "${branch.name}"? All messages in this branch will be permanently lost. This action cannot be undone.`,
+          confirmText: 'Delete Branch'
+        });
+
+        if (confirmed) {
           try {
             await invoke('delete_branch', { branchId });
             modal.remove();
             await updateBranchIndicator();
-            setStatus('Branch deleted', 'success');
+            showSuccess('Branch Deleted', `Branch "${branch.name}" has been deleted.`);
           } catch (error) {
-            setStatus(`Delete failed: ${error}`, 'error');
+            showError('Delete Failed', `Failed to delete branch: ${error}`);
           }
         }
       });
@@ -3130,7 +3277,14 @@ async function handleDeleteCharacter() {
     return;
   }
 
-  if (confirm(`Are you sure you want to delete ${currentCharacter.name}? This cannot be undone.`)) {
+  const confirmed = await showConfirmDialog({
+    type: 'danger',
+    title: 'Delete Character?',
+    message: `Are you sure you want to delete "${currentCharacter.name}"? All chat history for this character will be permanently lost. This action cannot be undone.`,
+    confirmText: 'Delete Character'
+  });
+
+  if (confirmed) {
     try {
       const characterName = currentCharacter.name;
       await invoke('delete_character', { characterId: currentCharacter.id });
@@ -3232,7 +3386,14 @@ async function loadChatHistory() {
 
 // Clear chat history
 async function clearHistory() {
-  if (!confirm('Clear conversation history? This cannot be undone.')) {
+  const confirmed = await showConfirmDialog({
+    type: 'danger',
+    title: 'Clear Conversation?',
+    message: 'This will permanently delete all messages in this conversation. This action cannot be undone.',
+    confirmText: 'Clear History'
+  });
+
+  if (!confirmed) {
     return;
   }
 
