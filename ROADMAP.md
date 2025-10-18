@@ -305,12 +305,12 @@
 
 **Why Important:** Long roleplay sessions can span hundreds of messages. Finding specific content without search is tedious and time-consuming.
 
-### 6. Context Menus (Right-Click)
-- [ ] Right-click messages for actions (edit, delete, regenerate, branch, copy)
-- [ ] Right-click character dropdown for quick actions
-- [ ] Right-click World Info entries for edit/delete
-- [ ] Right-click in message input for paste/clear/templates
-- [ ] Context-aware menu items
+### 6. Context Menus (Right-Click) ✅
+- [x] Right-click messages for actions (edit, delete, regenerate, branch, copy)
+- [x] Right-click character dropdown for quick actions
+- [x] Right-click World Info entries for edit/delete
+- [x] Right-click in message input for paste/clear/templates
+- [x] Context-aware menu items
 
 **Why Important:** Right-click is muscle memory for desktop users. Faster than hovering to reveal action buttons.
 
