@@ -118,6 +118,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
 }
 
 .character-select {
@@ -157,6 +158,84 @@ body {
   appearance: none;
   background: transparent;
   padding-right: 30px;
+}
+
+/* Character Filter Panel */
+.character-filter-panel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: slideDownSearch 0.2s ease;
+}
+
+.character-filter-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.character-filter-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.character-filter-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+
+.character-filter-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.character-filter-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.character-filter-sort label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.character-sort-select {
+  flex: 1;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.character-sort-select:focus {
+  border-color: var(--accent);
 }
 
 .btn-danger {
