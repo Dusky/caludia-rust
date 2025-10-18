@@ -3277,6 +3277,64 @@ async fn export_world_info(app_handle: tauri::AppHandle, character_id: String) -
     Ok(output_path.to_string_lossy().to_string())
 }
 
+// SillyTavern World Info format structs
+#[derive(Debug, Deserialize)]
+struct SillyTavernWorldInfoEntry {
+    #[allow(dead_code)]
+    uid: Option<u32>,
+    key: Vec<String>,
+    #[serde(default)]
+    keysecondary: Vec<String>,
+    #[allow(dead_code)]
+    comment: Option<String>,
+    content: String,
+    disable: Option<bool>,
+    #[serde(default)]
+    order: i32,
+    #[serde(default)]
+    case_sensitive: Option<bool>,
+    // We ignore many other fields that SillyTavern uses but we don't need
+}
+
+#[derive(Debug, Deserialize)]
+struct SillyTavernWorldInfo {
+    entries: std::collections::HashMap<String, SillyTavernWorldInfoEntry>,
+}
+
+// Convert SillyTavern World Info entry to our format
+fn convert_sillytavern_entry(st_entry: SillyTavernWorldInfoEntry) -> WorldInfoEntry {
+    // Combine primary and secondary keys
+    let mut all_keys = st_entry.key;
+    all_keys.extend(st_entry.keysecondary);
+
+    WorldInfoEntry {
+        id: Uuid::new_v4().to_string(),
+        keys: all_keys,
+        content: st_entry.content,
+        enabled: !st_entry.disable.unwrap_or(false), // SillyTavern uses 'disable', we use 'enabled'
+        case_sensitive: st_entry.case_sensitive.unwrap_or(false),
+        priority: st_entry.order, // SillyTavern uses 'order' for priority
+        use_regex: false,
+    }
+}
+
+// Try to parse as SillyTavern format first, fall back to our native format
+fn parse_world_info_json(contents: &str) -> Result<Vec<WorldInfoEntry>, String> {
+    // Try SillyTavern format first
+    if let Ok(st_data) = serde_json::from_str::<SillyTavernWorldInfo>(contents) {
+        let entries: Vec<WorldInfoEntry> = st_data
+            .entries
+            .into_iter()
+            .map(|(_, entry)| convert_sillytavern_entry(entry))
+            .collect();
+        return Ok(entries);
+    }
+
+    // Fall back to our native format (simple array)
+    serde_json::from_str::<Vec<WorldInfoEntry>>(contents)
+        .map_err(|e| format!("Failed to parse World Info: {}", e))
+}
+
 // Import World Info entries from JSON
 #[tauri::command]
 async fn import_world_info(
@@ -3304,12 +3362,11 @@ async fn import_world_info(
         return Err("No file selected".to_string());
     };
 
-    // Read and parse world info file
+    // Read and parse world info file (supports both our format and SillyTavern format)
     let contents = fs::read_to_string(&json_path)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
-    let imported_entries: Vec<WorldInfoEntry> = serde_json::from_str(&contents)
-        .map_err(|e| format!("Failed to parse World Info: {}", e))?;
+    let imported_entries = parse_world_info_json(&contents)?;
 
     let entry_count = imported_entries.len();
 
