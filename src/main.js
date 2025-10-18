@@ -14,6 +14,9 @@ let newCharacterBtn;
 let currentCharacter = null;
 let pendingAvatarPath = null;
 
+// Cached config values
+let cachedContextLimit = 200000; // Default value
+
 // Theme definitions
 const themes = {
   dark: {
@@ -2769,6 +2772,10 @@ async function handleSaveSettings(e) {
 
   try {
     await invoke('save_api_config', { baseUrl, apiKey, model, stream, contextLimit });
+
+    // Update cached context limit
+    cachedContextLimit = contextLimit;
+
     validationMsg.textContent = 'Configuration saved successfully';
     validationMsg.className = 'validation-message success';
     setStatus('Configuration saved', 'success');
@@ -2957,21 +2964,12 @@ async function updateTokenCount() {
         currentInput
       });
 
-      // Get context limit from config
-      let contextLimit = 200000; // Default
-      try {
-        const config = await invoke('get_api_config');
-        contextLimit = config.context_limit || 200000;
-      } catch (e) {
-        // Use default if config not available
-      }
-
-      // Update total display
+      // Update total display (use cached context limit)
       const tokenCounter = document.getElementById('token-counter');
       const tokenCountTotal = document.getElementById('token-count-total');
 
       // Format: "2.5k / 200k tokens"
-      tokenCountTotal.textContent = `${formatTokenCount(tokenData.total)} / ${formatTokenCount(contextLimit)} tokens`;
+      tokenCountTotal.textContent = `${formatTokenCount(tokenData.total)} / ${formatTokenCount(cachedContextLimit)} tokens`;
 
       // Update breakdown
       document.getElementById('token-system').textContent = tokenData.system_prompt;
@@ -4946,6 +4944,9 @@ async function loadExistingConfig() {
     document.getElementById('api-key').value = config.api_key;
     document.getElementById('stream-toggle').checked = config.stream || false;
     document.getElementById('context-limit').value = config.context_limit || 200000;
+
+    // Cache context limit to avoid repeated API calls
+    cachedContextLimit = config.context_limit || 200000;
 
     const modelSelect = document.getElementById('model-select');
     modelSelect.innerHTML = ''; // Clear existing options
