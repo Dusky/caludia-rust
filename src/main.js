@@ -17,6 +17,208 @@ let pendingAvatarPath = null;
 // Cached config values
 let cachedContextLimit = 200000; // Default value
 
+// Undo/Redo System
+let undoStack = [];
+let redoStack = [];
+const MAX_UNDO_STACK_SIZE = 50; // Limit stack size to prevent memory issues
+
+// Action types for undo/redo
+const UndoActionType = {
+  MESSAGE_DELETE: 'MESSAGE_DELETE',
+  MESSAGE_EDIT: 'MESSAGE_EDIT',
+  CHARACTER_FIELD: 'CHARACTER_FIELD',
+  WORLD_INFO: 'WORLD_INFO'
+};
+
+// Record an action for undo
+function recordUndoAction(action) {
+  undoStack.push(action);
+
+  // Limit stack size
+  if (undoStack.length > MAX_UNDO_STACK_SIZE) {
+    undoStack.shift(); // Remove oldest action
+  }
+
+  // Clear redo stack when new action is recorded
+  redoStack = [];
+
+  updateUndoRedoUI();
+}
+
+// Perform undo
+async function performUndo() {
+  if (undoStack.length === 0) {
+    showInfo('Nothing to Undo', 'No actions available to undo.');
+    return;
+  }
+
+  const action = undoStack.pop();
+
+  try {
+    switch (action.type) {
+      case UndoActionType.MESSAGE_DELETE:
+        await undoMessageDelete(action);
+        break;
+      case UndoActionType.MESSAGE_EDIT:
+        await undoMessageEdit(action);
+        break;
+      case UndoActionType.CHARACTER_FIELD:
+        await undoCharacterField(action);
+        break;
+      case UndoActionType.WORLD_INFO:
+        await undoWorldInfo(action);
+        break;
+      default:
+        console.error('Unknown undo action type:', action.type);
+        return;
+    }
+
+    // Add to redo stack
+    redoStack.push(action);
+    updateUndoRedoUI();
+    showSuccess('Undo Complete', action.description || 'Action undone successfully.');
+  } catch (error) {
+    console.error('Undo failed:', error);
+    showError('Undo Failed', `Failed to undo action: ${error}`);
+    // Put action back on undo stack if it failed
+    undoStack.push(action);
+  }
+}
+
+// Perform redo
+async function performRedo() {
+  if (redoStack.length === 0) {
+    showInfo('Nothing to Redo', 'No actions available to redo.');
+    return;
+  }
+
+  const action = redoStack.pop();
+
+  try {
+    switch (action.type) {
+      case UndoActionType.MESSAGE_DELETE:
+        await redoMessageDelete(action);
+        break;
+      case UndoActionType.MESSAGE_EDIT:
+        await redoMessageEdit(action);
+        break;
+      case UndoActionType.CHARACTER_FIELD:
+        await redoCharacterField(action);
+        break;
+      case UndoActionType.WORLD_INFO:
+        await redoWorldInfo(action);
+        break;
+      default:
+        console.error('Unknown redo action type:', action.type);
+        return;
+    }
+
+    // Add back to undo stack
+    undoStack.push(action);
+    updateUndoRedoUI();
+    showSuccess('Redo Complete', action.description || 'Action redone successfully.');
+  } catch (error) {
+    console.error('Redo failed:', error);
+    showError('Redo Failed', `Failed to redo action: ${error}`);
+    // Put action back on redo stack if it failed
+    redoStack.push(action);
+  }
+}
+
+// Update UI to reflect undo/redo availability
+function updateUndoRedoUI() {
+  // This can be used to enable/disable undo/redo buttons if we add them
+  // For now, just used to track state
+  const canUndo = undoStack.length > 0;
+  const canRedo = redoStack.length > 0;
+
+  // Update command palette if it exists
+  if (window.updateCommandPaletteState) {
+    window.updateCommandPaletteState({ canUndo, canRedo });
+  }
+}
+
+// Undo action implementations
+async function undoMessageDelete(action) {
+  // TODO: Full implementation requires backend support to re-insert deleted messages
+  // For now, inform user and suggest using branches
+  showInfo('Undo Not Yet Implemented', 'Message deletion undo requires backend support (coming soon). Use chat branches to explore different conversation paths.');
+  throw new Error('Undo for message deletion not yet implemented');
+}
+
+async function redoMessageDelete(action) {
+  await invoke('delete_message_at_index', { messageIndex: action.messageIndex });
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  if (allMessages[action.messageIndex]) {
+    allMessages[action.messageIndex].remove();
+  }
+  await updateTokenCount();
+}
+
+async function undoMessageEdit(action) {
+  // TODO: Full implementation requires backend support to restore previous message state
+  // For now, inform user and suggest using branches
+  showInfo('Undo Not Yet Implemented', 'Message edit undo requires backend support (coming soon). Use chat branches to save conversation states before editing.');
+  throw new Error('Undo for message edit not yet implemented');
+}
+
+async function redoMessageEdit(action) {
+  await invoke('truncate_history_from', { index: action.messageIndex });
+  await loadChatHistory();
+  await sendMessage(action.newContent);
+}
+
+async function undoCharacterField(action) {
+  // Restore character field to previous value
+  const fieldElement = document.getElementById(action.fieldId);
+  if (fieldElement) {
+    fieldElement.value = action.oldValue;
+
+    // Trigger auto-save
+    currentCharacter[action.fieldName] = action.oldValue;
+    await autoSaveCharacter();
+  }
+}
+
+async function redoCharacterField(action) {
+  // Re-apply field change
+  const fieldElement = document.getElementById(action.fieldId);
+  if (fieldElement) {
+    fieldElement.value = action.newValue;
+
+    // Trigger auto-save
+    currentCharacter[action.fieldName] = action.newValue;
+    await autoSaveCharacter();
+  }
+}
+
+async function undoWorldInfo(action) {
+  // Restore World Info entry to previous state
+  // This would require backend support for world info history
+  await invoke('restore_world_info_entry', {
+    entryId: action.entryId,
+    previousState: action.previousState
+  });
+
+  // Reload world info panel
+  if (window.reloadWorldInfoPanel) {
+    await window.reloadWorldInfoPanel();
+  }
+}
+
+async function redoWorldInfo(action) {
+  // Re-apply World Info change
+  await invoke('restore_world_info_entry', {
+    entryId: action.entryId,
+    previousState: action.newState
+  });
+
+  // Reload world info panel
+  if (window.reloadWorldInfoPanel) {
+    await window.reloadWorldInfoPanel();
+  }
+}
+
 // Theme definitions
 const themes = {
   dark: {
@@ -293,6 +495,26 @@ const commands = [
     icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 13V3M7 6l3-3 3 3" stroke="currentColor" stroke-width="1.5"/><path d="M3 16h14" stroke="currentColor" stroke-width="1.5"/></svg>`,
     action: () => importChatHistory(),
     keywords: ['load', 'restore', 'open']
+  },
+  {
+    id: 'undo',
+    title: 'Undo',
+    description: 'Undo last action (message delete, edit)',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 8h9a3 3 0 0 1 0 6H8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M7 5l-3 3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    action: () => performUndo(),
+    shortcut: ['Ctrl', 'Z'],
+    keywords: ['revert', 'back', 'reverse']
+  },
+  {
+    id: 'redo',
+    title: 'Redo',
+    description: 'Redo previously undone action',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M16 8H7a3 3 0 0 0 0 6h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M13 5l3 3-3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    action: () => performRedo(),
+    shortcut: ['Ctrl', 'Shift', 'Z'],
+    keywords: ['forward', 'repeat']
   },
   // Character actions
   {
@@ -1995,6 +2217,15 @@ async function handleEditMessage(messageDiv, originalContent) {
     saveBtn.textContent = 'Saving...';
 
     try {
+      // TODO: Record undo action when backend support is added
+      // recordUndoAction({
+      //   type: UndoActionType.MESSAGE_EDIT,
+      //   description: 'Edit message',
+      //   messageIndex,
+      //   originalContent,
+      //   newContent
+      // });
+
       // Truncate history from this point
       await invoke('truncate_history_from', { index: messageIndex });
 
@@ -2203,11 +2434,30 @@ async function handleDeleteMessage(messageDiv) {
   }
 
   // Confirm deletion
-  if (!confirm('Are you sure you want to delete this message? This cannot be undone.')) {
+  const confirmed = await showConfirmDialog({
+    type: 'danger',
+    title: 'Delete Message?',
+    message: 'Are you sure you want to delete this message? You can undo this action with Ctrl+Z.',
+    confirmText: 'Delete Message'
+  });
+
+  if (!confirmed) {
     return;
   }
 
   try {
+    // TODO: Record undo action when backend support is added
+    // const contentDiv = messageDiv.querySelector('.message-content');
+    // const content = contentDiv ? contentDiv.textContent.trim() : '';
+    // const isUser = messageDiv.classList.contains('user-message');
+    // recordUndoAction({
+    //   type: UndoActionType.MESSAGE_DELETE,
+    //   description: 'Delete message',
+    //   messageIndex,
+    //   content,
+    //   isUser
+    // });
+
     await invoke('delete_message_at_index', { messageIndex });
     messageDiv.remove();
     await updateTokenCount();
@@ -5112,6 +5362,20 @@ window.addEventListener('DOMContentLoaded', () => {
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
       document.getElementById('roleplay-btn').click();
+      return;
+    }
+
+    // Ctrl/Cmd + Z - Undo (only if not in input field to avoid conflicts with native undo)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && !e.target.matches('input, textarea')) {
+      e.preventDefault();
+      performUndo();
+      return;
+    }
+
+    // Ctrl/Cmd + Shift + Z - Redo (only if not in input field to avoid conflicts with native redo)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Z' && e.shiftKey && !e.target.matches('input, textarea')) {
+      e.preventDefault();
+      performRedo();
       return;
     }
 

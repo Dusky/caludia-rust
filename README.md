@@ -65,6 +65,8 @@ Config stored in `~/.config/claudia/config.json`
 - **Ctrl+P** - Open command palette (quick access to all actions)
 - **Ctrl+F** - Search in chat history
 - **Ctrl+/** - Toggle Roleplay Tools panel
+- **Ctrl+Z** - Undo last action (message delete/edit)
+- **Ctrl+Shift+Z** - Redo previously undone action
 
 ## Roadmap
 

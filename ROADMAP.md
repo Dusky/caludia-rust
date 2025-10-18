@@ -323,15 +323,19 @@
 
 **Why Important:** Users should never wonder if an action succeeded or is still processing. Clear feedback prevents confusion and repeated clicks.
 
-### 8. Undo/Redo System
-- [ ] Undo message edit (Ctrl+Z)
-- [ ] Undo message delete
+### 8. Undo/Redo System (Partially Implemented)
+- [x] Undo/redo infrastructure (stack management, action types)
+- [x] Keyboard shortcuts (Ctrl+Z for undo, Ctrl+Shift+Z for redo)
+- [x] Command palette integration
+- [ ] Backend support for message delete undo
+- [ ] Backend support for message edit undo
 - [ ] Undo character field changes
 - [ ] Undo World Info changes
 - [ ] Action history panel (optional)
-- [ ] Redo support (Ctrl+Shift+Z)
 
 **Why Important:** Mistakes happen. An undo system provides a safety net and encourages experimentation without fear of losing work.
+
+**Status:** Frontend infrastructure complete with keyboard shortcuts and command palette entries. Backend support needed for actual undo operations (message restoration functions).
 
 ### 9. Settings Search
 - [ ] Search bar at top of settings panel
