@@ -1035,6 +1035,148 @@ function closeChatSearch() {
   }
 }
 
+// Settings Search
+function setupSettingsSearch() {
+  const settingsSearchInput = document.getElementById('settings-search-input');
+  const settingsSearchClearBtn = document.getElementById('settings-search-clear');
+
+  if (!settingsSearchInput || !settingsSearchClearBtn) return;
+
+  // Search input listener
+  settingsSearchInput.addEventListener('input', (e) => {
+    const searchTerm = e.target.value;
+    performSettingsSearch(searchTerm);
+
+    // Show/hide clear button
+    settingsSearchClearBtn.style.display = searchTerm ? 'flex' : 'none';
+  });
+
+  // Clear button listener
+  settingsSearchClearBtn.addEventListener('click', () => {
+    settingsSearchInput.value = '';
+    performSettingsSearch('');
+    settingsSearchClearBtn.style.display = 'none';
+    settingsSearchInput.focus();
+  });
+}
+
+function performSettingsSearch(searchTerm) {
+  const settingsPanel = document.getElementById('settings-panel');
+  if (!settingsPanel) return;
+
+  // Get all settings sections and form groups
+  const sections = settingsPanel.querySelectorAll('.settings-section');
+  const formGroups = settingsPanel.querySelectorAll('.form-group');
+  const tabs = settingsPanel.querySelectorAll('.tab-content');
+
+  // If search is empty, show everything
+  if (!searchTerm || searchTerm.trim() === '') {
+    sections.forEach(section => section.classList.remove('search-hidden'));
+    formGroups.forEach(group => group.classList.remove('search-hidden'));
+    clearSettingsHighlights();
+    return;
+  }
+
+  const term = searchTerm.toLowerCase();
+
+  // Search in all tabs
+  tabs.forEach(tab => {
+    let tabHasMatch = false;
+
+    // Search in collapsible sections within this tab
+    const tabSections = tab.querySelectorAll('.settings-section');
+    tabSections.forEach(section => {
+      const sectionContent = section.querySelector('.settings-section-content');
+      const sectionTitle = section.querySelector('.settings-section-title');
+      const sectionGroups = sectionContent ? sectionContent.querySelectorAll('.form-group') : [];
+
+      let sectionHasMatch = false;
+
+      // Check if section title matches
+      if (sectionTitle && sectionTitle.textContent.toLowerCase().includes(term)) {
+        sectionHasMatch = true;
+      }
+
+      // Check each form group in this section
+      sectionGroups.forEach(group => {
+        const label = group.querySelector('label');
+        const input = group.querySelector('input, select, textarea');
+        const text = group.textContent.toLowerCase();
+        const placeholder = input ? (input.placeholder || '').toLowerCase() : '';
+
+        if (text.includes(term) || placeholder.includes(term)) {
+          group.classList.remove('search-hidden');
+          sectionHasMatch = true;
+          highlightSettingsMatch(group, term);
+        } else {
+          group.classList.add('search-hidden');
+        }
+      });
+
+      // Show/hide section based on matches
+      if (sectionHasMatch) {
+        section.classList.remove('search-hidden');
+        // Auto-expand collapsed sections with matches
+        section.classList.remove('collapsed');
+        tabHasMatch = true;
+      } else {
+        section.classList.add('search-hidden');
+      }
+    });
+
+    // Search in direct form groups (not in sections)
+    const directFormGroups = Array.from(tab.querySelectorAll('.form-group')).filter(group => {
+      return !group.closest('.settings-section-content');
+    });
+
+    directFormGroups.forEach(group => {
+      const text = group.textContent.toLowerCase();
+      const input = group.querySelector('input, select, textarea');
+      const placeholder = input ? (input.placeholder || '').toLowerCase() : '';
+
+      if (text.includes(term) || placeholder.includes(term)) {
+        group.classList.remove('search-hidden');
+        highlightSettingsMatch(group, term);
+        tabHasMatch = true;
+      } else {
+        group.classList.add('search-hidden');
+      }
+    });
+  });
+}
+
+function highlightSettingsMatch(element, term) {
+  clearSettingsHighlights(element);
+
+  // Highlight in labels
+  const labels = element.querySelectorAll('label');
+  labels.forEach(label => {
+    const text = label.textContent;
+    const lowerText = text.toLowerCase();
+    const index = lowerText.indexOf(term);
+
+    if (index !== -1 && !label.querySelector('input')) {
+      const before = text.substring(0, index);
+      const match = text.substring(index, index + term.length);
+      const after = text.substring(index + term.length);
+
+      label.innerHTML = before + '<span class="settings-search-highlight">' + match + '</span>' + after;
+    }
+  });
+}
+
+function clearSettingsHighlights(container) {
+  const parent = container || document.getElementById('settings-panel');
+  if (!parent) return;
+
+  const highlights = parent.querySelectorAll('.settings-search-highlight');
+  highlights.forEach(highlight => {
+    const text = highlight.textContent;
+    const textNode = document.createTextNode(text);
+    highlight.parentNode.replaceChild(textNode, highlight);
+  });
+}
+
 function performSearch(searchTerm) {
   clearSearchHighlights();
   searchMatches = [];
@@ -5406,6 +5548,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Setup context menu
   setupContextMenu();
+
+  // Setup settings search
+  setupSettingsSearch();
 
   loadExistingConfig();
 });
