@@ -36,12 +36,14 @@ window.ClaudiaPluginAPI = {
 
   // Register plugin settings UI
   registerSettingsUI(pluginId, settingsCallback) {
+    console.log(`registerSettingsUI called for ${pluginId}`, typeof settingsCallback);
     if (typeof settingsCallback !== 'function') {
       console.error(`Settings callback for ${pluginId} must be a function`);
       return false;
     }
     pluginSettingsRegistry[pluginId] = settingsCallback;
-    console.log(`Plugin ${pluginId} registered settings UI`);
+    console.log(`Plugin ${pluginId} registered settings UI successfully`);
+    console.log('Current registry:', pluginSettingsRegistry);
     return true;
   },
 
@@ -6462,12 +6464,24 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       const pluginCode = await invoke('load_plugins');
       if (pluginCode) {
+        console.log('Executing plugin code...');
         // Execute plugin code
         eval(pluginCode);
         console.log('Plugins loaded successfully');
+        console.log('Plugin settings registry:', pluginSettingsRegistry);
+        console.log('Registry keys:', Object.keys(pluginSettingsRegistry));
+
+        // Show toast to confirm plugin loading
+        setTimeout(() => {
+          const count = Object.keys(pluginSettingsRegistry).length;
+          if (count > 0) {
+            showSuccess('Plugins Loaded', `${count} plugin(s) with settings registered`);
+          }
+        }, 1000);
       }
     } catch (error) {
       console.error('Failed to load plugins:', error);
+      showError('Plugin Error', 'Failed to load plugins: ' + error.message);
     }
   })();
 
