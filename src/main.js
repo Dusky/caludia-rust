@@ -3854,8 +3854,14 @@ function setupAppControls() {
       const rightSidebar = document.querySelector('.right-sidebar');
       const appContainer = document.querySelector('.app-container');
       if (rightSidebar && appContainer) {
-        rightSidebar.classList.toggle('collapsed');
+        const isCollapsed = rightSidebar.classList.toggle('collapsed');
         appContainer.classList.toggle('right-sidebar-collapsed');
+
+        // Flip arrow icon: ◄ when expanded (collapse left), ► when collapsed (expand right)
+        const svg = toggleRightSidebar.querySelector('path');
+        if (svg) {
+          svg.setAttribute('d', isCollapsed ? 'M6 4L10 8L6 12' : 'M10 4L6 8L10 12');
+        }
       }
     });
   }
@@ -3867,8 +3873,14 @@ function setupAppControls() {
       const leftSidebar = document.querySelector('.left-sidebar');
       const appContainer = document.querySelector('.app-container');
       if (leftSidebar && appContainer) {
-        leftSidebar.classList.toggle('collapsed');
+        const isCollapsed = leftSidebar.classList.toggle('collapsed');
         appContainer.classList.toggle('left-sidebar-collapsed');
+
+        // Flip arrow icon: ► when expanded (collapse right), ◄ when collapsed (expand left)
+        const svg = toggleLeftSidebar.querySelector('path');
+        if (svg) {
+          svg.setAttribute('d', isCollapsed ? 'M10 4L6 8L10 12' : 'M6 4L10 8L6 12');
+        }
       }
     });
   }

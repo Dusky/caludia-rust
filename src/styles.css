@@ -3737,9 +3737,18 @@ body.drag-over {
   grid-template-columns: 48px 1fr 280px;
 }
 
+/* Both sidebars collapsed */
+.layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+  grid-template-columns: 48px 1fr 48px;
+}
+
 @media (max-width: 1200px) {
   .layout-spacious .app-container.left-sidebar-collapsed {
     grid-template-columns: 48px 1fr 200px;
+  }
+
+  .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 48px;
   }
 }
 
