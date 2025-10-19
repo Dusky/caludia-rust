@@ -1,5 +1,8 @@
 const { invoke } = window.__TAURI__.core;
 
+// Track app start time for loading overlay
+window.appStartTime = Date.now();
+
 // ============================================================================
 // Plugin System - ClaudiaPluginAPI
 // ============================================================================
@@ -15,6 +18,9 @@ const pluginHooks = {
   addUIComponent: []
 };
 
+// Plugin settings UI registry
+const pluginSettingsRegistry = {};
+
 // Global Plugin API exposed to plugins
 window.ClaudiaPluginAPI = {
   // Hook registration
@@ -25,6 +31,17 @@ window.ClaudiaPluginAPI = {
     }
     pluginHooks[hookName].push(callback);
     console.log(`Plugin registered hook: ${hookName}`);
+    return true;
+  },
+
+  // Register plugin settings UI
+  registerSettingsUI(pluginId, settingsCallback) {
+    if (typeof settingsCallback !== 'function') {
+      console.error(`Settings callback for ${pluginId} must be a function`);
+      return false;
+    }
+    pluginSettingsRegistry[pluginId] = settingsCallback;
+    console.log(`Plugin ${pluginId} registered settings UI`);
     return true;
   },
 
@@ -3905,6 +3922,13 @@ async function loadPluginsList() {
         </div>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
           <button
+            onclick="handleConfigurePlugin('${plugin.manifest.id}')"
+            class="btn-secondary"
+            style="font-size: 11px; padding: 4px 8px;"
+          >
+            Configure
+          </button>
+          <button
             onclick="handleUpdatePlugin('${plugin.manifest.id}')"
             class="btn-secondary"
             style="font-size: 11px; padding: 4px 8px;"
@@ -3954,6 +3978,27 @@ async function handleUpdatePlugin(pluginId) {
     console.error('Plugin update error:', error);
   }
 }
+
+async function handleConfigurePlugin(pluginId) {
+  // Check if plugin has registered settings UI
+  const settingsCallback = pluginSettingsRegistry[pluginId];
+
+  if (!settingsCallback) {
+    showToast('No configuration available for this plugin', 'info');
+    return;
+  }
+
+  // Call the plugin's settings callback to open its settings UI
+  try {
+    await settingsCallback();
+  } catch (error) {
+    console.error(`Failed to open settings for plugin ${pluginId}:`, error);
+    showToast('Failed to open plugin settings', 'error');
+  }
+}
+
+// Make it globally accessible for onclick handlers
+window.handleConfigurePlugin = handleConfigurePlugin;
 
 async function handleUninstallPlugin(pluginId) {
   const confirmed = await window.__TAURI__.dialog.confirm('Are you sure you want to uninstall this plugin? This cannot be undone.', { title: 'Confirm Uninstall', kind: 'warning' });
@@ -6380,15 +6425,21 @@ async function loadExistingConfig() {
     showSettings();
   } finally {
     // Hide loading overlay after initialization is complete
+    // Ensure minimum display time of 800ms so users see the loading state
     const loadingOverlay = document.getElementById('app-loading');
     if (loadingOverlay) {
+      const startTime = window.appStartTime || Date.now();
+      const elapsed = Date.now() - startTime;
+      const minDisplayTime = 800;
+      const remainingTime = Math.max(0, minDisplayTime - elapsed);
+
       setTimeout(() => {
         loadingOverlay.classList.add('hidden');
         // Remove from DOM after transition completes
         setTimeout(() => {
           loadingOverlay.remove();
         }, 300);
-      }, 100);
+      }, remainingTime);
     }
   }
 }
