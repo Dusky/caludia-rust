@@ -2758,19 +2758,135 @@ async fn export_chat_as_html(app_handle: tauri::AppHandle) -> Result<String, Str
     Ok(output_path.to_string_lossy().to_string())
 }
 
-// Import chat history from JSON
+// Parse chat history from Markdown format
+fn parse_markdown_chat(contents: &str) -> Result<ChatHistory, String> {
+    use regex::Regex;
+
+    let mut messages = Vec::new();
+
+    // Pattern: **User**: content or **Assistant**: content
+    let re = Regex::new(r"(?m)^\*\*(User|Assistant)\*\*:\s*(.+?)(?=^\*\*(?:User|Assistant)\*\*:|$)")
+        .map_err(|e| format!("Regex error: {}", e))?;
+
+    for cap in re.captures_iter(contents) {
+        let role = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+        let content = cap.get(2).map(|m| m.as_str()).unwrap_or("").trim();
+
+        if !content.is_empty() {
+            let message = if role == "User" {
+                Message::new_user(content.to_string())
+            } else {
+                Message::new_assistant(content.to_string())
+            };
+            messages.push(message);
+        }
+    }
+
+    if messages.is_empty() {
+        return Err("No messages found in Markdown file".to_string());
+    }
+
+    Ok(ChatHistory { messages })
+}
+
+// Parse chat history from HTML format
+fn parse_html_chat(contents: &str) -> Result<ChatHistory, String> {
+    use regex::Regex;
+
+    let mut messages = Vec::new();
+
+    // Pattern: <div class="message user|assistant">...<div class="content">content</div>...
+    let message_re = Regex::new(r#"<div class="message (user|assistant)">"#)
+        .map_err(|e| format!("Regex error: {}", e))?;
+    let content_re = Regex::new(r#"<div class="content">(.+?)</div>"#)
+        .map_err(|e| format!("Regex error: {}", e))?;
+
+    // Split by message divs
+    let parts: Vec<&str> = message_re.split(contents).collect();
+    let mut role_iter = message_re.captures_iter(contents);
+
+    for (_i, part) in parts.iter().enumerate().skip(1) {
+        if let Some(role_cap) = role_iter.next() {
+            let role = role_cap.get(1).map(|m| m.as_str()).unwrap_or("");
+
+            if let Some(content_cap) = content_re.captures(part) {
+                let content = content_cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                // Decode HTML entities
+                let decoded = content
+                    .replace("&lt;", "<")
+                    .replace("&gt;", ">")
+                    .replace("&amp;", "&")
+                    .replace("&quot;", "\"")
+                    .trim()
+                    .to_string();
+
+                if !decoded.is_empty() {
+                    let message = if role == "user" {
+                        Message::new_user(decoded)
+                    } else {
+                        Message::new_assistant(decoded)
+                    };
+                    messages.push(message);
+                }
+            }
+        }
+    }
+
+    if messages.is_empty() {
+        return Err("No messages found in HTML file".to_string());
+    }
+
+    Ok(ChatHistory { messages })
+}
+
+// Parse chat history from plain text format
+fn parse_text_chat(contents: &str) -> Result<ChatHistory, String> {
+    use regex::Regex;
+
+    let mut messages = Vec::new();
+
+    // Pattern: User: content or Assistant: content (at start of line)
+    let re = Regex::new(r"(?m)^(User|Assistant):\s*(.+?)(?=^(?:User|Assistant):|$)")
+        .map_err(|e| format!("Regex error: {}", e))?;
+
+    for cap in re.captures_iter(contents) {
+        let role = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+        let content = cap.get(2).map(|m| m.as_str()).unwrap_or("").trim();
+
+        if !content.is_empty() {
+            let message = if role == "User" {
+                Message::new_user(content.to_string())
+            } else {
+                Message::new_assistant(content.to_string())
+            };
+            messages.push(message);
+        }
+    }
+
+    if messages.is_empty() {
+        return Err("No messages found in text file".to_string());
+    }
+
+    Ok(ChatHistory { messages })
+}
+
+// Import chat history from multiple formats (JSON, Markdown, HTML, Text)
 #[tauri::command]
 async fn import_chat_history(app_handle: tauri::AppHandle) -> Result<usize, String> {
     use tauri_plugin_dialog::DialogExt;
 
-    // Open file picker for JSON files
+    // Open file picker for multiple formats
     let file_path = app_handle
         .dialog()
         .file()
-        .add_filter("Chat History", &["json"])
+        .add_filter("All Supported", &["json", "md", "html", "txt"])
+        .add_filter("JSON", &["json"])
+        .add_filter("Markdown", &["md"])
+        .add_filter("HTML", &["html"])
+        .add_filter("Plain Text", &["txt"])
         .blocking_pick_file();
 
-    let json_path = if let Some(path) = file_path {
+    let file_path_buf = if let Some(path) = file_path {
         PathBuf::from(
             path.as_path()
                 .ok_or_else(|| "Could not get file path".to_string())?
@@ -2781,17 +2897,43 @@ async fn import_chat_history(app_handle: tauri::AppHandle) -> Result<usize, Stri
         return Err("No file selected".to_string());
     };
 
-    // Read and parse history file
-    let contents = fs::read_to_string(&json_path)
+    // Read file contents
+    let contents = fs::read_to_string(&file_path_buf)
         .map_err(|e| format!("Failed to read file: {}", e))?;
 
-    let mut history: ChatHistory = serde_json::from_str(&contents)
-        .map_err(|e| format!("Failed to parse history: {}", e))?;
+    // Detect format based on file extension
+    let extension = file_path_buf
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
 
-    // Migrate messages to ensure compatibility
-    for msg in &mut history.messages {
-        msg.migrate();
-    }
+    let history = match extension.to_lowercase().as_str() {
+        "json" => {
+            // Parse JSON format
+            let mut h: ChatHistory = serde_json::from_str(&contents)
+                .map_err(|e| format!("Failed to parse JSON: {}", e))?;
+            // Migrate messages to ensure compatibility
+            for msg in &mut h.messages {
+                msg.migrate();
+            }
+            h
+        }
+        "md" => {
+            // Parse Markdown format
+            parse_markdown_chat(&contents)?
+        }
+        "html" => {
+            // Parse HTML format
+            parse_html_chat(&contents)?
+        }
+        "txt" => {
+            // Parse plain text format
+            parse_text_chat(&contents)?
+        }
+        _ => {
+            return Err(format!("Unsupported file format: {}", extension));
+        }
+    };
 
     let message_count = history.messages.len();
 
