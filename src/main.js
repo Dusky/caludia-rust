@@ -6378,6 +6378,18 @@ async function loadExistingConfig() {
     console.error('Failed to load existing config:', error);
     addMessage('API not configured. Please configure your API settings.', false);
     showSettings();
+  } finally {
+    // Hide loading overlay after initialization is complete
+    const loadingOverlay = document.getElementById('app-loading');
+    if (loadingOverlay) {
+      setTimeout(() => {
+        loadingOverlay.classList.add('hidden');
+        // Remove from DOM after transition completes
+        setTimeout(() => {
+          loadingOverlay.remove();
+        }, 300);
+      }, 100);
+    }
   }
 }
 

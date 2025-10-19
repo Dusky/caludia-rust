@@ -36,6 +36,49 @@ body {
   height: 100vh;
 }
 
+/* App Loading Overlay */
+.app-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.app-loading.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.app-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.app-loading-text {
+  margin-top: 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .app-container {
   display: flex;
   flex-direction: column;
@@ -2280,14 +2323,14 @@ body.view-comfortable .message-content pre {
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 300px;
   max-width: 400px;
   pointer-events: auto;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
   animation: slideInRight 0.3s ease;
   transition: all 0.3s ease;
 }
@@ -2372,7 +2415,7 @@ body.view-comfortable .message-content pre {
 /* Toast Variants */
 .toast.success {
   border-color: rgba(34, 197, 94, 0.5);
-  background: rgba(34, 197, 94, 0.1);
+  background: rgba(34, 197, 94, 0.25);
 }
 
 .toast.success .toast-icon {
@@ -2385,7 +2428,7 @@ body.view-comfortable .message-content pre {
 
 .toast.error {
   border-color: rgba(239, 68, 68, 0.5);
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.25);
 }
 
 .toast.error .toast-icon {
@@ -2398,7 +2441,7 @@ body.view-comfortable .message-content pre {
 
 .toast.warning {
   border-color: rgba(249, 115, 22, 0.5);
-  background: rgba(249, 115, 22, 0.1);
+  background: rgba(249, 115, 22, 0.25);
 }
 
 .toast.warning .toast-icon {
@@ -2411,7 +2454,7 @@ body.view-comfortable .message-content pre {
 
 .toast.info {
   border-color: rgba(99, 102, 241, 0.5);
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(99, 102, 241, 0.25);
 }
 
 .toast.info .toast-icon {
