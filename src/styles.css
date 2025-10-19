@@ -36,6 +36,18 @@ body {
   height: 100vh;
 }
 
+/* Global select element theming */
+select {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
 /* App Loading Overlay */
 .app-loading {
   position: fixed;
@@ -275,6 +287,11 @@ body {
   font-size: 13px;
   cursor: pointer;
   outline: none;
+}
+
+.character-sort-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 
 .character-sort-select:focus {
