@@ -3276,3 +3276,431 @@ body.drag-over {
     width: 100%;
   }
 }
+
+/* ==========================================
+   LAYOUT MODES - COMPACT vs SPACIOUS
+   ========================================== */
+
+/* Default: Hide sidebars in compact mode */
+.layout-compact .left-sidebar,
+.layout-compact .right-sidebar {
+  display: none;
+}
+
+.layout-compact .app-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.layout-compact .main-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Spacious Mode: Three-column layout */
+.layout-spacious .app-container {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* When right sidebar is collapsed */
+.layout-spacious .app-container.right-sidebar-collapsed {
+  grid-template-columns: 240px 1fr 48px;
+}
+
+.layout-spacious .main-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ==========================================
+   LEFT SIDEBAR - CHARACTER PANEL
+   ========================================== */
+
+.left-sidebar {
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.layout-spacious .left-sidebar {
+  display: flex;
+}
+
+.sidebar-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sidebar-search {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.sidebar-search .search-icon {
+  position: absolute;
+  left: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-secondary);
+}
+
+.sidebar-search input {
+  width: 100%;
+  padding: 8px 8px 8px 28px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.sidebar-search input::placeholder {
+  color: var(--text-secondary);
+}
+
+.sidebar-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sidebar-sort {
+  padding: 8px 16px 12px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-sort label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.sidebar-sort-select {
+  flex: 1;
+  padding: 6px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.sidebar-sort-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.sidebar-sort-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.sidebar-character-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.sidebar-character-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: all 0.2s;
+}
+
+.sidebar-character-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.sidebar-character-item.active {
+  background: var(--accent);
+  color: white;
+}
+
+.sidebar-character-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  overflow: hidden;
+}
+
+.sidebar-character-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.sidebar-character-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-character-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-character-item.active .sidebar-character-name {
+  color: white;
+}
+
+/* ==========================================
+   RIGHT SIDEBAR - TOOLS PANEL
+   ========================================== */
+
+.right-sidebar {
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.layout-spacious .right-sidebar {
+  display: flex;
+}
+
+/* In spacious mode, move roleplay panel into right sidebar */
+.layout-spacious #roleplay-sidebar-tab {
+  display: block;
+}
+
+.layout-spacious .roleplay-panel {
+  position: static !important;
+  transform: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+}
+
+.layout-spacious .roleplay-panel .roleplay-header {
+  display: none;
+}
+
+.layout-spacious .roleplay-overlay {
+  display: none !important;
+}
+
+.right-sidebar.collapsed {
+  width: 48px;
+}
+
+.right-sidebar.collapsed .sidebar-header h3,
+.right-sidebar.collapsed .right-sidebar-content {
+  display: none;
+}
+
+.right-sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* ==========================================
+   SPACIOUS MODE - HEADER ADJUSTMENTS
+   ========================================== */
+
+/* Hide character controls in header when in spacious mode (they're in left sidebar) */
+.layout-spacious .character-display,
+.layout-spacious .character-controls,
+.layout-spacious .header-left-controls {
+  display: none;
+}
+
+/* Simplify header in spacious mode */
+.layout-spacious .app-header {
+  padding: 12px 20px;
+}
+
+.layout-spacious .header-content {
+  justify-content: flex-end;
+}
+
+/* ==========================================
+   CHAT VIEW ADJUSTMENTS
+   ========================================== */
+
+.layout-spacious #chat-view {
+  max-width: none;
+}
+
+.layout-spacious .messages-container {
+  padding: 20px 24px;
+}
+
+/* ==========================================
+   BRANCH LIST VIEW
+   ========================================== */
+
+.branch-list-view {
+  padding: 32px 24px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.branch-list-header {
+  margin-bottom: 24px;
+}
+
+.branch-list-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.branch-list-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.branch-list-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.branch-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.branch-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.branch-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-tertiary);
+}
+
+.branch-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.branch-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.branch-card-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--accent);
+  color: white;
+}
+
+.branch-card-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.branch-card-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================
+   RESPONSIVE - SPACIOUS MODE
+   ========================================== */
+
+@media (max-width: 1200px) {
+  .layout-spacious .app-container {
+    grid-template-columns: 200px 1fr 280px;
+  }
+
+  .layout-spacious .app-container.right-sidebar-collapsed {
+    grid-template-columns: 200px 1fr 48px;
+  }
+}
+
+@media (max-width: 968px) {
+  /* On smaller screens, fall back to compact-like behavior even in spacious mode */
+  .layout-spacious .app-container {
+    grid-template-columns: 1fr;
+  }
+
+  .layout-spacious .left-sidebar,
+  .layout-spacious .right-sidebar {
+    position: absolute;
+    z-index: 100;
+    height: 100vh;
+  }
+
+  .layout-spacious .left-sidebar {
+    left: 0;
+    width: 240px;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .layout-spacious .left-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .layout-spacious .right-sidebar {
+    right: 0;
+    width: 320px;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+  }
+
+  .layout-spacious .right-sidebar.open {
+    transform: translateX(0);
+  }
+}

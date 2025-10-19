@@ -1,5 +1,83 @@
 const { invoke } = window.__TAURI__.core;
 
+// ============================================================================
+// Plugin System - ClaudiaPluginAPI
+// ============================================================================
+
+// Hook registry for plugins
+const pluginHooks = {
+  beforeMessageSend: [],
+  afterMessageReceive: [],
+  onMessageDisplay: [],
+  registerAIBackend: [],
+  registerExportFormat: [],
+  modifyContext: [],
+  addUIComponent: []
+};
+
+// Global Plugin API exposed to plugins
+window.ClaudiaPluginAPI = {
+  // Hook registration
+  registerHook(hookName, callback) {
+    if (!pluginHooks[hookName]) {
+      console.error(`Unknown hook: ${hookName}`);
+      return false;
+    }
+    pluginHooks[hookName].push(callback);
+    console.log(`Plugin registered hook: ${hookName}`);
+    return true;
+  },
+
+  // Invoke Tauri backend commands
+  async invoke(command, params) {
+    return await invoke(command, params);
+  },
+
+  // Plugin configuration storage
+  async getConfig(pluginId, key) {
+    const config = localStorage.getItem(`plugin_${pluginId}_${key}`);
+    return config ? JSON.parse(config) : null;
+  },
+
+  setConfig(pluginId, key, value) {
+    localStorage.setItem(`plugin_${pluginId}_${key}`, JSON.stringify(value));
+  },
+
+  // Plugin logging
+  log(pluginId, message) {
+    console.log(`[Plugin: ${pluginId}]`, message);
+  },
+
+  error(pluginId, message) {
+    console.error(`[Plugin: ${pluginId}]`, message);
+  },
+
+  // Get current app state
+  getCurrentCharacter() {
+    return currentCharacter;
+  },
+
+  getChatHistory() {
+    return invoke('get_chat_history');
+  }
+};
+
+// Execute plugin hooks
+async function executeHook(hookName, data) {
+  const hooks = pluginHooks[hookName] || [];
+  let result = data;
+
+  for (const hook of hooks) {
+    try {
+      result = await hook(result);
+    } catch (error) {
+      console.error(`Error in plugin hook ${hookName}:`, error);
+    }
+  }
+
+  return result;
+}
+
 let messageInput;
 let messagesContainer;
 let chatForm;
@@ -1752,6 +1830,52 @@ function loadSavedFontSize() {
   applyFontSize(savedSize);
 }
 
+// Apply layout mode
+function applyLayoutMode(mode) {
+  const body = document.body;
+  const appContainer = document.querySelector('.app-container');
+
+  // Remove all layout mode classes
+  body.classList.remove('layout-compact', 'layout-spacious');
+  if (appContainer) {
+    appContainer.classList.remove('layout-compact', 'layout-spacious');
+  }
+
+  // Add the selected layout mode class
+  body.classList.add(`layout-${mode}`);
+  if (appContainer) {
+    appContainer.classList.add(`layout-${mode}`);
+  }
+
+  // Move roleplay panel into right sidebar for spacious mode
+  const roleplayPanel = document.getElementById('roleplay-panel');
+  const roleplaySidebarTab = document.getElementById('roleplay-sidebar-tab');
+
+  if (mode === 'spacious' && roleplayPanel && roleplaySidebarTab) {
+    // Move roleplay panel content into right sidebar
+    roleplaySidebarTab.appendChild(roleplayPanel);
+  } else if (mode === 'compact' && roleplayPanel) {
+    // Move it back to its original location (before the toast container)
+    const toastContainer = document.getElementById('toast-container');
+    if (toastContainer && toastContainer.parentNode) {
+      toastContainer.parentNode.insertBefore(roleplayPanel, toastContainer);
+    }
+  }
+
+  // Store preference
+  localStorage.setItem('claudia-layout-mode', mode);
+}
+
+// Load saved layout mode
+function loadSavedLayoutMode() {
+  const savedMode = localStorage.getItem('claudia-layout-mode') || 'spacious';
+  const layoutModeSelect = document.getElementById('layout-mode-select');
+  if (layoutModeSelect) {
+    layoutModeSelect.value = savedMode;
+  }
+  applyLayoutMode(savedMode);
+}
+
 // Export chat history
 async function exportChatHistory() {
   try {
@@ -2807,6 +2931,9 @@ async function handleContinueMessage(messageDiv) {
 
 // Extract message sending logic into separate function
 async function sendMessage(message, isRegenerate = false) {
+  // Execute beforeMessageSend hook
+  message = await executeHook('beforeMessageSend', message);
+
   if (!isRegenerate) {
     addMessage(message, true, false, Date.now());
   }
@@ -2931,7 +3058,11 @@ async function sendMessage(message, isRegenerate = false) {
     showTypingIndicator();
 
     try {
-      const response = await invoke('chat', { message });
+      let response = await invoke('chat', { message });
+
+      // Execute afterMessageReceive hook
+      response = await executeHook('afterMessageReceive', response);
+
       removeTypingIndicator();
       addMessage(response, false);
       setStatus('Response complete', 'success');
@@ -3048,6 +3179,11 @@ function setupTabs() {
       // Add active class to clicked tab and corresponding content
       btn.classList.add('active');
       document.getElementById(`${targetTab}-tab`).classList.add('active');
+
+      // Load plugins list when plugins tab is opened
+      if (targetTab === 'plugins') {
+        loadPluginsList();
+      }
     });
   });
 
@@ -3294,6 +3430,14 @@ function setupAppControls() {
     });
   }
 
+  // Setup layout mode selector
+  const layoutModeSelect = document.getElementById('layout-mode-select');
+  if (layoutModeSelect) {
+    layoutModeSelect.addEventListener('change', (e) => {
+      applyLayoutMode(e.target.value);
+    });
+  }
+
   // Setup roleplay panel buttons
   const addWorldInfoBtn = document.getElementById('add-worldinfo-btn');
   if (addWorldInfoBtn) {
@@ -3337,7 +3481,194 @@ function setupAppControls() {
   document.getElementById('delete-preset-btn').addEventListener('click', deletePreset);
   document.getElementById('duplicate-preset-btn').addEventListener('click', duplicatePreset);
   document.getElementById('restore-preset-btn').addEventListener('click', restoreBuiltinPreset);
+
+  // Setup plugin controls
+  const installPluginBtn = document.getElementById('install-plugin-btn');
+  if (installPluginBtn) {
+    installPluginBtn.addEventListener('click', handleInstallPlugin);
+  }
+
+  // Setup sidebar controls (spacious layout)
+  const sidebarNewCharBtn = document.getElementById('sidebar-new-character-btn');
+  if (sidebarNewCharBtn) {
+    sidebarNewCharBtn.addEventListener('click', handleNewCharacter);
+  }
+
+  const sidebarSearch = document.getElementById('sidebar-character-search');
+  if (sidebarSearch) {
+    sidebarSearch.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase();
+      const items = document.querySelectorAll('.sidebar-character-item');
+      items.forEach(item => {
+        const name = item.querySelector('.sidebar-character-name').textContent.toLowerCase();
+        if (name.includes(searchTerm)) {
+          item.style.display = '';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+  }
+
+  // Setup sidebar sort
+  const sidebarSort = document.getElementById('sidebar-character-sort');
+  if (sidebarSort) {
+    // Load saved sort preference
+    const savedSort = localStorage.getItem('sidebar-character-sort') || 'name-asc';
+    sidebarSort.value = savedSort;
+
+    sidebarSort.addEventListener('change', (e) => {
+      localStorage.setItem('sidebar-character-sort', e.target.value);
+      populateSidebarCharacterList(allCharacters);
+    });
+  }
+
+  // Setup right sidebar collapse toggle
+  const toggleRightSidebar = document.getElementById('toggle-right-sidebar');
+  if (toggleRightSidebar) {
+    toggleRightSidebar.addEventListener('click', () => {
+      const rightSidebar = document.querySelector('.right-sidebar');
+      const appContainer = document.querySelector('.app-container');
+      if (rightSidebar && appContainer) {
+        rightSidebar.classList.toggle('collapsed');
+        appContainer.classList.toggle('right-sidebar-collapsed');
+      }
+    });
+  }
 }
+
+// Plugin Management
+async function handleInstallPlugin() {
+  const urlInput = document.getElementById('plugin-url-input');
+  const repoUrl = urlInput.value.trim();
+
+  if (!repoUrl) {
+    await window.__TAURI__.dialog.message('Please enter a GitHub repository URL', { title: 'Plugin Installation', kind: 'error' });
+    return;
+  }
+
+  try {
+    await invoke('install_plugin', { repoUrl });
+    await window.__TAURI__.dialog.message('Plugin installed successfully! Enable it in the plugins list below.', { title: 'Success', kind: 'info' });
+    urlInput.value = '';
+    await loadPluginsList();
+  } catch (error) {
+    await window.__TAURI__.dialog.message(`Failed to install plugin: ${error}`, { title: 'Installation Failed', kind: 'error' });
+    console.error('Plugin installation error:', error);
+  }
+}
+
+async function loadPluginsList() {
+  const pluginsList = document.getElementById('plugins-list');
+  if (!pluginsList) return;
+
+  try {
+    const plugins = await invoke('list_plugins');
+
+    if (plugins.length === 0) {
+      pluginsList.innerHTML = '<div style="color: var(--text-secondary); padding: 12px; text-align: center;">No plugins installed</div>';
+      return;
+    }
+
+    pluginsList.innerHTML = plugins.map(plugin => `
+      <div class="plugin-card" style="
+        background: var(--background-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px;
+      ">
+        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+          <div>
+            <div style="font-weight: 600; color: var(--text-primary);">${plugin.manifest.name}</div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">
+              v${plugin.manifest.version} by ${plugin.manifest.author}
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <input
+                type="checkbox"
+                ${plugin.enabled ? 'checked' : ''}
+                onchange="handleTogglePlugin('${plugin.manifest.id}', this.checked)"
+              />
+              <span style="font-size: 12px; color: var(--text-secondary);">Enabled</span>
+            </label>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: 8px;">
+          ${plugin.manifest.description}
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 8px;">
+          <button
+            onclick="handleUpdatePlugin('${plugin.manifest.id}')"
+            class="btn-secondary"
+            style="font-size: 11px; padding: 4px 8px;"
+          >
+            Update
+          </button>
+          <button
+            onclick="handleUninstallPlugin('${plugin.manifest.id}')"
+            class="btn-secondary"
+            style="font-size: 11px; padding: 4px 8px; color: var(--error-color);"
+          >
+            Uninstall
+          </button>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Failed to load plugins:', error);
+    pluginsList.innerHTML = '<div style="color: var(--error-color); padding: 12px;">Failed to load plugins</div>';
+  }
+}
+
+async function handleTogglePlugin(pluginId, enabled) {
+  try {
+    if (enabled) {
+      await invoke('enable_plugin', { pluginId });
+      await window.__TAURI__.dialog.message('Plugin enabled! Please reload the app for changes to take effect.', { title: 'Plugin Enabled', kind: 'info' });
+    } else {
+      await invoke('disable_plugin', { pluginId });
+      await window.__TAURI__.dialog.message('Plugin disabled! Please reload the app for changes to take effect.', { title: 'Plugin Disabled', kind: 'info' });
+    }
+    await loadPluginsList();
+  } catch (error) {
+    await window.__TAURI__.dialog.message(`Failed to ${enabled ? 'enable' : 'disable'} plugin: ${error}`, { title: 'Error', kind: 'error' });
+    console.error('Plugin toggle error:', error);
+    await loadPluginsList();
+  }
+}
+
+async function handleUpdatePlugin(pluginId) {
+  try {
+    await invoke('update_plugin', { pluginId });
+    await window.__TAURI__.dialog.message('Plugin updated successfully! Please reload the app for changes to take effect.', { title: 'Success', kind: 'info' });
+    await loadPluginsList();
+  } catch (error) {
+    await window.__TAURI__.dialog.message(`Failed to update plugin: ${error}`, { title: 'Update Failed', kind: 'error' });
+    console.error('Plugin update error:', error);
+  }
+}
+
+async function handleUninstallPlugin(pluginId) {
+  const confirmed = await window.__TAURI__.dialog.confirm('Are you sure you want to uninstall this plugin? This cannot be undone.', { title: 'Confirm Uninstall', kind: 'warning' });
+
+  if (!confirmed) return;
+
+  try {
+    await invoke('uninstall_plugin', { pluginId });
+    await window.__TAURI__.dialog.message('Plugin uninstalled successfully!', { title: 'Success', kind: 'info' });
+    await loadPluginsList();
+  } catch (error) {
+    await window.__TAURI__.dialog.message(`Failed to uninstall plugin: ${error}`, { title: 'Uninstall Failed', kind: 'error' });
+    console.error('Plugin uninstall error:', error);
+  }
+}
+
+// Make plugin functions globally accessible for onclick handlers
+window.handleTogglePlugin = handleTogglePlugin;
+window.handleUpdatePlugin = handleUpdatePlugin;
+window.handleUninstallPlugin = handleUninstallPlugin;
 
 // Keyboard shortcuts
 function setupKeyboardShortcuts() {
@@ -3607,6 +3938,217 @@ function populateCharacterDropdown(characters) {
   });
 }
 
+// Populate sidebar character list (for spacious layout)
+function populateSidebarCharacterList(characters) {
+  const sidebarList = document.getElementById('sidebar-character-list');
+  if (!sidebarList) return;
+
+  // Use sidebar-specific sort setting
+  const sortSelect = document.getElementById('sidebar-character-sort');
+  const sortValue = sortSelect ? sortSelect.value : (localStorage.getItem('sidebar-character-sort') || 'name-asc');
+
+  let sorted = [...characters];
+
+  switch (sortValue) {
+    case 'name-asc':
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case 'name-desc':
+      sorted.sort((a, b) => b.name.localeCompare(a.name));
+      break;
+    case 'date-desc':
+      sorted.sort((a, b) => (b.created_at || 0) - (a.created_at || 0));
+      break;
+    case 'date-asc':
+      sorted.sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+      break;
+  }
+
+  sidebarList.innerHTML = '';
+
+  sorted.forEach(char => {
+    const item = document.createElement('div');
+    item.className = 'sidebar-character-item';
+    item.dataset.characterId = char.id;
+
+    if (currentCharacter && currentCharacter.id === char.id) {
+      item.classList.add('active');
+    }
+
+    const avatar = document.createElement('div');
+    avatar.className = 'sidebar-character-avatar';
+
+    if (char.avatar) {
+      const img = document.createElement('img');
+      img.src = char.avatar;
+      img.alt = char.name;
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = char.name.charAt(0).toUpperCase();
+    }
+
+    const info = document.createElement('div');
+    info.className = 'sidebar-character-info';
+
+    const name = document.createElement('div');
+    name.className = 'sidebar-character-name';
+    name.textContent = char.name;
+
+    info.appendChild(name);
+    item.appendChild(avatar);
+    item.appendChild(info);
+
+    // Handle character selection - show branch list
+    item.addEventListener('click', async () => {
+      updateActiveCharacterInSidebar(char.id);
+      await showBranchListForCharacter(char);
+    });
+
+    sidebarList.appendChild(item);
+  });
+}
+
+// Update active character in sidebar
+function updateActiveCharacterInSidebar(characterId) {
+  const items = document.querySelectorAll('.sidebar-character-item');
+  items.forEach(item => {
+    if (item.dataset.characterId === characterId) {
+      item.classList.add('active');
+    } else {
+      item.classList.remove('active');
+    }
+  });
+}
+
+// Show branch list for a character
+async function showBranchListForCharacter(character) {
+  try {
+    // Set this character as active temporarily to load their branches
+    await invoke('set_active_character', { characterId: character.id });
+
+    // Get branches for this character
+    const branches = await invoke('list_branches');
+    const activeBranchId = await invoke('get_active_branch_id');
+
+    // Clear the chat area and show branch list
+    messagesContainer.innerHTML = '';
+
+    const branchListView = document.createElement('div');
+    branchListView.className = 'branch-list-view';
+
+    branchListView.innerHTML = `
+      <div class="branch-list-header">
+        <h2>${character.name}</h2>
+        <p>Select a chat branch to continue</p>
+      </div>
+
+      <div class="branch-list-actions">
+        <button class="btn-primary" id="new-branch-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          New Chat
+        </button>
+      </div>
+
+      <div class="branch-list" id="branch-list">
+        <!-- Branches will be inserted here -->
+      </div>
+    `;
+
+    messagesContainer.appendChild(branchListView);
+
+    // Populate branches
+    const branchList = document.getElementById('branch-list');
+
+    branches.forEach(branch => {
+      const branchCard = document.createElement('div');
+      branchCard.className = 'branch-card';
+
+      const isActive = branch.id === activeBranchId;
+      const messageCount = branch.message_count || 0;
+      const createdDate = branch.created_at ? new Date(branch.created_at * 1000).toLocaleDateString() : 'Unknown';
+
+      branchCard.innerHTML = `
+        <div class="branch-card-header">
+          <div class="branch-card-name">${branch.name}</div>
+          ${isActive ? '<div class="branch-card-badge">Current</div>' : ''}
+        </div>
+        <div class="branch-card-meta">
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            ${createdDate}
+          </div>
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7h10M7 2v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            ${messageCount} messages
+          </div>
+        </div>
+      `;
+
+      // Handle branch selection
+      branchCard.addEventListener('click', async () => {
+        await loadBranch(character.id, branch.id);
+      });
+
+      branchList.appendChild(branchCard);
+    });
+
+    // Handle new branch creation
+    document.getElementById('new-branch-btn').addEventListener('click', async () => {
+      const branchName = await window.__TAURI__.dialog.confirm('Create a new chat branch?', {
+        title: 'New Chat',
+        kind: 'info'
+      });
+
+      if (branchName) {
+        try {
+          // Create branch from message 0 (empty branch)
+          const newBranch = await invoke('create_branch', {
+            messageIndex: 0,
+            branchName: `Chat ${branches.length + 1}`
+          });
+          await loadBranch(character.id, newBranch.id);
+        } catch (error) {
+          console.error('Failed to create branch:', error);
+          await window.__TAURI__.dialog.message(`Failed to create branch: ${error}`, {
+            title: 'Error',
+            kind: 'error'
+          });
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load branches:', error);
+    addMessage(`Failed to load branches: ${error}`, false);
+  }
+}
+
+// Load a specific branch for a character
+async function loadBranch(characterId, branchId) {
+  try {
+    setStatus('Loading chat...', 'default');
+    await invoke('set_active_character', { characterId });
+    await invoke('switch_branch', { branchId });
+    await loadCharacters();
+    setStatus('Chat loaded', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to load branch:', error);
+    setStatus('Failed to load chat', 'error');
+    await window.__TAURI__.dialog.message(`Failed to load chat: ${error}`, {
+      title: 'Error',
+      kind: 'error'
+    });
+  }
+}
+
 // Setup character filter panel
 function setupCharacterFilter() {
   const filterBtn = document.getElementById('character-filter-btn');
@@ -3658,6 +4200,9 @@ async function loadCharacters() {
 
     // Populate dropdown with filtered/sorted list
     populateCharacterDropdown(characters);
+
+    // Populate sidebar character list (for spacious layout)
+    populateSidebarCharacterList(characters);
 
     const activeCharacter = await invoke('get_character');
     console.log('Active character:', activeCharacter);
@@ -5544,6 +6089,20 @@ window.addEventListener('DOMContentLoaded', () => {
   characterHeaderName = document.getElementById('character-header-name');
   newCharacterBtn = document.getElementById('new-character-btn');
 
+  // Load and execute plugins
+  (async () => {
+    try {
+      const pluginCode = await invoke('load_plugins');
+      if (pluginCode) {
+        // Execute plugin code
+        eval(pluginCode);
+        console.log('Plugins loaded successfully');
+      }
+    } catch (error) {
+      console.error('Failed to load plugins:', error);
+    }
+  })();
+
   chatForm.addEventListener('submit', handleSubmit);
   document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
   document.getElementById('character-form').addEventListener('submit', handleSaveCharacter);
@@ -5706,6 +6265,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSavedTheme();
   loadSavedViewMode();
   loadSavedFontSize();
+  loadSavedLayoutMode();
 
   // Setup auto-save for message input
   setupAutoSave();

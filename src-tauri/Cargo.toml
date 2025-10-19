@@ -34,4 +34,6 @@ image = "0.24"
 regex = "1"
 chrono = "0.4"
 tiktoken-rs = "0.5"
+git2 = "0.18"
+dirs = "5.0"
 

@@ -1,3 +1,5 @@
+mod plugin_manager;
+
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -3648,6 +3650,50 @@ fn get_branch_info(branch_id: String) -> Result<Branch, String> {
         .ok_or_else(|| format!("Branch '{}' not found", branch_id))
 }
 
+// ============================================================================
+// Plugin System Commands
+// ============================================================================
+
+#[tauri::command]
+fn install_plugin(repo_url: String) -> Result<plugin_manager::Plugin, String> {
+    plugin_manager::install_from_git(&repo_url)
+}
+
+#[tauri::command]
+fn list_plugins() -> Vec<plugin_manager::Plugin> {
+    plugin_manager::list_plugins()
+}
+
+#[tauri::command]
+fn enable_plugin(plugin_id: String) -> Result<(), String> {
+    plugin_manager::enable_plugin(&plugin_id)
+}
+
+#[tauri::command]
+fn disable_plugin(plugin_id: String) -> Result<(), String> {
+    plugin_manager::disable_plugin(&plugin_id)
+}
+
+#[tauri::command]
+fn uninstall_plugin(plugin_id: String) -> Result<(), String> {
+    plugin_manager::uninstall_plugin(&plugin_id)
+}
+
+#[tauri::command]
+fn update_plugin(plugin_id: String) -> Result<(), String> {
+    plugin_manager::update_plugin(&plugin_id)
+}
+
+#[tauri::command]
+fn get_plugin(plugin_id: String) -> Option<plugin_manager::Plugin> {
+    plugin_manager::get_plugin(&plugin_id)
+}
+
+#[tauri::command]
+fn load_plugins() -> Result<String, String> {
+    plugin_manager::load_enabled_plugins()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -3718,7 +3764,15 @@ pub fn run() {
             list_branches,
             rename_branch,
             get_active_branch_id,
-            get_branch_info
+            get_branch_info,
+            install_plugin,
+            list_plugins,
+            enable_plugin,
+            disable_plugin,
+            uninstall_plugin,
+            update_plugin,
+            get_plugin,
+            load_plugins
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

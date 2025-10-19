@@ -15,7 +15,9 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "WebSearch",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npm run tauri:build:*)",
+      "Bash(git restore:*)"
     ],
     "deny": [],
     "ask": []

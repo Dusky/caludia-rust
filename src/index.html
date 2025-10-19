@@ -13,7 +13,45 @@
 
   <body>
     <div class="app-container">
-      <header class="app-header">
+      <!-- Left Sidebar - Character Panel (Spacious Mode) -->
+      <aside class="left-sidebar">
+        <div class="sidebar-header">
+          <h3>Characters</h3>
+          <button id="sidebar-new-character-btn" class="icon-btn" title="New Character">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="sidebar-search">
+          <svg class="search-icon" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 8L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <input
+            type="text"
+            id="sidebar-character-search"
+            placeholder="Search characters..."
+            autocomplete="off"
+          />
+        </div>
+        <div class="sidebar-sort">
+          <label for="sidebar-character-sort">Sort:</label>
+          <select id="sidebar-character-sort" class="sidebar-sort-select">
+            <option value="name-asc">Name (A-Z)</option>
+            <option value="name-desc">Name (Z-A)</option>
+            <option value="date-desc">Newest First</option>
+            <option value="date-asc">Oldest First</option>
+          </select>
+        </div>
+        <div id="sidebar-character-list" class="sidebar-character-list">
+          <!-- Character list will be populated here -->
+        </div>
+      </aside>
+
+      <!-- Main Panel -->
+      <div class="main-panel">
+        <header class="app-header">
         <div class="header-content">
           <div class="header-left-controls">
             <button id="roleplay-btn" class="icon-btn" title="Roleplay Tools">
@@ -412,6 +450,7 @@
           <button class="tab-btn active" data-tab="api">API</button>
           <button class="tab-btn" data-tab="character">Character</button>
           <button class="tab-btn" data-tab="appearance">Appearance</button>
+          <button class="tab-btn" data-tab="plugins">Plugins</button>
         </div>
 
         <div id="api-tab" class="tab-content active">
@@ -722,6 +761,15 @@
             </div>
 
             <div class="form-group">
+              <label for="layout-mode-select">Layout Mode</label>
+              <select id="layout-mode-select" class="layout-mode-select">
+                <option value="spacious">Spacious - Split panel with sidebar (Default)</option>
+                <option value="compact">Compact - Classic single-panel layout</option>
+              </select>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Choose your preferred UI layout</small>
+            </div>
+
+            <div class="form-group">
               <label for="font-size-slider">
                 Font Size: <span id="font-size-value">100%</span>
               </label>
@@ -750,6 +798,35 @@
                   <div class="theme-preview-avatar"></div>
                   <div class="theme-preview-content">Assistant response</div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="plugins-tab" class="tab-content">
+          <div class="settings-form">
+            <div class="form-group">
+              <label>Install Plugin from GitHub</label>
+              <div style="display: flex; gap: 8px;">
+                <input
+                  type="text"
+                  id="plugin-url-input"
+                  placeholder="https://github.com/username/plugin-name"
+                  style="flex: 1;"
+                />
+                <button type="button" id="install-plugin-btn" class="btn-secondary">
+                  Install
+                </button>
+              </div>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">
+                Enter a GitHub repository URL to install a plugin
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label>Installed Plugins</label>
+              <div id="plugins-list" style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+                <!-- Plugins will be listed here -->
               </div>
             </div>
           </div>
@@ -825,6 +902,26 @@
           </div>
         </div>
       </footer>
+      </div>
+      <!-- End Main Panel -->
+
+      <!-- Right Sidebar - Roleplay Tools (Spacious Mode) -->
+      <aside class="right-sidebar">
+        <div class="sidebar-header">
+          <h3>Roleplay Tools</h3>
+          <button id="toggle-right-sidebar" class="icon-btn" title="Collapse">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M10 4L6 8L10 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="right-sidebar-content">
+          <!-- Roleplay panel will be moved here in spacious mode -->
+          <div id="roleplay-sidebar-tab">
+            <!-- Roleplay tools will be moved here -->
+          </div>
+        </div>
+      </aside>
     </div>
 
     <!-- Toast Container -->
