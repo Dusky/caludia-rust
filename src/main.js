@@ -218,32 +218,44 @@ function updateUndoRedoUI() {
 
 // Undo action implementations
 async function undoMessageDelete(action) {
-  // TODO: Full implementation requires backend support to re-insert deleted messages
-  // For now, inform user and suggest using branches
-  showInfo('Undo Not Yet Implemented', 'Message deletion undo requires backend support (coming soon). Use chat branches to explore different conversation paths.');
-  throw new Error('Undo for message deletion not yet implemented');
+  // Insert message back at the original index
+  await invoke('insert_message_at_index', {
+    messageIndex: action.messageIndex,
+    message: action.messageData
+  });
+
+  // Reload chat history to reflect the change
+  await loadChatHistory();
+  await updateTokenCount();
 }
 
 async function redoMessageDelete(action) {
+  // Re-delete the message at the index
   await invoke('delete_message_at_index', { messageIndex: action.messageIndex });
-  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
-  if (allMessages[action.messageIndex]) {
-    allMessages[action.messageIndex].remove();
-  }
+
+  // Reload chat history to reflect the change
+  await loadChatHistory();
   await updateTokenCount();
 }
 
 async function undoMessageEdit(action) {
-  // TODO: Full implementation requires backend support to restore previous message state
-  // For now, inform user and suggest using branches
-  showInfo('Undo Not Yet Implemented', 'Message edit undo requires backend support (coming soon). Use chat branches to save conversation states before editing.');
-  throw new Error('Undo for message edit not yet implemented');
+  // Restore the original messages from the edit point
+  await invoke('replace_messages_from_index', {
+    startIndex: action.messageIndex,
+    messages: action.originalMessages
+  });
+
+  // Reload chat history to reflect the change
+  await loadChatHistory();
+  await updateTokenCount();
 }
 
 async function redoMessageEdit(action) {
+  // Truncate from the edit point and resend the edited message
   await invoke('truncate_history_from', { index: action.messageIndex });
   await loadChatHistory();
   await sendMessage(action.newContent);
+  await updateTokenCount();
 }
 
 async function undoCharacterField(action) {
@@ -2483,14 +2495,9 @@ async function handleEditMessage(messageDiv, originalContent) {
     saveBtn.textContent = 'Saving...';
 
     try {
-      // TODO: Record undo action when backend support is added
-      // recordUndoAction({
-      //   type: UndoActionType.MESSAGE_EDIT,
-      //   description: 'Edit message',
-      //   messageIndex,
-      //   originalContent,
-      //   newContent
-      // });
+      // Get all messages from this point onward for undo
+      const chatHistory = await invoke('get_chat_history');
+      const messagesToRestore = chatHistory.slice(messageIndex);
 
       // Truncate history from this point
       await invoke('truncate_history_from', { index: messageIndex });
@@ -2502,6 +2509,15 @@ async function handleEditMessage(messageDiv, originalContent) {
 
       // Send the edited message
       await sendMessage(newContent);
+
+      // Record undo action after successful edit
+      recordUndoAction({
+        type: UndoActionType.MESSAGE_EDIT,
+        description: 'Edit message',
+        messageIndex,
+        originalMessages: messagesToRestore,
+        newContent
+      });
     } catch (error) {
       console.error('Failed to edit message:', error);
       contentDiv.innerHTML = originalHTML;
@@ -2712,21 +2728,22 @@ async function handleDeleteMessage(messageDiv) {
   }
 
   try {
-    // TODO: Record undo action when backend support is added
-    // const contentDiv = messageDiv.querySelector('.message-content');
-    // const content = contentDiv ? contentDiv.textContent.trim() : '';
-    // const isUser = messageDiv.classList.contains('user-message');
-    // recordUndoAction({
-    //   type: UndoActionType.MESSAGE_DELETE,
-    //   description: 'Delete message',
-    //   messageIndex,
-    //   content,
-    //   isUser
-    // });
+    // Get message data before deleting for undo
+    const messageData = await invoke('get_message_at_index', { messageIndex });
 
+    // Delete the message
     await invoke('delete_message_at_index', { messageIndex });
     messageDiv.remove();
     await updateTokenCount();
+
+    // Record undo action
+    recordUndoAction({
+      type: UndoActionType.MESSAGE_DELETE,
+      description: 'Delete message',
+      messageIndex,
+      messageData
+    });
+
     showSuccess('Message Deleted', 'The message has been deleted successfully.');
   } catch (error) {
     console.error('Failed to delete message:', error);

@@ -1884,6 +1884,53 @@ fn toggle_message_hidden(message_index: usize) -> Result<bool, String> {
     Ok(new_state)
 }
 
+// Undo/Redo support commands
+#[tauri::command]
+fn get_message_at_index(message_index: usize) -> Result<Message, String> {
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    Ok(history.messages[message_index].clone())
+}
+
+#[tauri::command]
+fn insert_message_at_index(message_index: usize, message: Message) -> Result<(), String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index > history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    history.messages.insert(message_index, message);
+    save_history(&character.id, &history)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn replace_messages_from_index(start_index: usize, messages: Vec<Message>) -> Result<(), String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if start_index > history.messages.len() {
+        return Err(format!("Start index {} out of bounds", start_index));
+    }
+
+    // Remove all messages from start_index onward
+    history.messages.truncate(start_index);
+
+    // Add the new messages
+    history.messages.extend(messages);
+    save_history(&character.id, &history)?;
+
+    Ok(())
+}
+
 #[tauri::command]
 async fn continue_message(message_index: usize) -> Result<String, String> {
     let config = load_config().ok_or_else(|| "API not configured".to_string())?;
@@ -3715,6 +3762,9 @@ pub fn run() {
             delete_message_at_index,
             toggle_message_pin,
             toggle_message_hidden,
+            get_message_at_index,
+            insert_message_at_index,
+            replace_messages_from_index,
             continue_message,
             regenerate_at_index,
             add_swipe_to_last_assistant,
