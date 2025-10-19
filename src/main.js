@@ -1446,6 +1446,13 @@ function showMessageContextMenu(e, message) {
     action: () => copyMessageText(message)
   });
 
+  // Export message
+  items.push({
+    icon: '<svg viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 5l3-3 3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    text: 'Export Message',
+    action: () => exportSingleMessage(message)
+  });
+
   items.push({ separator: true });
 
   // Edit message
@@ -1888,22 +1895,271 @@ function loadSavedLayoutMode() {
   applyLayoutMode(savedMode);
 }
 
-// Export chat history
+// Show export modal
+function showExportModal() {
+  const exportModal = document.getElementById('export-modal');
+  if (exportModal) {
+    exportModal.style.display = 'flex';
+  }
+}
+
+// Hide export modal
+function hideExportModal() {
+  const exportModal = document.getElementById('export-modal');
+  if (exportModal) {
+    exportModal.style.display = 'none';
+  }
+}
+
+// Export chat history (opens export modal)
 async function exportChatHistory() {
+  showExportModal();
+}
+
+// Export as JSON
+async function exportAsJSON() {
   try {
-    setStatus('Exporting chat...', 'default');
+    setStatus('Exporting as JSON...', 'default');
+    hideExportModal();
     const filePath = await invoke('export_chat_history');
     setStatus('Ready');
-    showSuccess('Chat Exported', `Successfully exported to ${filePath}`, 4000);
-    console.log('Chat exported to:', filePath);
+    showSuccess('Exported as JSON', `Successfully exported to ${filePath}`, 4000);
   } catch (error) {
     console.error('Export failed:', error);
     if (error && !error.toString().includes('cancelled')) {
       setStatus('Ready');
-      showError('Export Failed', `Failed to export chat: ${error}`);
+      showError('Export Failed', `Failed to export: ${error}`);
     } else {
       setStatus('Ready');
     }
+  }
+}
+
+// Export as HTML
+async function exportAsHTML() {
+  try {
+    setStatus('Exporting as HTML...', 'default');
+    hideExportModal();
+    const filePath = await invoke('export_chat_as_html');
+    setStatus('Ready');
+    showSuccess('Exported as HTML', `Successfully exported to ${filePath}`, 4000);
+  } catch (error) {
+    console.error('Export failed:', error);
+    if (error && !error.toString().includes('cancelled')) {
+      setStatus('Ready');
+      showError('Export Failed', `Failed to export: ${error}`);
+    } else {
+      setStatus('Ready');
+    }
+  }
+}
+
+// Export as Markdown
+async function exportAsMarkdown() {
+  try {
+    setStatus('Exporting as Markdown...', 'default');
+    hideExportModal();
+    const filePath = await invoke('export_chat_as_markdown');
+    setStatus('Ready');
+    showSuccess('Exported as Markdown', `Successfully exported to ${filePath}`, 4000);
+  } catch (error) {
+    console.error('Export failed:', error);
+    if (error && !error.toString().includes('cancelled')) {
+      setStatus('Ready');
+      showError('Export Failed', `Failed to export: ${error}`);
+    } else {
+      setStatus('Ready');
+    }
+  }
+}
+
+// Export as Plain Text
+async function exportAsText() {
+  try {
+    setStatus('Exporting as text...', 'default');
+    hideExportModal();
+    const filePath = await invoke('export_chat_as_text');
+    setStatus('Ready');
+    showSuccess('Exported as Text', `Successfully exported to ${filePath}`, 4000);
+  } catch (error) {
+    console.error('Export failed:', error);
+    if (error && !error.toString().includes('cancelled')) {
+      setStatus('Ready');
+      showError('Export Failed', `Failed to export: ${error}`);
+    } else {
+      setStatus('Ready');
+    }
+  }
+}
+
+// Export as PDF (generates HTML then prints)
+async function exportAsPDF() {
+  try {
+    setStatus('Generating PDF...', 'default');
+    hideExportModal();
+
+    // Get chat history and format as HTML
+    const history = await invoke('get_chat_history');
+    const character = currentCharacter;
+
+    // Create a formatted HTML page for printing
+    const htmlContent = generatePrintableHTML(history, character);
+
+    // Open print dialog with the formatted content
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+
+    // Wait a moment for content to load, then trigger print
+    setTimeout(() => {
+      printWindow.print();
+    }, 250);
+
+    setStatus('Ready');
+    showInfo('PDF Export', 'Print dialog opened. Select "Save as PDF" to create a PDF file.');
+  } catch (error) {
+    console.error('PDF export failed:', error);
+    setStatus('Ready');
+    showError('Export Failed', `Failed to generate PDF: ${error}`);
+  }
+}
+
+// Generate printable HTML content
+function generatePrintableHTML(history, character) {
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Chat with ${character.name}</title>
+      <style>
+        @page { margin: 2cm; }
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          max-width: 800px;
+          margin: 0 auto;
+          padding: 20px;
+          background: white;
+          color: #333;
+        }
+        h1 {
+          color: #333;
+          border-bottom: 2px solid #ddd;
+          padding-bottom: 10px;
+          margin-bottom: 24px;
+        }
+        .message {
+          margin: 20px 0;
+          padding: 15px;
+          border-radius: 8px;
+          background: #f9f9f9;
+          border-left: 4px solid #ddd;
+          page-break-inside: avoid;
+        }
+        .message.user {
+          border-left-color: #4CAF50;
+        }
+        .message.assistant {
+          border-left-color: #2196F3;
+        }
+        .role {
+          font-weight: bold;
+          margin-bottom: 8px;
+          color: #555;
+        }
+        .content {
+          line-height: 1.6;
+          color: #333;
+          white-space: pre-wrap;
+        }
+        @media print {
+          body { background: white; }
+          .message { box-shadow: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>Chat with ${character.name}</h1>
+  `;
+
+  for (const msg of history) {
+    const roleClass = msg.role === 'user' ? 'user' : 'assistant';
+    const roleLabel = msg.role === 'user' ? 'User' : 'Assistant';
+    const content = (msg.swipes && msg.swipes.length > 0
+      ? msg.swipes[msg.current_swipe || 0]
+      : msg.content
+    ).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    html += `
+      <div class="message ${roleClass}">
+        <div class="role">${roleLabel}</div>
+        <div class="content">${content}</div>
+      </div>
+    `;
+  }
+
+  html += `
+    </body>
+    </html>
+  `;
+
+  return html;
+}
+
+// Copy conversation to clipboard
+async function copyToClipboard() {
+  try {
+    setStatus('Copying to clipboard...', 'default');
+    hideExportModal();
+
+    // Get chat history
+    const history = await invoke('get_chat_history');
+    const character = currentCharacter;
+
+    // Build formatted text
+    let text = `Chat with ${character.name}\n`;
+    text += '='.repeat(40) + '\n\n';
+
+    for (const msg of history) {
+      const role = msg.role === 'user' ? 'User' : 'Assistant';
+      const content = msg.swipes && msg.swipes.length > 0
+        ? msg.swipes[msg.current_swipe || 0]
+        : msg.content;
+      text += `${role}: ${content}\n\n`;
+    }
+
+    // Copy to clipboard using Clipboard API
+    await navigator.clipboard.writeText(text);
+
+    setStatus('Ready');
+    showSuccess('Copied to Clipboard', 'Conversation copied to clipboard successfully!');
+  } catch (error) {
+    console.error('Copy to clipboard failed:', error);
+    setStatus('Ready');
+    showError('Copy Failed', `Failed to copy to clipboard: ${error}`);
+  }
+}
+
+// Export a single message to clipboard
+async function exportSingleMessage(messageDiv) {
+  try {
+    // Get message content
+    const contentDiv = messageDiv.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    const messageText = contentDiv.textContent.trim();
+    const role = messageDiv.classList.contains('user') ? 'User' : 'Assistant';
+
+    // Format the message
+    const formattedText = `${role}: ${messageText}`;
+
+    // Copy to clipboard
+    await navigator.clipboard.writeText(formattedText);
+
+    showSuccess('Message Copied', 'Message copied to clipboard successfully!');
+  } catch (error) {
+    console.error('Failed to export message:', error);
+    showError('Export Failed', `Failed to copy message: ${error}`);
   }
 }
 
@@ -3402,6 +3658,38 @@ function setupAppControls() {
   document.getElementById('clear-btn').addEventListener('click', clearHistory);
   document.getElementById('export-chat-btn').addEventListener('click', exportChatHistory);
   document.getElementById('import-chat-btn').addEventListener('click', importChatHistory);
+
+  // Export modal handlers
+  document.getElementById('export-close-btn').addEventListener('click', hideExportModal);
+  document.querySelector('#export-modal .export-overlay').addEventListener('click', hideExportModal);
+
+  // Export format buttons
+  document.querySelectorAll('.export-option-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const format = e.currentTarget.dataset.format;
+      switch (format) {
+        case 'json':
+          await exportAsJSON();
+          break;
+        case 'html':
+          await exportAsHTML();
+          break;
+        case 'markdown':
+          await exportAsMarkdown();
+          break;
+        case 'text':
+          await exportAsText();
+          break;
+        case 'pdf':
+          await exportAsPDF();
+          break;
+        case 'clipboard':
+          await copyToClipboard();
+          break;
+      }
+    });
+  });
+
   characterSelect.addEventListener('change', handleCharacterSwitch);
   newCharacterBtn.addEventListener('click', handleNewCharacter);
   document.getElementById('delete-character-btn').addEventListener('click', handleDeleteCharacter);

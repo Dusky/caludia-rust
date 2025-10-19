@@ -1036,5 +1036,80 @@
         </div>
       </div>
     </div>
+
+    <!-- Export Menu Modal -->
+    <div id="export-modal" class="export-modal" style="display: none;">
+      <div class="export-overlay"></div>
+      <div class="export-content">
+        <div class="export-header">
+          <h3>Export Conversation</h3>
+          <button class="close-btn" id="export-close-btn">&times;</button>
+        </div>
+        <div class="export-options">
+          <button class="export-option-btn" data-format="json">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 2v6h6M10 12h4M10 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="export-option-text">
+              <div class="export-option-title">JSON</div>
+              <div class="export-option-desc">Raw data with full metadata</div>
+            </div>
+          </button>
+          <button class="export-option-btn" data-format="html">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="export-option-text">
+              <div class="export-option-title">HTML</div>
+              <div class="export-option-desc">Formatted webpage with styling</div>
+            </div>
+          </button>
+          <button class="export-option-btn" data-format="markdown">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 13l2 2 4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="export-option-text">
+              <div class="export-option-title">Markdown</div>
+              <div class="export-option-desc">Plain text with formatting marks</div>
+            </div>
+          </button>
+          <button class="export-option-btn" data-format="text">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 2v6h6M16 13H8M16 17H8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="export-option-text">
+              <div class="export-option-title">Plain Text</div>
+              <div class="export-option-desc">Simple text format</div>
+            </div>
+          </button>
+          <button class="export-option-btn" data-format="pdf">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 2v6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M9 13h6M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            <div class="export-option-text">
+              <div class="export-option-title">PDF</div>
+              <div class="export-option-desc">Portable document format</div>
+            </div>
+          </button>
+          <button class="export-option-btn" data-format="clipboard">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <div class="export-option-text">
+              <div class="export-option-title">Copy to Clipboard</div>
+              <div class="export-option-desc">Formatted text ready to paste</div>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
