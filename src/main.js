@@ -6483,14 +6483,6 @@ window.addEventListener('DOMContentLoaded', () => {
         console.log('Plugins loaded successfully');
         console.log('Plugin settings registry:', pluginSettingsRegistry);
         console.log('Registry keys:', Object.keys(pluginSettingsRegistry));
-
-        // Show toast to confirm plugin loading
-        setTimeout(() => {
-          const count = Object.keys(pluginSettingsRegistry).length;
-          if (count > 0) {
-            showSuccess('Plugins Loaded', `${count} plugin(s) with settings registered`);
-          }
-        }, 1000);
       }
     } catch (error) {
       console.error('Failed to load plugins:', error);
