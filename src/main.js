@@ -3984,7 +3984,7 @@ async function handleConfigurePlugin(pluginId) {
   const settingsCallback = pluginSettingsRegistry[pluginId];
 
   if (!settingsCallback) {
-    showToast('No configuration available for this plugin', 'info');
+    showInfo('Plugin Settings', 'No configuration available for this plugin');
     return;
   }
 
@@ -3993,7 +3993,7 @@ async function handleConfigurePlugin(pluginId) {
     await settingsCallback();
   } catch (error) {
     console.error(`Failed to open settings for plugin ${pluginId}:`, error);
-    showToast('Failed to open plugin settings', 'error');
+    showError('Plugin Settings', 'Failed to open plugin settings');
   }
 }
 
