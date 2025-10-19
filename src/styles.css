@@ -38,14 +38,14 @@ body {
 
 /* Global select element theming */
 select {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border);
+  background: var(--bg-tertiary) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border) !important;
 }
 
 select option {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
 }
 
 /* App Loading Overlay */
@@ -3719,6 +3719,28 @@ body.drag-over {
   flex: 1;
   overflow-y: auto;
   padding: 0;
+}
+
+/* Left sidebar collapse */
+.left-sidebar.collapsed {
+  width: 48px;
+}
+
+.left-sidebar.collapsed .sidebar-header h3,
+.left-sidebar.collapsed .sidebar-search,
+.left-sidebar.collapsed .sidebar-sort,
+.left-sidebar.collapsed .sidebar-character-list {
+  display: none;
+}
+
+.layout-spacious .app-container.left-sidebar-collapsed {
+  grid-template-columns: 48px 1fr 280px;
+}
+
+@media (max-width: 1200px) {
+  .layout-spacious .app-container.left-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 200px;
+  }
 }
 
 /* ==========================================

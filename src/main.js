@@ -3859,6 +3859,19 @@ function setupAppControls() {
       }
     });
   }
+
+  // Left sidebar toggle
+  const toggleLeftSidebar = document.getElementById('toggle-left-sidebar');
+  if (toggleLeftSidebar) {
+    toggleLeftSidebar.addEventListener('click', () => {
+      const leftSidebar = document.querySelector('.left-sidebar');
+      const appContainer = document.querySelector('.app-container');
+      if (leftSidebar && appContainer) {
+        leftSidebar.classList.toggle('collapsed');
+        appContainer.classList.toggle('left-sidebar-collapsed');
+      }
+    });
+  }
 }
 
 // Plugin Management
