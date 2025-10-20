@@ -1814,27 +1814,36 @@ function showSavedIndicator(indicator) {
 }
 
 // Apply view mode
-function applyViewMode(mode) {
+async function applyViewMode(mode) {
   const body = document.body;
 
   // Remove all view mode classes
-  body.classList.remove('view-compact', 'view-cozy', 'view-comfortable');
+  body.classList.remove('view-compact', 'view-cozy', 'view-comfortable', 'view-visual-novel');
 
   // Add the selected mode
   body.classList.add(`view-${mode}`);
 
   // Store preference
   localStorage.setItem('claudia-view-mode', mode);
+
+  // Initialize expression display when switching to VN mode
+  if (mode === 'visual-novel') {
+    try {
+      await updateExpressionDisplay();
+    } catch (error) {
+      console.error('Failed to initialize expression display:', error);
+    }
+  }
 }
 
 // Load saved view mode
-function loadSavedViewMode() {
+async function loadSavedViewMode() {
   const savedMode = localStorage.getItem('claudia-view-mode') || 'cozy';
   const viewModeSelect = document.getElementById('view-mode-select');
   if (viewModeSelect) {
     viewModeSelect.value = savedMode;
   }
-  applyViewMode(savedMode);
+  await applyViewMode(savedMode);
 }
 
 // Apply font size
@@ -1866,6 +1875,29 @@ function loadSavedFontSize() {
     fontSizeSlider.value = savedSize;
   }
   applyFontSize(savedSize);
+}
+
+// Toggle timestamps
+function toggleTimestamps(show) {
+  const body = document.body;
+  if (show) {
+    body.classList.add('show-timestamps');
+  } else {
+    body.classList.remove('show-timestamps');
+  }
+
+  // Store preference
+  localStorage.setItem('claudia-show-timestamps', show.toString());
+}
+
+// Load saved timestamp preference
+function loadSavedTimestampPreference() {
+  const savedPref = localStorage.getItem('claudia-show-timestamps') === 'true';
+  const timestampToggle = document.getElementById('show-timestamps-toggle');
+  if (timestampToggle) {
+    timestampToggle.checked = savedPref;
+  }
+  toggleTimestamps(savedPref);
 }
 
 // Apply layout mode
@@ -2338,7 +2370,7 @@ function renderAssistantContent(contentDiv, messageText) {
 }
 
 // Add message to chat
-function addMessage(content, isUser = false, skipActions = false, timestamp = null) {
+async function addMessage(content, isUser = false, skipActions = false, timestamp = null) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
 
@@ -2353,6 +2385,18 @@ function addMessage(content, isUser = false, skipActions = false, timestamp = nu
         makeAvatarClickable(avatar, url);
       }
     });
+  }
+
+  // Detect and update expression for assistant messages
+  if (!isUser) {
+    try {
+      const expressionName = await detectMessageExpression(content);
+      if (expressionName) {
+        await updateExpressionDisplay(expressionName);
+      }
+    } catch (error) {
+      console.error('Failed to detect/display expression:', error);
+    }
   }
 
   const contentDiv = document.createElement('div');
@@ -3069,8 +3113,8 @@ async function handleSwitchBranch(branchId) {
     messagesContainer.innerHTML = '';
 
     // Reload messages from the new branch (same pattern as loadChatHistory)
-    messages.forEach((msg) => {
-      const messageDiv = addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
+    for (const msg of messages) {
+      const messageDiv = await addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
 
       // Apply pinned state
       if (msg.pinned && messageDiv) {
@@ -3099,7 +3143,7 @@ async function handleSwitchBranch(branchId) {
       if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {
         updateSwipeControls(messageDiv, msg.current_swipe || 0, msg.swipes.length);
       }
-    });
+    }
 
     // Update token count
     await updateTokenCount();
@@ -3227,7 +3271,7 @@ async function sendMessage(message, isRegenerate = false) {
   message = await executeHook('beforeMessageSend', message);
 
   if (!isRegenerate) {
-    addMessage(message, true, false, Date.now());
+    await addMessage(message, true, false, Date.now());
   }
 
   sendBtn.disabled = true;
@@ -3356,7 +3400,7 @@ async function sendMessage(message, isRegenerate = false) {
       response = await executeHook('afterMessageReceive', response);
 
       removeTypingIndicator();
-      addMessage(response, false);
+      await addMessage(response, false);
       setStatus('Response complete', 'success');
       setTimeout(() => setStatus('Ready'), 2000);
     } catch (error) {
@@ -3678,6 +3722,47 @@ function setupAppControls() {
   document.getElementById('export-chat-btn').addEventListener('click', exportChatHistory);
   document.getElementById('import-chat-btn').addEventListener('click', importChatHistory);
 
+  // VN mode toggle handler
+  const vnToggleBtn = document.getElementById('toggle-vn-mode-btn');
+  if (vnToggleBtn) {
+    vnToggleBtn.addEventListener('click', async () => {
+      const currentMode = localStorage.getItem('claudia-view-mode') || 'cozy';
+      const isVNMode = currentMode === 'visual-novel';
+
+      // Toggle between VN mode and the previous non-VN mode
+      const previousMode = localStorage.getItem('claudia-previous-view-mode') || 'cozy';
+      const newMode = isVNMode ? previousMode : 'visual-novel';
+
+      // Save the current mode as previous if we're switching to VN
+      if (!isVNMode) {
+        localStorage.setItem('claudia-previous-view-mode', currentMode);
+      }
+
+      await applyViewMode(newMode);
+
+      // Update the view mode select in settings if it exists
+      const viewModeSelect = document.getElementById('view-mode-select');
+      if (viewModeSelect) {
+        viewModeSelect.value = newMode;
+      }
+
+      // Update button state
+      vnToggleBtn.setAttribute('aria-pressed', newMode === 'visual-novel');
+      if (newMode === 'visual-novel') {
+        vnToggleBtn.classList.add('active');
+      } else {
+        vnToggleBtn.classList.remove('active');
+      }
+    });
+
+    // Initialize button state based on current mode
+    const currentMode = localStorage.getItem('claudia-view-mode') || 'cozy';
+    vnToggleBtn.setAttribute('aria-pressed', currentMode === 'visual-novel');
+    if (currentMode === 'visual-novel') {
+      vnToggleBtn.classList.add('active');
+    }
+  }
+
   // Export modal handlers
   document.getElementById('export-close-btn').addEventListener('click', hideExportModal);
   document.querySelector('#export-modal .export-overlay').addEventListener('click', hideExportModal);
@@ -3721,6 +3806,8 @@ function setupAppControls() {
   document.getElementById('remove-avatar-btn').addEventListener('click', handleAvatarRemove);
   document.getElementById('import-character-btn').addEventListener('click', handleImportCharacter);
   document.getElementById('export-character-btn').addEventListener('click', handleExportCharacter);
+  document.getElementById('upload-expression-btn').addEventListener('click', handleUploadExpression);
+  document.getElementById('default-expression-select').addEventListener('change', handleDefaultExpressionChange);
 
   // Setup collapsible sections
   document.querySelectorAll('.settings-section-header').forEach(header => {
@@ -3741,8 +3828,8 @@ function setupAppControls() {
   // Setup view mode selector
   const viewModeSelect = document.getElementById('view-mode-select');
   if (viewModeSelect) {
-    viewModeSelect.addEventListener('change', (e) => {
-      applyViewMode(e.target.value);
+    viewModeSelect.addEventListener('change', async (e) => {
+      await applyViewMode(e.target.value);
     });
   }
 
@@ -3759,6 +3846,14 @@ function setupAppControls() {
   if (layoutModeSelect) {
     layoutModeSelect.addEventListener('change', (e) => {
       applyLayoutMode(e.target.value);
+    });
+  }
+
+  // Setup timestamp toggle
+  const timestampToggle = document.getElementById('show-timestamps-toggle');
+  if (timestampToggle) {
+    timestampToggle.addEventListener('change', (e) => {
+      toggleTimestamps(e.target.checked);
     });
   }
 
@@ -3857,13 +3952,29 @@ function setupAppControls() {
         const isCollapsed = rightSidebar.classList.toggle('collapsed');
         appContainer.classList.toggle('right-sidebar-collapsed');
 
+        // Update aria-expanded and aria-label
+        toggleRightSidebar.setAttribute('aria-expanded', !isCollapsed);
+        toggleRightSidebar.setAttribute('aria-label', isCollapsed ? 'Expand roleplay tools sidebar' : 'Collapse roleplay tools sidebar');
+
+        // Update title
+        toggleRightSidebar.setAttribute('title', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+
         // Flip arrow icon: ◄ when expanded (collapse left), ► when collapsed (expand right)
         const svg = toggleRightSidebar.querySelector('path');
         if (svg) {
           svg.setAttribute('d', isCollapsed ? 'M6 4L10 8L6 12' : 'M10 4L6 8L10 12');
         }
+
+        // Save preference
+        localStorage.setItem('right-sidebar-collapsed', isCollapsed);
       }
     });
+
+    // Restore saved state
+    const savedRightCollapsed = localStorage.getItem('right-sidebar-collapsed') === 'true';
+    if (savedRightCollapsed) {
+      toggleRightSidebar.click();
+    }
   }
 
   // Left sidebar toggle
@@ -3876,13 +3987,29 @@ function setupAppControls() {
         const isCollapsed = leftSidebar.classList.toggle('collapsed');
         appContainer.classList.toggle('left-sidebar-collapsed');
 
+        // Update aria-expanded and aria-label
+        toggleLeftSidebar.setAttribute('aria-expanded', !isCollapsed);
+        toggleLeftSidebar.setAttribute('aria-label', isCollapsed ? 'Expand character sidebar' : 'Collapse character sidebar');
+
+        // Update title
+        toggleLeftSidebar.setAttribute('title', isCollapsed ? 'Expand sidebar' : 'Collapse sidebar');
+
         // Flip arrow icon: ► when expanded (collapse right), ◄ when collapsed (expand left)
         const svg = toggleLeftSidebar.querySelector('path');
         if (svg) {
           svg.setAttribute('d', isCollapsed ? 'M10 4L6 8L10 12' : 'M6 4L10 8L6 12');
         }
+
+        // Save preference
+        localStorage.setItem('left-sidebar-collapsed', isCollapsed);
       }
     });
+
+    // Restore saved state
+    const savedLeftCollapsed = localStorage.getItem('left-sidebar-collapsed') === 'true';
+    if (savedLeftCollapsed) {
+      toggleLeftSidebar.click();
+    }
   }
 }
 
@@ -4603,6 +4730,16 @@ async function loadCharacters() {
     await loadChatHistory();
     await updateBranchIndicator();
 
+    // Initialize expression display for visual novel mode
+    const currentViewMode = localStorage.getItem('claudia-view-mode') || 'cozy';
+    if (currentViewMode === 'visual-novel') {
+      try {
+        await updateExpressionDisplay();
+      } catch (error) {
+        console.error('Failed to initialize expression display:', error);
+      }
+    }
+
     // Load auto-saved draft for this character
     loadAutoSavedDraft();
   } catch (error) {
@@ -4754,18 +4891,27 @@ async function handleExportCharacter() {
 // Load chat history
 async function loadChatHistory() {
   try {
+    // Show skeleton loader while loading
+    showMessageSkeleton(3);
+
     const history = await invoke('get_chat_history');
     messagesContainer.innerHTML = '';
 
     if (history.length === 0) {
       if (currentCharacter && currentCharacter.greeting) {
-        addMessage(currentCharacter.greeting, false, true);
+        await addMessage(currentCharacter.greeting, false, true);
       } else {
-        addMessage('API configured. Ready to chat.', false, true);
+        // Show empty state
+        showEmptyState(messagesContainer, {
+          icon: '👋',
+          title: 'Start a Conversation',
+          description: 'Send a message to begin chatting with your character. Your conversation history will appear here.',
+          actionText: null
+        });
       }
     } else {
-      history.forEach((msg, index) => {
-        const messageDiv = addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
+      for (const msg of history) {
+        const messageDiv = await addMessage(msg.content, msg.role === 'user', false, msg.timestamp);
 
         // Apply pinned state
         if (msg.pinned && messageDiv) {
@@ -4794,7 +4940,7 @@ async function loadChatHistory() {
         if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {
           updateSwipeControls(messageDiv, msg.current_swipe || 0, msg.swipes.length);
         }
-      });
+      }
     }
   } catch (error) {
     console.error('Failed to load chat history:', error);
@@ -4824,9 +4970,9 @@ async function clearHistory() {
     await invoke('clear_chat_history');
     messagesContainer.innerHTML = '';
     if (currentCharacter && currentCharacter.greeting) {
-      addMessage(currentCharacter.greeting, false, true);
+      await addMessage(currentCharacter.greeting, false, true);
     } else {
-      addMessage('Conversation cleared. Ready to chat.', false, true);
+      await addMessage('Conversation cleared. Ready to chat.', false, true);
     }
     setStatus('Ready');
     showSuccess('History Cleared', 'Conversation history has been cleared.');
@@ -4882,6 +5028,9 @@ async function loadCharacterSettings() {
       removeAvatarBtn.style.display = 'none';
       pendingAvatarPath = null;
     }
+
+    // Load expressions
+    await loadExpressionsGallery(character.id);
   } catch (error) {
     console.error('Failed to load character:', error);
   }
@@ -6635,6 +6784,13 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + ? - Open keyboard shortcuts help
+    if ((e.ctrlKey || e.metaKey) && e.key === '?') {
+      e.preventDefault();
+      openShortcutsModal();
+      return;
+    }
+
     // Ctrl/Cmd + Z - Undo (only if not in input field to avoid conflicts with native undo)
     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey && !e.target.matches('input, textarea')) {
       e.preventDefault();
@@ -6665,6 +6821,7 @@ window.addEventListener('DOMContentLoaded', () => {
   loadSavedViewMode();
   loadSavedFontSize();
   loadSavedLayoutMode();
+  loadSavedTimestampPreference();
 
   // Setup auto-save for message input
   setupAutoSave();
@@ -6684,5 +6841,383 @@ window.addEventListener('DOMContentLoaded', () => {
   // Setup character filter and sort
   setupCharacterFilter();
 
+  // Setup keyboard shortcuts modal
+  setupShortcutsModal();
+
   loadExistingConfig();
 });
+
+// ============================================================================
+// Empty States
+// ============================================================================
+
+function showEmptyState(container, options = {}) {
+  const {
+    icon = '💬',
+    title = 'No data yet',
+    description = 'Get started by adding something new.',
+    actionText = null,
+    actionCallback = null
+  } = options;
+
+  const emptyState = document.createElement('div');
+  emptyState.className = 'empty-state';
+
+  let actionHTML = '';
+  if (actionText && actionCallback) {
+    actionHTML = `
+      <button class="empty-state-action">
+        <svg viewBox="0 0 16 16" fill="none">
+          <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        ${actionText}
+      </button>
+    `;
+  }
+
+  emptyState.innerHTML = `
+    <div class="empty-state-icon">${icon}</div>
+    <h3 class="empty-state-title">${title}</h3>
+    <p class="empty-state-description">${description}</p>
+    ${actionHTML}
+  `;
+
+  if (actionCallback) {
+    const button = emptyState.querySelector('.empty-state-action');
+    if (button) {
+      button.addEventListener('click', actionCallback);
+    }
+  }
+
+  if (typeof container === 'string') {
+    const element = document.getElementById(container);
+    if (element) {
+      element.innerHTML = '';
+      element.appendChild(emptyState);
+    }
+  } else if (container) {
+    container.innerHTML = '';
+    container.appendChild(emptyState);
+  }
+}
+
+// ============================================================================
+// Skeleton Loading Screens
+// ============================================================================
+
+function createSkeletonMessage() {
+  const skeleton = document.createElement('div');
+  skeleton.className = 'skeleton-message';
+  skeleton.innerHTML = `
+    <div class="skeleton skeleton-avatar"></div>
+    <div class="skeleton-message-content">
+      <div class="skeleton skeleton-line long"></div>
+      <div class="skeleton skeleton-line medium"></div>
+      <div class="skeleton skeleton-line short"></div>
+    </div>
+  `;
+  return skeleton;
+}
+
+function createSkeletonCharacterItem() {
+  const skeleton = document.createElement('div');
+  skeleton.className = 'skeleton-character-item';
+  skeleton.innerHTML = `
+    <div class="skeleton skeleton-character-avatar"></div>
+    <div class="skeleton-character-info">
+      <div class="skeleton skeleton-character-name"></div>
+      <div class="skeleton skeleton-character-preview"></div>
+    </div>
+  `;
+  return skeleton;
+}
+
+function showMessageSkeleton(count = 3) {
+  const container = document.getElementById('messages');
+  if (!container) return;
+
+  // Clear existing content
+  container.innerHTML = '';
+
+  // Add skeleton messages
+  for (let i = 0; i < count; i++) {
+    container.appendChild(createSkeletonMessage());
+  }
+}
+
+function showCharacterListSkeleton(count = 5) {
+  const container = document.getElementById('sidebar-character-list');
+  if (!container) return;
+
+  // Clear existing content
+  container.innerHTML = '';
+
+  // Add skeleton character items
+  for (let i = 0; i < count; i++) {
+    container.appendChild(createSkeletonCharacterItem());
+  }
+}
+
+function clearSkeleton(containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Remove all skeleton elements
+  container.querySelectorAll('.skeleton-message, .skeleton-character-item').forEach(el => {
+    el.remove();
+  });
+}
+
+// ============================================================================
+// Keyboard Shortcuts Modal
+// ============================================================================
+
+function setupShortcutsModal() {
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  const shortcutsOverlay = shortcutsModal.querySelector('.shortcuts-overlay');
+  const closeBtn = document.getElementById('shortcuts-close-btn');
+
+  // Close shortcuts modal
+  const closeShortcutsModal = () => {
+    shortcutsModal.style.display = 'none';
+  };
+
+  // Overlay click
+  shortcutsOverlay.addEventListener('click', closeShortcutsModal);
+
+  // Close button click
+  closeBtn.addEventListener('click', closeShortcutsModal);
+
+  // Escape key to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && shortcutsModal.style.display !== 'none') {
+      closeShortcutsModal();
+    }
+  });
+}
+
+function openShortcutsModal() {
+  const shortcutsModal = document.getElementById('shortcuts-modal');
+  shortcutsModal.style.display = 'flex';
+}
+
+// ============================================================================
+// Expression System
+// ============================================================================
+
+async function loadExpressionsGallery(characterId) {
+  try {
+    const expressions = await invoke('get_character_expressions', { characterId });
+    const gallery = document.getElementById('expressions-gallery');
+    const defaultSelect = document.getElementById('default-expression-select');
+
+    // Clear gallery
+    gallery.innerHTML = '';
+
+    // Clear and repopulate default expression select
+    defaultSelect.innerHTML = '<option value="">None</option>';
+
+    // Display each expression
+    for (const [exprName, filename] of Object.entries(expressions)) {
+      // Get full path to expression image
+      const fullPath = await invoke('get_expression_full_path', {
+        characterId,
+        expressionFilename: filename
+      });
+
+      // Create expression item
+      const item = document.createElement('div');
+      item.className = 'expression-item';
+      item.innerHTML = `
+        <img src="${convertFileSrc(fullPath)}" alt="${exprName}" />
+        <div class="expression-item-name">${exprName}</div>
+        <button class="expression-item-delete" data-expr-name="${exprName}" title="Delete expression">×</button>
+      `;
+
+      // Add delete handler
+      const deleteBtn = item.querySelector('.expression-item-delete');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await handleDeleteExpression(characterId, exprName);
+      });
+
+      gallery.appendChild(item);
+
+      // Add to default expression select
+      const option = document.createElement('option');
+      option.value = exprName;
+      option.textContent = exprName;
+      defaultSelect.appendChild(option);
+    }
+
+    // Load current default expression
+    const character = await invoke('get_character');
+    if (character.default_expression) {
+      defaultSelect.value = character.default_expression;
+    }
+  } catch (error) {
+    console.error('Failed to load expressions:', error);
+  }
+}
+
+async function handleUploadExpression() {
+  const nameInput = document.getElementById('expression-name-input');
+  const expressionName = nameInput.value.trim();
+
+  if (!expressionName) {
+    alert('Please enter an expression name first');
+    return;
+  }
+
+  // Validate expression name (alphanumeric, hyphens, underscores only)
+  if (!/^[a-zA-Z0-9_-]+$/.test(expressionName)) {
+    alert('Expression name can only contain letters, numbers, hyphens, and underscores');
+    return;
+  }
+
+  try {
+    const characterId = document.getElementById('character-settings-select').value;
+    await invoke('select_and_upload_expression', {
+      characterId,
+      expressionName
+    });
+
+    // Clear input and reload gallery
+    nameInput.value = '';
+    await loadExpressionsGallery(characterId);
+  } catch (error) {
+    console.error('Failed to upload expression:', error);
+    alert(`Failed to upload expression: ${error}`);
+  }
+}
+
+async function handleDeleteExpression(characterId, expressionName) {
+  if (!confirm(`Delete expression "${expressionName}"?`)) {
+    return;
+  }
+
+  try {
+    await invoke('delete_expression', { characterId, expressionName });
+    await loadExpressionsGallery(characterId);
+  } catch (error) {
+    console.error('Failed to delete expression:', error);
+    alert(`Failed to delete expression: ${error}`);
+  }
+}
+
+async function handleDefaultExpressionChange() {
+  const select = document.getElementById('default-expression-select');
+  const characterId = document.getElementById('character-settings-select').value;
+  const expressionName = select.value || null;
+
+  try {
+    await invoke('set_default_expression', { characterId, expressionName });
+  } catch (error) {
+    console.error('Failed to set default expression:', error);
+    alert(`Failed to set default expression: ${error}`);
+  }
+}
+
+// Update expression display panel
+async function updateExpressionDisplay(expressionName = null) {
+  const panel = document.getElementById('expression-display-panel');
+  if (!panel) return;
+
+  try {
+    const character = await invoke('get_character');
+
+    // Use provided expression, or fall back to default
+    const exprToShow = expressionName || character.default_expression;
+
+    if (!exprToShow || !character.expressions || !character.expressions[exprToShow]) {
+      // No expression to show - display placeholder
+      panel.innerHTML = '<div class="expression-display-placeholder">No expression available</div>';
+      return;
+    }
+
+    const filename = character.expressions[exprToShow];
+    const fullPath = await invoke('get_expression_full_path', {
+      characterId: character.id,
+      expressionFilename: filename
+    });
+
+    // Create new image element with crossfade
+    const newImg = document.createElement('img');
+    newImg.src = convertFileSrc(fullPath);
+    newImg.alt = exprToShow;
+    newImg.style.opacity = '0';
+    newImg.style.transition = 'opacity 0.3s ease';
+
+    // Create expression indicator
+    const indicator = document.createElement('div');
+    indicator.className = 'expression-indicator';
+    indicator.textContent = exprToShow;
+
+    // Clear and update panel
+    const oldContent = panel.firstChild;
+    panel.innerHTML = '';
+    panel.appendChild(newImg);
+    panel.appendChild(indicator);
+
+    // Trigger crossfade
+    setTimeout(() => {
+      newImg.style.opacity = '1';
+    }, 10);
+
+  } catch (error) {
+    console.error('Failed to update expression display:', error);
+    panel.innerHTML = '<div class="expression-display-placeholder">Failed to load expression</div>';
+  }
+}
+
+// Extract expression tags from text
+function extractExpressionTags(text) {
+  const patterns = [
+    /\*([^*]+)\*/g,      // *expression*
+    /\(([^)]+)\)/g,      // (expression)
+    /\[([^\]]+)\]/g,     // [expression]
+    /\{\{([^}]+)\}\}/g   // {{expression}}
+  ];
+
+  for (const pattern of patterns) {
+    const matches = [...text.matchAll(pattern)];
+    if (matches.length > 0) {
+      // Return the first match found
+      return matches[0][1].trim().toLowerCase();
+    }
+  }
+
+  return null;
+}
+
+// Detect expression for a message
+async function detectMessageExpression(messageText) {
+  try {
+    const character = await invoke('get_character');
+
+    // First, check for explicit expression tags in the text
+    const taggedExpression = extractExpressionTags(messageText);
+    if (taggedExpression && character.expressions && character.expressions[taggedExpression]) {
+      return taggedExpression;
+    }
+
+    // If no tags, use sentiment detection
+    if (character.expressions && Object.keys(character.expressions).length > 0) {
+      const availableExpressions = Object.keys(character.expressions);
+      const detectedExpression = await invoke('detect_expression_from_text', {
+        text: messageText,
+        availableExpressions
+      });
+
+      if (detectedExpression) {
+        return detectedExpression;
+      }
+    }
+
+    // Fall back to default expression
+    return character.default_expression || null;
+  } catch (error) {
+    console.error('Failed to detect expression:', error);
+    return null;
+  }
+}

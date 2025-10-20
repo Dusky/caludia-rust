@@ -63,6 +63,12 @@ struct Character {
     creator_notes: Option<String>,
     #[serde(default)]
     extensions: serde_json::Value,
+
+    // Expression system
+    #[serde(default)]
+    expressions: std::collections::HashMap<String, String>, // expression_name -> image_filename
+    #[serde(default)]
+    default_expression: Option<String>, // default expression to use
 }
 
 // V2/V3 character card specification structs
@@ -192,6 +198,8 @@ struct Message {
     pinned: bool, // Whether this message is pinned to always stay in context
     #[serde(default)]
     hidden: bool, // Whether this message is temporarily hidden from view
+    #[serde(default)]
+    expression: Option<String>, // Expression name used for this message
 }
 
 impl Message {
@@ -209,6 +217,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            expression: None,
         }
     }
 
@@ -226,6 +235,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            expression: None,
         }
     }
 
@@ -847,6 +857,125 @@ fn read_png_text_chunks(png_path: &PathBuf) -> Result<std::collections::HashMap<
     Ok(text_chunks)
 }
 
+// Encode expression images to base64 and add to extensions
+fn encode_expressions_to_extensions(
+    character: &Character,
+    extensions: &mut serde_json::Value,
+) -> Result<(), String> {
+    if character.expressions.is_empty() {
+        return Ok(());
+    }
+
+    let mut expressions_data = serde_json::Map::new();
+
+    // Encode each expression image to base64
+    for (expr_name, filename) in &character.expressions {
+        let expr_path = get_expression_path(&character.id, filename);
+
+        if expr_path.exists() {
+            let image_bytes = fs::read(&expr_path)
+                .map_err(|e| format!("Failed to read expression {}: {}", expr_name, e))?;
+
+            let base64_data = base64::engine::general_purpose::STANDARD.encode(&image_bytes);
+
+            // Determine MIME type from file extension
+            let mime_type = if filename.ends_with(".png") {
+                "image/png"
+            } else if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+                "image/jpeg"
+            } else if filename.ends_with(".webp") {
+                "image/webp"
+            } else {
+                "image/png" // default
+            };
+
+            let data_uri = format!("data:{};base64,{}", mime_type, base64_data);
+            expressions_data.insert(expr_name.clone(), serde_json::Value::String(data_uri));
+        }
+    }
+
+    // Create claudia_expressions object
+    let mut claudia_ext = serde_json::Map::new();
+    claudia_ext.insert("expressions".to_string(), serde_json::Value::Object(expressions_data));
+
+    if let Some(default_expr) = &character.default_expression {
+        claudia_ext.insert("default".to_string(), serde_json::Value::String(default_expr.clone()));
+    }
+
+    // Add to extensions
+    if let serde_json::Value::Object(ref mut ext_map) = extensions {
+        ext_map.insert("claudia_expressions".to_string(), serde_json::Value::Object(claudia_ext));
+    } else {
+        // If extensions is not an object, create one
+        let mut ext_map = serde_json::Map::new();
+        ext_map.insert("claudia_expressions".to_string(), serde_json::Value::Object(claudia_ext));
+        *extensions = serde_json::Value::Object(ext_map);
+    }
+
+    Ok(())
+}
+
+// Decode expression images from extensions and save as files
+fn decode_expressions_from_extensions(
+    character_id: &str,
+    extensions: &serde_json::Value,
+) -> Result<(std::collections::HashMap<String, String>, Option<String>), String> {
+    use std::collections::HashMap;
+
+    let mut expressions = HashMap::new();
+    let mut default_expression = None;
+
+    // Check if claudia_expressions exists in extensions
+    if let Some(claudia_ext) = extensions.get("claudia_expressions") {
+        // Get default expression
+        if let Some(default) = claudia_ext.get("default").and_then(|v| v.as_str()) {
+            default_expression = Some(default.to_string());
+        }
+
+        // Get expressions object
+        if let Some(exprs) = claudia_ext.get("expressions").and_then(|v| v.as_object()) {
+            // Ensure expressions directory exists
+            let expr_dir = get_expressions_dir(character_id);
+            fs::create_dir_all(&expr_dir)
+                .map_err(|e| format!("Failed to create expressions directory: {}", e))?;
+
+            for (expr_name, data_uri_value) in exprs {
+                if let Some(data_uri) = data_uri_value.as_str() {
+                    // Parse data URI (format: "data:image/png;base64,...")
+                    if let Some(base64_start) = data_uri.find("base64,") {
+                        let base64_data = &data_uri[base64_start + 7..];
+
+                        // Decode base64
+                        let image_bytes = base64::engine::general_purpose::STANDARD.decode(base64_data)
+                            .map_err(|e| format!("Failed to decode expression {}: {}", expr_name, e))?;
+
+                        // Determine file extension from MIME type
+                        let extension = if data_uri.contains("image/jpeg") || data_uri.contains("image/jpg") {
+                            "jpg"
+                        } else if data_uri.contains("image/webp") {
+                            "webp"
+                        } else {
+                            "png" // default
+                        };
+
+                        // Generate filename
+                        let filename = format!("{}_{}.{}", character_id, expr_name, extension);
+                        let file_path = get_expression_path(character_id, &filename);
+
+                        // Write image file
+                        fs::write(&file_path, &image_bytes)
+                            .map_err(|e| format!("Failed to write expression {}: {}", expr_name, e))?;
+
+                        expressions.insert(expr_name.clone(), filename);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok((expressions, default_expression))
+}
+
 fn read_character_card_from_png(png_path: &PathBuf) -> Result<CharacterCardV2Data, String> {
     eprintln!("Reading character card from: {}", png_path.display());
 
@@ -910,11 +1039,19 @@ fn write_character_card_to_png(
     let rgba = img.to_rgba8();
     let (width, height) = (rgba.width(), rgba.height());
 
+    // Encode expressions into extensions
+    let mut extensions = character.extensions.clone();
+    encode_expressions_to_extensions(character, &mut extensions)?;
+
+    // Create a modified character with expression-encoded extensions
+    let mut char_with_expressions = character.clone();
+    char_with_expressions.extensions = extensions;
+
     // Build V2 card
     let card = CharacterCardV2 {
         spec: "chara_card_v2".to_string(),
         spec_version: "2.0".to_string(),
-        data: CharacterCardV2Data::from(character.clone()),
+        data: CharacterCardV2Data::from(char_with_expressions),
     };
 
     // Serialize to JSON
@@ -1107,6 +1244,8 @@ fn create_default_character() -> Character {
         character_version: None,
         creator_notes: None,
         extensions: serde_json::Value::Object(serde_json::Map::new()),
+        expressions: std::collections::HashMap::new(),
+        default_expression: None,
     }
 }
 
@@ -2412,6 +2551,8 @@ fn create_character(name: String, system_prompt: String) -> Result<Character, St
         character_version: None,
         creator_notes: None,
         extensions: serde_json::Value::Object(serde_json::Map::new()),
+        expressions: std::collections::HashMap::new(),
+        default_expression: None,
     };
     save_character(&character)?;
     set_active_character(new_id)?;
@@ -2516,6 +2657,9 @@ async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character
     // Create new character ID
     let new_id = Uuid::new_v4().to_string();
 
+    // Decode expressions from extensions (do this before name conflict check)
+    let (expressions, default_expression) = decode_expressions_from_extensions(&new_id, &card_data.extensions)?;
+
     // Check for name conflicts and append number if needed
     let mut final_name = card_data.name.clone();
     let existing_chars = list_characters()?;
@@ -2561,6 +2705,8 @@ async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character
         character_version: card_data.character_version,
         creator_notes: card_data.creator_notes,
         extensions: card_data.extensions,
+        expressions,
+        default_expression,
     };
 
     // Save character
@@ -3840,6 +3986,211 @@ fn get_branch_info(branch_id: String) -> Result<Branch, String> {
 }
 
 // ============================================================================
+// Expression System Commands
+// ============================================================================
+
+// Helper function to get expressions directory for a character
+fn get_expressions_dir(character_id: &str) -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/expressions").join(character_id)
+}
+
+// Helper function to get expression image path
+fn get_expression_path(character_id: &str, expression_filename: &str) -> PathBuf {
+    get_expressions_dir(character_id).join(expression_filename)
+}
+
+#[tauri::command]
+fn get_character_expressions(character_id: String) -> Result<HashMap<String, String>, String> {
+    let characters = list_characters()?;
+    if let Some(character) = characters.iter().find(|c| c.id == character_id) {
+        Ok(character.expressions.clone())
+    } else {
+        Err(format!("Character {} not found", character_id))
+    }
+}
+
+#[tauri::command]
+fn upload_expression_image(source_path: String, character_id: String, expression_name: String) -> Result<String, String> {
+    // Create expressions directory if it doesn't exist
+    let expressions_dir = get_expressions_dir(&character_id);
+    fs::create_dir_all(&expressions_dir).map_err(|e| e.to_string())?;
+
+    // Determine file extension
+    let source = PathBuf::from(&source_path);
+    let extension = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("png");
+
+    // Create filename: expression_name.extension
+    let filename = format!("{}.{}", expression_name, extension);
+    let dest_path = expressions_dir.join(&filename);
+
+    // Copy the file
+    fs::copy(&source_path, &dest_path).map_err(|e| e.to_string())?;
+
+    // Update character's expressions map
+    let character = load_character(&character_id)
+        .ok_or_else(|| format!("Character {} not found", character_id))?;
+
+    let mut char_mut = character;
+    char_mut.expressions.insert(expression_name.clone(), filename.clone());
+    save_character(&char_mut)?;
+
+    Ok(filename)
+}
+
+#[tauri::command]
+async fn select_and_upload_expression(
+    app_handle: tauri::AppHandle,
+    character_id: String,
+    expression_name: String
+) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
+        .blocking_pick_file();
+
+    if let Some(path) = file_path {
+        let path_str = path.as_path()
+            .ok_or_else(|| "Could not get file path".to_string())?
+            .to_string_lossy()
+            .to_string();
+        upload_expression_image(path_str, character_id, expression_name)
+    } else {
+        Err("No file selected".to_string())
+    }
+}
+
+#[tauri::command]
+fn delete_expression(character_id: String, expression_name: String) -> Result<(), String> {
+    let mut character = load_character(&character_id)
+        .ok_or_else(|| format!("Character {} not found", character_id))?;
+
+    if let Some(filename) = character.expressions.remove(&expression_name) {
+        // Delete the image file
+        let file_path = get_expression_path(&character_id, &filename);
+        if file_path.exists() {
+            fs::remove_file(file_path).map_err(|e| e.to_string())?;
+        }
+        // Save updated character
+        save_character(&character)?;
+        Ok(())
+    } else {
+        Err(format!("Expression '{}' not found for character", expression_name))
+    }
+}
+
+#[tauri::command]
+fn get_expression_full_path(character_id: String, expression_filename: String) -> Result<String, String> {
+    let path = get_expression_path(&character_id, &expression_filename);
+    if path.exists() {
+        Ok(path.to_string_lossy().to_string())
+    } else {
+        Err(format!("Expression file not found: {}", expression_filename))
+    }
+}
+
+#[tauri::command]
+fn set_message_expression(message_index: usize, expression_name: Option<String>) -> Result<(), String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of range", message_index));
+    }
+
+    history.messages[message_index].expression = expression_name;
+    save_history(&character.id, &history)
+}
+
+#[tauri::command]
+fn set_default_expression(character_id: String, expression_name: Option<String>) -> Result<(), String> {
+    let mut character = load_character(&character_id)
+        .ok_or_else(|| format!("Character {} not found", character_id))?;
+
+    character.default_expression = expression_name;
+    save_character(&character)
+}
+
+#[tauri::command]
+fn detect_expression_from_text(text: String, available_expressions: Vec<String>) -> Option<String> {
+    let text_lower = text.to_lowercase();
+
+    // Happiness indicators
+    if text_lower.contains("smile") || text_lower.contains("grin") ||
+       text_lower.contains("laugh") || text_lower.contains("chuckle") ||
+       text_lower.contains("happy") || text_lower.contains("joy") ||
+       text_lower.contains("haha") || text_lower.contains("hehe") {
+        if available_expressions.contains(&"happy".to_string()) {
+            return Some("happy".to_string());
+        }
+    }
+
+    // Sadness indicators
+    if text_lower.contains("cry") || text_lower.contains("tear") ||
+       text_lower.contains("sad") || text_lower.contains("depress") ||
+       text_lower.contains("sorrow") || text_lower.contains("sob") {
+        if available_expressions.contains(&"sad".to_string()) {
+            return Some("sad".to_string());
+        }
+    }
+
+    // Anger indicators
+    if text_lower.contains("angry") || text_lower.contains("mad") ||
+       text_lower.contains("furious") || text_lower.contains("rage") ||
+       text_lower.contains("annoyed") || text_lower.contains("grr") {
+        if available_expressions.contains(&"angry".to_string()) {
+            return Some("angry".to_string());
+        }
+    }
+
+    // Surprise indicators
+    if text_lower.contains("surprise") || text_lower.contains("shock") ||
+       text_lower.contains("gasp") || text_lower.contains("wow") ||
+       text_lower.contains("omg") || text_lower.contains("amazing") {
+        if available_expressions.contains(&"surprised".to_string()) {
+            return Some("surprised".to_string());
+        }
+    }
+
+    // Fear indicators
+    if text_lower.contains("afraid") || text_lower.contains("scared") ||
+       text_lower.contains("fear") || text_lower.contains("terror") ||
+       text_lower.contains("frighten") {
+        if available_expressions.contains(&"scared".to_string()) {
+            return Some("scared".to_string());
+        }
+    }
+
+    // Embarrassment indicators
+    if text_lower.contains("blush") || text_lower.contains("embarrass") ||
+       text_lower.contains("shy") || text_lower.contains("flustered") {
+        if available_expressions.contains(&"embarrassed".to_string()) ||
+           available_expressions.contains(&"blushing".to_string()) {
+            return Some("embarrassed".to_string())
+                .or(Some("blushing".to_string()));
+        }
+    }
+
+    // Thinking/Confused indicators
+    if text_lower.contains("think") || text_lower.contains("ponder") ||
+       text_lower.contains("confused") || text_lower.contains("wonder") ||
+       text_lower.contains("hmm") {
+        if available_expressions.contains(&"thinking".to_string()) {
+            return Some("thinking".to_string());
+        }
+    }
+
+    // No match found
+    None
+}
+
+// ============================================================================
 // Plugin System Commands
 // ============================================================================
 
@@ -3923,6 +4274,14 @@ pub fn run() {
             set_active_character,
             import_character_card,
             export_character_card,
+            get_character_expressions,
+            upload_expression_image,
+            select_and_upload_expression,
+            delete_expression,
+            get_expression_full_path,
+            set_message_expression,
+            set_default_expression,
+            detect_expression_from_text,
             export_chat_history,
             export_chat_as_markdown,
             export_chat_as_text,
