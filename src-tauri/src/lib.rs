@@ -21,9 +21,25 @@ struct ApiConfig {
     #[serde(default)]
     active_character_id: Option<String>,
     #[serde(default)]
+    active_chat_id: Option<String>,
+    #[serde(default)]
     stream: bool,
     #[serde(default = "default_context_limit")]
     context_limit: u32,
+}
+
+impl Default for ApiConfig {
+    fn default() -> Self {
+        Self {
+            base_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            active_character_id: None,
+            active_chat_id: None,
+            stream: false,
+            context_limit: default_context_limit(),
+        }
+    }
 }
 
 fn default_context_limit() -> u32 {
@@ -514,6 +530,7 @@ fn get_builtin_presets() -> Vec<PromptPreset> {
     ]
 }
 
+// Old simple history format (for backward compatibility with non-branched chat)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChatHistory {
     messages: Vec<Message>,
@@ -531,6 +548,53 @@ struct Branch {
     diverge_at_index: usize, // Message index in parent where this branch diverged
 }
 
+// Branch info with computed fields for frontend display
+#[derive(Debug, Clone, Serialize)]
+struct BranchInfo {
+    id: String,
+    name: String,
+    created_at: i64,
+    parent_branch_id: Option<String>,
+    diverge_at_index: usize,
+    message_count: usize,           // Computed: number of messages in this branch
+    last_message_at: Option<i64>,   // Computed: timestamp of last message
+}
+
+// Chat represents a conversation with a character
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Chat {
+    id: String,                    // UUID
+    name: String,                  // User-defined name for this chat
+    created_at: i64,              // Unix timestamp in milliseconds
+    last_message_at: Option<i64>, // Unix timestamp in milliseconds
+    character_id: String,          // Which character this chat belongs to
+}
+
+// Chat info with computed fields for frontend display
+#[derive(Debug, Clone, Serialize)]
+struct ChatInfo {
+    id: String,
+    name: String,
+    created_at: i64,
+    last_message_at: Option<i64>,
+    character_id: String,
+    message_count: usize,    // Total messages across all branches
+    branch_count: usize,     // Number of branches in this chat
+}
+
+// FullChatHistory combines chat metadata with branched message history
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FullChatHistory {
+    chat: Chat,                                                    // Chat metadata
+    #[serde(default = "default_branches")]
+    branches: Vec<Branch>,                                        // Branch tree
+    #[serde(default = "default_active_branch")]
+    active_branch_id: String,                                     // Currently active branch
+    #[serde(default)]
+    branch_messages: std::collections::HashMap<String, Vec<Message>>, // Messages per branch
+}
+
+// Old structure for backward compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BranchedChatHistory {
     #[serde(default = "default_branches")]
@@ -633,6 +697,20 @@ fn get_character_path(character_id: &str) -> PathBuf {
 fn get_character_history_path(character_id: &str) -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home).join(format!(".config/claudia/history_{}.json", character_id))
+}
+
+// New chat system paths
+fn get_chats_dir(character_id: &str) -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(format!(".config/claudia/chats/{}", character_id))
+}
+
+fn get_chat_path(character_id: &str, chat_id: &str) -> PathBuf {
+    get_chats_dir(character_id).join(format!("chat_{}.json", chat_id))
+}
+
+fn get_chats_index_path(character_id: &str) -> PathBuf {
+    get_chats_dir(character_id).join("index.json")
 }
 
 fn get_avatars_dir() -> PathBuf {
@@ -1156,11 +1234,18 @@ fn load_branched_history(character_id: &str) -> BranchedChatHistory {
             let mut branch_messages = HashMap::new();
             branch_messages.insert("main".to_string(), old_history.messages);
 
-            return BranchedChatHistory {
+            let migrated_history = BranchedChatHistory {
                 branches: default_branches(),
                 active_branch_id: "main".to_string(),
                 branch_messages,
             };
+
+            // IMPORTANT: Save the migrated format to disk so future loads work
+            if let Err(e) = save_branched_history(character_id, &migrated_history) {
+                eprintln!("Warning: Failed to save migrated branched history: {}", e);
+            }
+
+            return migrated_history;
         }
     }
 
@@ -1168,11 +1253,18 @@ fn load_branched_history(character_id: &str) -> BranchedChatHistory {
     let mut branch_messages = HashMap::new();
     branch_messages.insert("main".to_string(), vec![]);
 
-    BranchedChatHistory {
+    let new_history = BranchedChatHistory {
         branches: default_branches(),
         active_branch_id: "main".to_string(),
         branch_messages,
+    };
+
+    // Save the default structure to disk so subsequent loads work
+    if let Err(e) = save_branched_history(character_id, &new_history) {
+        eprintln!("Warning: Failed to save initial branched history: {}", e);
     }
+
+    new_history
 }
 
 // Legacy function - returns active branch messages
@@ -1397,14 +1489,19 @@ async fn validate_api(base_url: String, api_key: String) -> Result<Vec<String>, 
 
 #[tauri::command]
 async fn save_api_config(base_url: String, api_key: String, model: String, stream: bool, context_limit: u32) -> Result<(), String> {
-    // Preserve existing active_character_id if it exists
-    let active_character_id = load_config().and_then(|c| c.active_character_id);
+    // Preserve existing active_character_id and active_chat_id if they exist
+    let (active_character_id, active_chat_id) = if let Some(c) = load_config() {
+        (c.active_character_id, c.active_chat_id)
+    } else {
+        (None, None)
+    };
 
     let config = ApiConfig {
         base_url,
         api_key,
         model,
         active_character_id,
+        active_chat_id,
         stream,
         context_limit,
     };
@@ -3946,10 +4043,28 @@ fn delete_branch(branch_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn list_branches() -> Result<Vec<Branch>, String> {
+fn list_branches() -> Result<Vec<BranchInfo>, String> {
     let character = get_active_character();
     let branched = load_branched_history(&character.id);
-    Ok(branched.branches)
+
+    // Convert branches to BranchInfo with computed fields
+    let branch_infos: Vec<BranchInfo> = branched.branches.iter().map(|branch| {
+        let messages = branched.branch_messages.get(&branch.id).cloned().unwrap_or_default();
+        let message_count = messages.len();
+        let last_message_at = messages.last().and_then(|msg| Some(msg.timestamp));
+
+        BranchInfo {
+            id: branch.id.clone(),
+            name: branch.name.clone(),
+            created_at: branch.created_at,
+            parent_branch_id: branch.parent_branch_id.clone(),
+            diverge_at_index: branch.diverge_at_index,
+            message_count,
+            last_message_at,
+        }
+    }).collect();
+
+    Ok(branch_infos)
 }
 
 #[tauri::command]
@@ -3983,6 +4098,235 @@ fn get_branch_info(branch_id: String) -> Result<Branch, String> {
         .find(|b| b.id == branch_id)
         .cloned()
         .ok_or_else(|| format!("Branch '{}' not found", branch_id))
+}
+
+// ============================================================================
+// Chat System Commands
+// ============================================================================
+
+// Load all chats for a character
+fn load_chats_index(character_id: &str) -> Vec<Chat> {
+    let index_path = get_chats_index_path(character_id);
+    if let Ok(contents) = fs::read_to_string(&index_path) {
+        serde_json::from_str(&contents).unwrap_or_default()
+    } else {
+        Vec::new()
+    }
+}
+
+// Save chats index
+fn save_chats_index(character_id: &str, chats: &Vec<Chat>) -> Result<(), String> {
+    let index_path = get_chats_index_path(character_id);
+    if let Some(parent) = index_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let contents = serde_json::to_string_pretty(chats).map_err(|e| e.to_string())?;
+    fs::write(index_path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Load a specific chat history
+fn load_chat_history(character_id: &str, chat_id: &str) -> Result<FullChatHistory, String> {
+    let chat_path = get_chat_path(character_id, chat_id);
+    let contents = fs::read_to_string(&chat_path)
+        .map_err(|e| format!("Failed to read chat: {}", e))?;
+
+    let mut chat_history: FullChatHistory = serde_json::from_str(&contents)
+        .map_err(|e| format!("Failed to parse chat: {}", e))?;
+
+    // Migrate old messages to new format
+    for messages in chat_history.branch_messages.values_mut() {
+        for msg in messages {
+            msg.migrate();
+        }
+    }
+
+    Ok(chat_history)
+}
+
+// Save chat history
+fn save_chat_history(character_id: &str, chat_history: &FullChatHistory) -> Result<(), String> {
+    let chat_path = get_chat_path(character_id, &chat_history.chat.id);
+    if let Some(parent) = chat_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let contents = serde_json::to_string_pretty(chat_history).map_err(|e| e.to_string())?;
+    fs::write(chat_path, contents).map_err(|e| e.to_string())?;
+
+    // Update chat metadata in index
+    let mut chats = load_chats_index(character_id);
+    if let Some(chat_meta) = chats.iter_mut().find(|c| c.id == chat_history.chat.id) {
+        *chat_meta = chat_history.chat.clone();
+    } else {
+        chats.push(chat_history.chat.clone());
+    }
+    save_chats_index(character_id, &chats)?;
+
+    Ok(())
+}
+
+// Migrate old BranchedChatHistory to new FullChatHistory
+fn migrate_to_chat_system(character_id: &str) -> Result<(), String> {
+    // Check if already migrated
+    let index_path = get_chats_index_path(character_id);
+    if index_path.exists() {
+        return Ok(()); // Already migrated
+    }
+
+    // Try to load old format
+    let old_history_path = get_character_history_path(character_id);
+    if !old_history_path.exists() {
+        return Ok(()); // No history to migrate
+    }
+
+    let branched = load_branched_history(character_id);
+
+    // Create first chat from old data
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    // Calculate last message time
+    let last_message_at = branched.branch_messages
+        .values()
+        .flat_map(|msgs| msgs.iter())
+        .map(|msg| msg.timestamp)
+        .max();
+
+    let chat = Chat {
+        id: Uuid::new_v4().to_string(),
+        name: "Main Chat".to_string(),
+        created_at: timestamp,
+        last_message_at,
+        character_id: character_id.to_string(),
+    };
+
+    let chat_history = FullChatHistory {
+        chat: chat.clone(),
+        branches: branched.branches,
+        active_branch_id: branched.active_branch_id,
+        branch_messages: branched.branch_messages,
+    };
+
+    // Save to new format
+    save_chat_history(character_id, &chat_history)?;
+
+    // Rename old file as backup
+    let backup_path = old_history_path.with_extension("json.backup");
+    let _ = fs::rename(&old_history_path, &backup_path);
+
+    Ok(())
+}
+
+#[tauri::command]
+fn list_chats(character_id: String) -> Result<Vec<ChatInfo>, String> {
+    // Ensure migration has happened
+    migrate_to_chat_system(&character_id)?;
+
+    let chats = load_chats_index(&character_id);
+
+    // Compute info for each chat
+    let chat_infos: Vec<ChatInfo> = chats.iter().map(|chat| {
+        let chat_history = load_chat_history(&character_id, &chat.id).ok();
+
+        let (message_count, branch_count) = if let Some(history) = chat_history {
+            let msg_count: usize = history.branch_messages.values().map(|msgs| msgs.len()).sum();
+            (msg_count, history.branches.len())
+        } else {
+            (0, 0)
+        };
+
+        ChatInfo {
+            id: chat.id.clone(),
+            name: chat.name.clone(),
+            created_at: chat.created_at,
+            last_message_at: chat.last_message_at,
+            character_id: chat.character_id.clone(),
+            message_count,
+            branch_count,
+        }
+    }).collect();
+
+    Ok(chat_infos)
+}
+
+#[tauri::command]
+fn create_chat(character_id: String, name: String) -> Result<Chat, String> {
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let chat = Chat {
+        id: Uuid::new_v4().to_string(),
+        name,
+        created_at: timestamp,
+        last_message_at: None,
+        character_id: character_id.clone(),
+    };
+
+    // Create empty chat history
+    let mut branch_messages = HashMap::new();
+    branch_messages.insert("main".to_string(), vec![]);
+
+    let chat_history = FullChatHistory {
+        chat: chat.clone(),
+        branches: default_branches(),
+        active_branch_id: "main".to_string(),
+        branch_messages,
+    };
+
+    save_chat_history(&character_id, &chat_history)?;
+
+    Ok(chat)
+}
+
+#[tauri::command]
+fn delete_chat(character_id: String, chat_id: String) -> Result<(), String> {
+    // Delete chat file
+    let chat_path = get_chat_path(&character_id, &chat_id);
+    fs::remove_file(&chat_path).map_err(|e| e.to_string())?;
+
+    // Remove from index
+    let mut chats = load_chats_index(&character_id);
+    chats.retain(|c| c.id != chat_id);
+    save_chats_index(&character_id, &chats)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_active_chat() -> Result<Chat, String> {
+    let config = load_config().ok_or("No config found")?;
+    let chat_id = config.active_chat_id.ok_or("No active chat")?;
+    let character = get_active_character();
+
+    let chats = load_chats_index(&character.id);
+    chats.into_iter()
+        .find(|c| c.id == chat_id)
+        .ok_or_else(|| "Active chat not found".to_string())
+}
+
+#[tauri::command]
+fn switch_chat(chat_id: String) -> Result<Vec<Message>, String> {
+    let character = get_active_character();
+
+    // Load the chat
+    let chat_history = load_chat_history(&character.id, &chat_id)?;
+
+    // Update active chat in config
+    let mut config = load_config().unwrap_or_default();
+    config.active_chat_id = Some(chat_id);
+    save_config(&config)?;
+
+    // Return messages from active branch
+    let messages = chat_history.branch_messages
+        .get(&chat_history.active_branch_id)
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(messages)
 }
 
 // ============================================================================
@@ -4316,6 +4660,11 @@ pub fn run() {
             rename_branch,
             get_active_branch_id,
             get_branch_info,
+            list_chats,
+            create_chat,
+            delete_chat,
+            get_active_chat,
+            switch_chat,
             install_plugin,
             list_plugins,
             enable_plugin,

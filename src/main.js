@@ -1903,19 +1903,13 @@ function loadSavedTimestampPreference() {
 // Apply layout mode
 function applyLayoutMode(mode) {
   const body = document.body;
-  const appContainer = document.querySelector('.app-container');
 
-  // Remove all layout mode classes
+  // Remove all layout classes from body ONLY
   body.classList.remove('layout-compact', 'layout-spacious');
-  if (appContainer) {
-    appContainer.classList.remove('layout-compact', 'layout-spacious');
-  }
 
-  // Add the selected layout mode class
+  // Add the new layout class to body ONLY
+  // (CSS selectors like `.layout-spacious .app-container` need the layout class on an ancestor)
   body.classList.add(`layout-${mode}`);
-  if (appContainer) {
-    appContainer.classList.add(`layout-${mode}`);
-  }
 
   // Move roleplay panel into right sidebar for spacious mode
   const roleplayPanel = document.getElementById('roleplay-panel');
@@ -4525,12 +4519,130 @@ function updateActiveCharacterInSidebar(characterId) {
 }
 
 // Show branch list for a character
-async function showBranchListForCharacter(character) {
+// Show chat list for a character
+async function showChatListForCharacter(character) {
   try {
-    // Set this character as active temporarily to load their branches
+    // Set this character as active
     await invoke('set_active_character', { characterId: character.id });
 
-    // Get branches for this character
+    // Trigger migration if needed (backend handles this automatically)
+    const chats = await invoke('list_chats', { characterId: character.id });
+
+    // Clear the chat area and show chat list
+    messagesContainer.innerHTML = '';
+
+    const chatListView = document.createElement('div');
+    chatListView.className = 'branch-list-view';
+
+    chatListView.innerHTML = `
+      <div class="branch-list-header">
+        <h2>${character.name}</h2>
+        <p>Select a conversation to continue</p>
+      </div>
+
+      <div class="branch-list-actions">
+        <button class="btn-primary" id="new-chat-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          New Conversation
+        </button>
+      </div>
+
+      <div class="branch-list" id="chat-list">
+        <!-- Chats will be inserted here -->
+      </div>
+    `;
+
+    messagesContainer.appendChild(chatListView);
+
+    // Populate chats
+    const chatList = document.getElementById('chat-list');
+
+    chats.forEach(chat => {
+      const chatCard = document.createElement('div');
+      chatCard.className = 'branch-card';
+
+      const messageCount = chat.message_count || 0;
+      const branchCount = chat.branch_count || 1;
+      const createdDate = chat.created_at ? new Date(chat.created_at).toLocaleDateString() : 'Unknown';
+      const lastMessageDate = chat.last_message_at ? new Date(chat.last_message_at).toLocaleDateString() : null;
+
+      chatCard.innerHTML = `
+        <div class="branch-card-header">
+          <div class="branch-card-name">${chat.name}</div>
+        </div>
+        <div class="branch-card-meta">
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            Created: ${createdDate}
+          </div>
+          ${lastMessageDate ? `
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5" fill="currentColor" fill-opacity="0.2"/>
+            </svg>
+            Last: ${lastMessageDate}
+          </div>
+          ` : ''}
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7h10M7 2v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            ${messageCount} messages
+          </div>
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2l5 5-5 5M7 2l5 5-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            ${branchCount} ${branchCount === 1 ? 'branch' : 'branches'}
+          </div>
+        </div>
+      `;
+
+      // Handle chat selection - show branches for this chat
+      chatCard.addEventListener('click', async () => {
+        await showBranchListForChat(character, chat);
+      });
+
+      chatList.appendChild(chatCard);
+    });
+
+    // Handle new chat creation
+    document.getElementById('new-chat-btn').addEventListener('click', async () => {
+      try {
+        const chatName = `Conversation ${chats.length + 1}`;
+        const newChat = await invoke('create_chat', {
+          characterId: character.id,
+          name: chatName
+        });
+        await showBranchListForChat(character, newChat);
+      } catch (error) {
+        console.error('Failed to create chat:', error);
+        await window.__TAURI__.dialog.message(`Failed to create conversation: ${error}`, {
+          title: 'Error',
+          kind: 'error'
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Failed to load chats:', error);
+    addMessage(`Failed to load conversations: ${error}`, false);
+  }
+}
+
+// Show branch list for a specific chat
+async function showBranchListForChat(character, chat) {
+  try {
+    // Switch to this chat (loads the chat and returns messages)
+    await invoke('switch_chat', { chatId: chat.id });
+
+    // Get branches for this chat
     const branches = await invoke('list_branches');
     const activeBranchId = await invoke('get_active_branch_id');
 
@@ -4542,8 +4654,15 @@ async function showBranchListForCharacter(character) {
 
     branchListView.innerHTML = `
       <div class="branch-list-header">
-        <h2>${character.name}</h2>
-        <p>Select a chat branch to continue</p>
+        <button class="btn-back" id="back-to-chats">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M10 12L6 8l4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div>
+          <h2>${chat.name}</h2>
+          <p>Select a branch to continue</p>
+        </div>
       </div>
 
       <div class="branch-list-actions">
@@ -4551,7 +4670,7 @@ async function showBranchListForCharacter(character) {
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
             <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
-          New Chat
+          New Branch
         </button>
       </div>
 
@@ -4562,6 +4681,11 @@ async function showBranchListForCharacter(character) {
 
     messagesContainer.appendChild(branchListView);
 
+    // Back button handler
+    document.getElementById('back-to-chats').addEventListener('click', async () => {
+      await showChatListForCharacter(character);
+    });
+
     // Populate branches
     const branchList = document.getElementById('branch-list');
 
@@ -4571,7 +4695,8 @@ async function showBranchListForCharacter(character) {
 
       const isActive = branch.id === activeBranchId;
       const messageCount = branch.message_count || 0;
-      const createdDate = branch.created_at ? new Date(branch.created_at * 1000).toLocaleDateString() : 'Unknown';
+      const createdDate = branch.created_at ? new Date(branch.created_at).toLocaleDateString() : 'Unknown';
+      const lastMessageDate = branch.last_message_at ? new Date(branch.last_message_at).toLocaleDateString() : null;
 
       branchCard.innerHTML = `
         <div class="branch-card-header">
@@ -4584,8 +4709,17 @@ async function showBranchListForCharacter(character) {
               <path d="M7 1v6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
             </svg>
-            ${createdDate}
+            Created: ${createdDate}
           </div>
+          ${lastMessageDate ? `
+          <div class="branch-card-meta-item">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M7 1v6l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5" fill="currentColor" fill-opacity="0.2"/>
+            </svg>
+            Last: ${lastMessageDate}
+          </div>
+          ` : ''}
           <div class="branch-card-meta-item">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M2 7h10M7 2v10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -4606,7 +4740,7 @@ async function showBranchListForCharacter(character) {
     // Handle new branch creation
     document.getElementById('new-branch-btn').addEventListener('click', async () => {
       const branchName = await window.__TAURI__.dialog.confirm('Create a new chat branch?', {
-        title: 'New Chat',
+        title: 'New Branch',
         kind: 'info'
       });
 
@@ -4615,7 +4749,7 @@ async function showBranchListForCharacter(character) {
           // Create branch from message 0 (empty branch)
           const newBranch = await invoke('create_branch', {
             messageIndex: 0,
-            branchName: `Chat ${branches.length + 1}`
+            branchName: `Branch ${branches.length + 1}`
           });
           await loadBranch(character.id, newBranch.id);
         } catch (error) {
@@ -4632,6 +4766,11 @@ async function showBranchListForCharacter(character) {
     console.error('Failed to load branches:', error);
     addMessage(`Failed to load branches: ${error}`, false);
   }
+}
+
+// Legacy function - redirects to new chat list view
+async function showBranchListForCharacter(character) {
+  await showChatListForCharacter(character);
 }
 
 // Load a specific branch for a character

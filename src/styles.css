@@ -2718,14 +2718,6 @@ body.view-comfortable .message-content pre {
     min-height: 44px;
     min-width: 44px;
   }
-
-  /* Better sidebar behavior */
-  .layout-spacious .left-sidebar,
-  .layout-spacious .right-sidebar {
-    position: fixed;
-    z-index: 1000;
-    height: 100vh;
-  }
 }
 
 /* Original responsive styles */
@@ -4430,6 +4422,9 @@ body.drag-over {
 
 .branch-list-header {
   margin-bottom: 24px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .branch-list-header h2 {
@@ -4442,6 +4437,27 @@ body.drag-over {
 .branch-list-header p {
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.btn-back {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.btn-back:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border-hover);
 }
 
 .branch-list-actions {
@@ -4538,46 +4554,7 @@ body.drag-over {
   }
 }
 
-@media (max-width: 968px) {
-  /* On smaller screens, fall back to compact-like behavior even in spacious mode */
-  .layout-spacious .app-container {
-    grid-template-columns: 1fr;
-  }
-
-  /* Ensure proper spacing */
-  .main-panel {
-    width: 100%;
-  }
-
-  .layout-spacious .left-sidebar,
-  .layout-spacious .right-sidebar {
-    position: absolute;
-    z-index: 100;
-    height: 100vh;
-  }
-
-  .layout-spacious .left-sidebar {
-    left: 0;
-    width: 240px;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-  }
-
-  .layout-spacious .left-sidebar.open {
-    transform: translateX(0);
-  }
-
-  .layout-spacious .right-sidebar {
-    right: 0;
-    width: 320px;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-  }
-
-  .layout-spacious .right-sidebar.open {
-    transform: translateX(0);
-  }
-}
+/* Removed broken media query at 968px that was breaking grid layout */
 
 /* ============================================================================
    Visual Novel View Mode
