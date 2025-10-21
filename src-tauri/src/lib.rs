@@ -2624,22 +2624,30 @@ fn get_swipe_info(message_index: usize) -> Result<SwipeInfo, String> {
 }
 
 #[tauri::command]
-fn create_character(name: String, system_prompt: String) -> Result<Character, String> {
+fn create_character(
+    name: String,
+    system_prompt: String,
+    description: Option<String>,
+    personality: Option<String>,
+    scenario: Option<String>,
+    greeting: Option<String>,
+    mes_example: Option<String>,
+) -> Result<Character, String> {
     let new_id = Uuid::new_v4().to_string();
     let character = Character {
         id: new_id.clone(),
         name: name.clone(),
         avatar_path: None,
         system_prompt,
-        greeting: Some(format!("Hello, I'm {}. How can I help you?", name)),
-        personality: None,
+        greeting: greeting.or_else(|| Some(format!("Hello, I'm {}. How can I help you?", name))),
+        personality,
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs() as i64,
-        description: None,
-        scenario: None,
-        mes_example: None,
+            .as_millis() as i64,
+        description,
+        scenario,
+        mes_example,
         post_history_instructions: None,
         alternate_greetings: Vec::new(),
         character_book: None,
@@ -2693,6 +2701,70 @@ fn delete_character(character_id: String) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[tauri::command]
+fn duplicate_character(character_id: String) -> Result<Character, String> {
+    // Load the source character
+    let source = load_character(&character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    // Create new character with duplicated data
+    let new_id = Uuid::new_v4().to_string();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let mut new_character = Character {
+        id: new_id.clone(),
+        name: format!("{} (Copy)", source.name),
+        avatar_path: None,  // Will handle avatar separately
+        system_prompt: source.system_prompt.clone(),
+        greeting: source.greeting.clone(),
+        personality: source.personality.clone(),
+        created_at: timestamp,
+        description: source.description.clone(),
+        scenario: source.scenario.clone(),
+        mes_example: source.mes_example.clone(),
+        post_history_instructions: source.post_history_instructions.clone(),
+        alternate_greetings: source.alternate_greetings.clone(),
+        character_book: source.character_book.clone(),
+        tags: source.tags.clone(),
+        creator: source.creator.clone(),
+        character_version: source.character_version.clone(),
+        creator_notes: source.creator_notes.clone(),
+        extensions: source.extensions.clone(),
+        expressions: source.expressions.clone(),
+        default_expression: source.default_expression.clone(),
+    };
+
+    // Copy avatar if it exists
+    if let Some(source_avatar) = &source.avatar_path {
+        let source_path = get_avatar_path(source_avatar);
+        if source_path.exists() {
+            // Extract extension
+            let ext = source_path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("png");
+
+            let new_avatar_filename = format!("{}.{}", new_id, ext);
+            let new_avatar_path = get_avatar_path(&new_avatar_filename);
+
+            if let Some(parent) = new_avatar_path.parent() {
+                fs::create_dir_all(parent).ok();
+            }
+
+            fs::copy(&source_path, &new_avatar_path).ok();
+            new_character.avatar_path = Some(new_avatar_filename);
+        }
+    }
+
+    // Save the new character
+    save_character(&new_character)?;
+
+    Ok(new_character)
 }
 
 #[tauri::command]
@@ -4297,6 +4369,27 @@ fn delete_chat(character_id: String, chat_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn rename_chat(character_id: String, chat_id: String, new_name: String) -> Result<(), String> {
+    // Load chat history
+    let mut chat_history = load_chat_history(&character_id, &chat_id)?;
+
+    // Update chat name
+    chat_history.chat.name = new_name.clone();
+
+    // Save updated history
+    save_chat_history(&character_id, &chat_history)?;
+
+    // Update in index
+    let mut chats = load_chats_index(&character_id);
+    if let Some(chat) = chats.iter_mut().find(|c| c.id == chat_id) {
+        chat.name = new_name;
+    }
+    save_chats_index(&character_id, &chats)?;
+
+    Ok(())
+}
+
+#[tauri::command]
 fn get_active_chat() -> Result<Chat, String> {
     let config = load_config().ok_or("No config found")?;
     let chat_id = config.active_chat_id.ok_or("No active chat")?;
@@ -4615,6 +4708,7 @@ pub fn run() {
             list_characters,
             create_character,
             delete_character,
+            duplicate_character,
             set_active_character,
             import_character_card,
             export_character_card,
@@ -4663,6 +4757,7 @@ pub fn run() {
             list_chats,
             create_chat,
             delete_chat,
+            rename_chat,
             get_active_chat,
             switch_chat,
             install_plugin,

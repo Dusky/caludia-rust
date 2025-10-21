@@ -2074,6 +2074,8 @@ body.show-timestamps .message-timestamp {
   padding: 24px;
   width: 90%;
   max-width: 500px;
+  max-height: 85vh;
+  overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
@@ -4270,6 +4272,89 @@ body.drag-over {
   color: white;
 }
 
+.character-menu-btn {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-character-item:hover .character-menu-btn {
+  opacity: 1;
+}
+
+.sidebar-character-item.active .character-menu-btn {
+  opacity: 1;
+  color: white;
+}
+
+.character-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-character-item.active .character-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.character-menu-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 160px;
+  z-index: 1000;
+  overflow: hidden;
+  display: none;
+}
+
+.character-menu-dropdown.show {
+  display: block;
+}
+
+.character-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
+  transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.character-menu-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.character-menu-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.character-menu-item.danger {
+  color: var(--danger);
+}
+
+.character-menu-item.danger:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.edit-character-content {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
 /* ==========================================
    RIGHT SIDEBAR - TOOLS PANEL
    ========================================== */
@@ -4491,6 +4576,18 @@ body.drag-over {
   justify-content: space-between;
   align-items: start;
   margin-bottom: 8px;
+}
+
+.chat-menu-btn {
+  opacity: 1;
+}
+
+.branch-card:not(:hover) .chat-menu-btn {
+  opacity: 0.5;
+}
+
+.branch-card:hover .chat-menu-btn {
+  opacity: 1;
 }
 
 .branch-card-name {

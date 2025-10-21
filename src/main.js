@@ -4496,7 +4496,24 @@ function populateSidebarCharacterList(characters) {
     item.appendChild(avatar);
     item.appendChild(info);
 
-    // Handle character selection - show branch list
+    // Add three-dot menu
+    const menuBtn = document.createElement('button');
+    menuBtn.className = 'character-menu-btn';
+    menuBtn.innerHTML = `
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="8" cy="3" r="1.5" fill="currentColor"/>
+        <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+        <circle cx="8" cy="13" r="1.5" fill="currentColor"/>
+      </svg>
+    `;
+    menuBtn.title = 'Character options';
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      showCharacterMenu(char, menuBtn);
+    });
+    item.appendChild(menuBtn);
+
+    // Handle character selection - show chat list
     item.addEventListener('click', async () => {
       updateActiveCharacterInSidebar(char.id);
       await showBranchListForCharacter(char);
@@ -4516,6 +4533,305 @@ function updateActiveCharacterInSidebar(characterId) {
       item.classList.remove('active');
     }
   });
+}
+
+// Show character menu dropdown
+function showCharacterMenu(character, buttonEl) {
+  // Close any existing menus
+  document.querySelectorAll('.character-menu-dropdown').forEach(m => m.remove());
+
+  // Create dropdown
+  const menu = document.createElement('div');
+  menu.className = 'character-menu-dropdown show';
+
+  menu.innerHTML = `
+    <div class="character-menu-item" data-action="edit">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M10.5 1.5L12.5 3.5L4.5 11.5L1.5 12.5L2.5 9.5L10.5 1.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Edit Character
+    </div>
+    <div class="character-menu-item" data-action="duplicate">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <rect x="3" y="3" width="8" height="8" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <path d="M5 3V1.5C5 1.22 5.22 1 5.5 1H12.5C12.78 1 13 1.22 13 1.5V8.5C13 8.78 12.78 9 12.5 9H11" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+      Duplicate Character
+    </div>
+    <div class="character-menu-item" data-action="export">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M7 1V9M7 1L4 4M7 1L10 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M1 9V12C1 12.5523 1.44772 13 2 13H12C12.5523 13 13 12.5523 13 12V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Export Character
+    </div>
+    <div class="character-menu-item danger" data-action="delete">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 4H12M5 4V2H9V4M3 4L4 12H10L11 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Delete Character
+    </div>
+  `;
+
+  // Position menu relative to button
+  const buttonRect = buttonEl.getBoundingClientRect();
+  const parent = buttonEl.parentElement;
+  const parentRect = parent.getBoundingClientRect();
+
+  menu.style.position = 'absolute';
+  menu.style.top = `${buttonRect.bottom - parentRect.top + 4}px`;
+  menu.style.right = `${parentRect.right - buttonRect.right}px`;
+
+  // Add click handlers
+  menu.querySelectorAll('.character-menu-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const action = item.dataset.action;
+      menu.remove();
+
+      switch (action) {
+        case 'edit':
+          await handleEditCharacterFromSidebar(character);
+          break;
+        case 'duplicate':
+          await handleDuplicateCharacter(character);
+          break;
+        case 'export':
+          await handleExportCharacterFromSidebar(character);
+          break;
+        case 'delete':
+          await handleDeleteCharacterFromSidebar(character);
+          break;
+      }
+    });
+  });
+
+  parent.style.position = 'relative';
+  parent.appendChild(menu);
+
+  // Close menu when clicking outside
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      if (!menu.contains(e.target) && e.target !== buttonEl) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    });
+  }, 0);
+}
+
+// Handle edit character from sidebar
+async function handleEditCharacterFromSidebar(character) {
+  const modal = document.getElementById('edit-character-modal');
+  const form = document.getElementById('edit-character-form');
+
+  // Load character data into form
+  document.getElementById('edit-character-id').value = character.id;
+  document.getElementById('edit-character-name').value = character.name;
+  document.getElementById('edit-character-system-prompt').value = character.system_prompt;
+  document.getElementById('edit-character-greeting').value = character.greeting || '';
+  document.getElementById('edit-character-personality').value = character.personality || '';
+  document.getElementById('edit-character-description').value = character.description || '';
+  document.getElementById('edit-character-scenario').value = character.scenario || '';
+  document.getElementById('edit-character-mes-example').value = character.mes_example || '';
+
+  // Show modal
+  modal.style.display = 'flex';
+}
+
+// Handle duplicate character
+async function handleDuplicateCharacter(character) {
+  try {
+    setStatus('Duplicating character...', 'default');
+    const newCharacter = await invoke('duplicate_character', { characterId: character.id });
+    await loadCharacters();
+    setStatus(`Created ${newCharacter.name}`, 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to duplicate character:', error);
+    setStatus('Failed to duplicate character', 'error');
+    await window.__TAURI__.dialog.message(`Failed to duplicate character: ${error}`, {
+      title: 'Error',
+      kind: 'error'
+    });
+  }
+}
+
+// Handle export character from sidebar
+async function handleExportCharacterFromSidebar(character) {
+  try {
+    const outputPath = await invoke('export_character_card', { characterId: character.id });
+    showSuccess('Character Exported', `Successfully exported to ${outputPath}`, 4000);
+  } catch (error) {
+    console.error('Failed to export character:', error);
+    if (error && !error.toString().includes('cancelled')) {
+      showError('Export Failed', `Failed to export character: ${error}`);
+    }
+  }
+}
+
+// Handle delete character from sidebar
+async function handleDeleteCharacterFromSidebar(character) {
+  if (character.id === 'default') {
+    await window.__TAURI__.dialog.message('Cannot delete the default character.', {
+      title: 'Cannot Delete',
+      kind: 'warning'
+    });
+    return;
+  }
+
+  const confirmed = await window.__TAURI__.dialog.confirm(
+    `Are you sure you want to delete "${character.name}"? This action cannot be undone.`,
+    {
+      title: 'Delete Character',
+      kind: 'warning'
+    }
+  );
+
+  if (confirmed) {
+    try {
+      setStatus('Deleting character...', 'default');
+      await invoke('delete_character', { characterId: character.id });
+      await loadCharacters();
+      setStatus('Character deleted', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
+    } catch (error) {
+      console.error('Failed to delete character:', error);
+      setStatus('Failed to delete character', 'error');
+      await window.__TAURI__.dialog.message(`Failed to delete character: ${error}`, {
+        title: 'Error',
+        kind: 'error'
+      });
+    }
+  }
+}
+
+// Show chat menu dropdown
+function showChatMenu(character, chat, buttonEl) {
+  // Close any existing menus
+  document.querySelectorAll('.character-menu-dropdown').forEach(m => m.remove());
+
+  // Create dropdown
+  const menu = document.createElement('div');
+  menu.className = 'character-menu-dropdown show';
+
+  menu.innerHTML = `
+    <div class="character-menu-item" data-action="rename">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M10.5 1.5L12.5 3.5L4.5 11.5L1.5 12.5L2.5 9.5L10.5 1.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Rename Chat
+    </div>
+    <div class="character-menu-item danger" data-action="delete">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 4H12M5 4V2H9V4M3 4L4 12H10L11 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Delete Chat
+    </div>
+  `;
+
+  // Position menu relative to button
+  const buttonRect = buttonEl.getBoundingClientRect();
+  const parent = buttonEl.parentElement.parentElement;  // Get the chat card
+  const parentRect = parent.getBoundingClientRect();
+
+  menu.style.position = 'absolute';
+  menu.style.top = `${buttonRect.bottom - parentRect.top + 4}px`;
+  menu.style.right = `${parentRect.right - buttonRect.right}px`;
+
+  // Add click handlers
+  menu.querySelectorAll('.character-menu-item').forEach(item => {
+    item.addEventListener('click', async () => {
+      const action = item.dataset.action;
+      menu.remove();
+
+      switch (action) {
+        case 'rename':
+          await handleRenameChatFromList(character, chat);
+          break;
+        case 'delete':
+          await handleDeleteChatFromList(character, chat);
+          break;
+      }
+    });
+  });
+
+  parent.style.position = 'relative';
+  parent.appendChild(menu);
+
+  // Close menu when clicking outside
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu(e) {
+      if (!menu.contains(e.target) && e.target !== buttonEl) {
+        menu.remove();
+        document.removeEventListener('click', closeMenu);
+      }
+    });
+  }, 0);
+}
+
+// Handle rename chat from list
+async function handleRenameChatFromList(character, chat) {
+  const newName = await window.__TAURI__.dialog.ask(
+    `Enter a new name for this chat:`,
+    {
+      title: 'Rename Chat',
+      defaultPath: chat.name
+    }
+  );
+
+  if (newName && newName !== chat.name) {
+    try {
+      setStatus('Renaming chat...', 'default');
+      await invoke('rename_chat', {
+        characterId: character.id,
+        chatId: chat.id,
+        newName: newName
+      });
+      // Refresh the chat list
+      await showChatListForCharacter(character);
+      setStatus('Chat renamed', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
+    } catch (error) {
+      console.error('Failed to rename chat:', error);
+      setStatus('Failed to rename chat', 'error');
+      await window.__TAURI__.dialog.message(`Failed to rename chat: ${error}`, {
+        title: 'Error',
+        kind: 'error'
+      });
+    }
+  }
+}
+
+// Handle delete chat from list
+async function handleDeleteChatFromList(character, chat) {
+  const confirmed = await window.__TAURI__.dialog.confirm(
+    `Are you sure you want to delete "${chat.name}"? This will delete all messages and branches in this chat. This action cannot be undone.`,
+    {
+      title: 'Delete Chat',
+      kind: 'warning'
+    }
+  );
+
+  if (confirmed) {
+    try {
+      setStatus('Deleting chat...', 'default');
+      await invoke('delete_chat', {
+        characterId: character.id,
+        chatId: chat.id
+      });
+      // Refresh the chat list
+      await showChatListForCharacter(character);
+      setStatus('Chat deleted', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
+    } catch (error) {
+      console.error('Failed to delete chat:', error);
+      setStatus('Failed to delete chat', 'error');
+      await window.__TAURI__.dialog.message(`Failed to delete chat: ${error}`, {
+        title: 'Error',
+        kind: 'error'
+      });
+    }
+  }
 }
 
 // Show branch list for a character
@@ -4571,6 +4887,13 @@ async function showChatListForCharacter(character) {
       chatCard.innerHTML = `
         <div class="branch-card-header">
           <div class="branch-card-name">${chat.name}</div>
+          <button class="character-menu-btn chat-menu-btn" title="Chat options">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="3" r="1.5" fill="currentColor"/>
+              <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+              <circle cx="8" cy="13" r="1.5" fill="currentColor"/>
+            </svg>
+          </button>
         </div>
         <div class="branch-card-meta">
           <div class="branch-card-meta-item">
@@ -4603,6 +4926,13 @@ async function showChatListForCharacter(character) {
           </div>
         </div>
       `;
+
+      // Add three-dot menu handler
+      const menuBtn = chatCard.querySelector('.chat-menu-btn');
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showChatMenu(character, chat, menuBtn);
+      });
 
       // Handle chat selection - show branches for this chat
       chatCard.addEventListener('click', async () => {
@@ -4930,11 +5260,24 @@ async function handleNewCharacter() {
 
     const name = nameInput.value.trim();
     const systemPrompt = systemPromptInput.value.trim();
+    const description = document.getElementById('new-character-description').value.trim() || null;
+    const personality = document.getElementById('new-character-personality').value.trim() || null;
+    const scenario = document.getElementById('new-character-scenario').value.trim() || null;
+    const greeting = document.getElementById('new-character-greeting').value.trim() || null;
+    const mesExample = document.getElementById('new-character-mes-example').value.trim() || null;
 
     if (!name || !systemPrompt) return;
 
     try {
-      const newCharacter = await invoke('create_character', { name, systemPrompt });
+      const newCharacter = await invoke('create_character', {
+        name,
+        systemPrompt,
+        description,
+        personality,
+        scenario,
+        greeting,
+        mesExample
+      });
       await loadCharacters();
       characterSelect.value = newCharacter.id;
 
@@ -6795,6 +7138,69 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('character-form').addEventListener('submit', handleSaveCharacter);
   document.getElementById('validate-btn').addEventListener('click', handleValidate);
 
+  // Edit character modal event listeners
+  const editCharacterModal = document.getElementById('edit-character-modal');
+  const editCharacterForm = document.getElementById('edit-character-form');
+  const closeEditBtn = document.getElementById('close-edit-character-btn');
+  const cancelEditBtn = document.getElementById('cancel-edit-character-btn');
+  const editOverlay = editCharacterModal.querySelector('.new-character-overlay');
+
+  editCharacterForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const characterId = document.getElementById('edit-character-id').value;
+    const name = document.getElementById('edit-character-name').value.trim();
+    const systemPrompt = document.getElementById('edit-character-system-prompt').value.trim();
+    const greeting = document.getElementById('edit-character-greeting').value.trim() || null;
+    const personality = document.getElementById('edit-character-personality').value.trim() || null;
+    const description = document.getElementById('edit-character-description').value.trim() || null;
+    const scenario = document.getElementById('edit-character-scenario').value.trim() || null;
+    const mesExample = document.getElementById('edit-character-mes-example').value.trim() || null;
+
+    try {
+      setStatus('Updating character...', 'default');
+      await invoke('update_character', {
+        characterId,
+        name,
+        systemPrompt,
+        greeting,
+        personality,
+        description,
+        scenario,
+        mesExample,
+        postHistory: null,
+        alternateGreetings: null,
+        tags: null,
+        creator: null,
+        creatorNotes: null,
+        characterVersion: null
+      });
+
+      editCharacterModal.style.display = 'none';
+      await loadCharacters();
+      setStatus('Character updated', 'success');
+      setTimeout(() => setStatus('Ready'), 2000);
+    } catch (error) {
+      console.error('Failed to update character:', error);
+      setStatus('Failed to update character', 'error');
+      await window.__TAURI__.dialog.message(`Failed to update character: ${error}`, {
+        title: 'Error',
+        kind: 'error'
+      });
+    }
+  });
+
+  closeEditBtn.addEventListener('click', () => {
+    editCharacterModal.style.display = 'none';
+  });
+
+  cancelEditBtn.addEventListener('click', () => {
+    editCharacterModal.style.display = 'none';
+  });
+
+  editOverlay.addEventListener('click', () => {
+    editCharacterModal.style.display = 'none';
+  });
+
   setupAppControls();
   setupKeyboardShortcuts();
   setupTabs();
@@ -6823,6 +7229,13 @@ window.addEventListener('DOMContentLoaded', () => {
       const newCharacterModal = document.getElementById('new-character-modal');
       if (newCharacterModal && newCharacterModal.style.display !== 'none') {
         document.getElementById('cancel-new-character-btn').click();
+        return;
+      }
+
+      // Close edit character modal
+      const editCharModal = document.getElementById('edit-character-modal');
+      if (editCharModal && editCharModal.style.display !== 'none') {
+        editCharModal.style.display = 'none';
         return;
       }
 
