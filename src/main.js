@@ -5422,44 +5422,6 @@ async function loadBranch(characterId, branchId) {
   }
 }
 
-// Setup character filter panel
-function setupCharacterFilter() {
-  const filterBtn = document.getElementById('character-filter-btn');
-  const filterPanel = document.getElementById('character-filter-panel');
-  const filterInput = document.getElementById('character-filter-input');
-  const sortSelect = document.getElementById('character-sort-select');
-
-  if (!filterBtn || !filterPanel || !filterInput || !sortSelect) return;
-
-  // Toggle filter panel
-  filterBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isVisible = filterPanel.style.display !== 'none';
-    filterPanel.style.display = isVisible ? 'none' : 'block';
-    if (!isVisible) {
-      filterInput.focus();
-    }
-  });
-
-  // Close panel when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!filterPanel.contains(e.target) && e.target !== filterBtn) {
-      filterPanel.style.display = 'none';
-    }
-  });
-
-  // Filter input
-  filterInput.addEventListener('input', (e) => {
-    characterFilterText = e.target.value;
-    populateCharacterDropdown(allCharacters, allGroupChats);
-  });
-
-  // Sort select
-  sortSelect.addEventListener('change', (e) => {
-    characterSortOrder = e.target.value;
-    populateCharacterDropdown(allCharacters, allGroupChats);
-  });
-}
 
 // Load characters and populate dropdown
 async function loadCharacters() {
@@ -7957,9 +7919,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Setup settings search
   setupSettingsSearch();
-
-  // Setup character filter and sort
-  setupCharacterFilter();
 
   // Setup keyboard shortcuts modal
   setupShortcutsModal();

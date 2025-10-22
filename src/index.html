@@ -88,11 +88,6 @@
             <!-- Feature badges will be added here dynamically -->
           </div>
           <div class="character-controls">
-            <button id="character-filter-btn" class="icon-btn" title="Filter & Sort Characters" aria-label="Filter and sort characters" aria-expanded="false">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M3 5h10M5 8h6M7 11h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
             <div class="select-wrapper">
               <select id="character-select" class="character-select" aria-label="Select character"></select>
             </div>
@@ -101,33 +96,6 @@
                 <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </button>
-          </div>
-
-          <!-- Character Filter Panel -->
-          <div id="character-filter-panel" class="character-filter-panel" style="display: none;" role="region" aria-label="Character filter options">
-            <div class="character-filter-search" role="search">
-              <svg class="character-filter-icon" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <circle cx="5" cy="5" r="4" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M8 8L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <input
-                type="text"
-                id="character-filter-input"
-                class="character-filter-input"
-                placeholder="Search characters..."
-                autocomplete="off"
-                aria-label="Filter characters by name"
-              />
-            </div>
-            <div class="character-filter-sort">
-              <label for="character-sort-select">Sort:</label>
-              <select id="character-sort-select" class="character-sort-select" aria-label="Sort characters">
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
-                <option value="date-desc">Newest First</option>
-                <option value="date-asc">Oldest First</option>
-              </select>
-            </div>
           </div>
           <div class="header-controls">
             <button id="toggle-vn-mode-btn" class="icon-btn" title="Toggle Visual Novel Mode" aria-label="Toggle visual novel mode" aria-pressed="false">
