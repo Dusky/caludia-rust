@@ -1269,7 +1269,7 @@
             <textarea
               id="edit-character-system-prompt"
               placeholder="You are a helpful AI assistant..."
-              rows="4"
+              rows="3"
               required
             ></textarea>
           </div>
@@ -1283,42 +1283,45 @@
             ></textarea>
           </div>
 
-          <!-- Roleplay Details -->
-          <div class="form-group">
-            <label for="edit-character-personality">Personality (Optional)</label>
-            <input
-              type="text"
-              id="edit-character-personality"
-              placeholder="helpful, friendly, knowledgeable"
-            />
-          </div>
+          <!-- Roleplay Details (Collapsible) -->
+          <details class="form-details">
+            <summary>Roleplay Details</summary>
+            <div class="form-group">
+              <label for="edit-character-personality">Personality (Optional)</label>
+              <input
+                type="text"
+                id="edit-character-personality"
+                placeholder="helpful, friendly, knowledgeable"
+              />
+            </div>
 
-          <div class="form-group">
-            <label for="edit-character-description">Description (Optional)</label>
-            <textarea
-              id="edit-character-description"
-              placeholder="Detailed character description..."
-              rows="3"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label for="edit-character-description">Description (Optional)</label>
+              <textarea
+                id="edit-character-description"
+                placeholder="Detailed character description..."
+                rows="2"
+              ></textarea>
+            </div>
 
-          <div class="form-group">
-            <label for="edit-character-scenario">Scenario (Optional)</label>
-            <textarea
-              id="edit-character-scenario"
-              placeholder="The setting or situation where interactions take place..."
-              rows="3"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label for="edit-character-scenario">Scenario (Optional)</label>
+              <textarea
+                id="edit-character-scenario"
+                placeholder="The setting or situation where interactions take place..."
+                rows="2"
+              ></textarea>
+            </div>
 
-          <div class="form-group">
-            <label for="edit-character-mes-example">Example Messages (Optional)</label>
-            <textarea
-              id="edit-character-mes-example"
-              placeholder="Example dialogue demonstrating the character's speaking style..."
-              rows="3"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label for="edit-character-mes-example">Example Messages (Optional)</label>
+              <textarea
+                id="edit-character-mes-example"
+                placeholder="Example dialogue demonstrating the character's speaking style..."
+                rows="2"
+              ></textarea>
+            </div>
+          </details>
 
           <!-- Advanced Settings (Collapsible) -->
           <details class="form-details">

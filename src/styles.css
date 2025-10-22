@@ -4549,8 +4549,19 @@ body.drag-over {
   overflow-y: auto;
 }
 
+/* More compact form spacing for character modals */
+.new-character-content .form-group,
+.edit-character-content .form-group {
+  margin-bottom: 12px;
+}
+
+.new-character-content .form-group:last-child,
+.edit-character-content .form-group:last-child {
+  margin-bottom: 0;
+}
+
 .form-details {
-  margin: 16px 0;
+  margin: 12px 0;
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 12px;

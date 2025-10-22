@@ -2784,6 +2784,19 @@ async function handleEditMessage(messageDiv, originalContent) {
   // Hide action buttons during edit
   actionsDiv.style.display = 'none';
 
+  // Add visual feedback for edit mode
+  messageDiv.classList.add('editing');
+  messageDiv.style.border = '2px solid var(--accent)';
+  messageDiv.style.background = 'var(--bg-tertiary)';
+  messageDiv.style.boxShadow = '0 0 0 4px rgba(99, 102, 241, 0.1)';
+
+  // Store original styles to restore later
+  const originalStyles = {
+    border: messageDiv.style.border,
+    background: messageDiv.style.background,
+    boxShadow: messageDiv.style.boxShadow
+  };
+
   // Create edit form
   const editForm = document.createElement('form');
   editForm.className = 'message-edit-form';
@@ -2823,10 +2836,19 @@ async function handleEditMessage(messageDiv, originalContent) {
   textarea.focus();
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
+  // Helper to exit edit mode and restore styles
+  const exitEditMode = () => {
+    messageDiv.classList.remove('editing');
+    messageDiv.style.border = originalStyles.border;
+    messageDiv.style.background = originalStyles.background;
+    messageDiv.style.boxShadow = originalStyles.boxShadow;
+  };
+
   // Handle cancel
   cancelBtn.addEventListener('click', () => {
     contentDiv.innerHTML = originalHTML;
     actionsDiv.style.display = 'flex';
+    exitEditMode();
   });
 
   // Handle save
@@ -2837,6 +2859,7 @@ async function handleEditMessage(messageDiv, originalContent) {
     if (!newContent || newContent === originalContent) {
       contentDiv.innerHTML = originalHTML;
       actionsDiv.style.display = 'flex';
+      exitEditMode();
       return;
     }
 
@@ -2873,10 +2896,13 @@ async function handleEditMessage(messageDiv, originalContent) {
         originalMessages: messagesToRestore,
         newContent
       });
+
+      // Edit complete - messageDiv will be removed, no need to exitEditMode
     } catch (error) {
       console.error('Failed to edit message:', error);
       contentDiv.innerHTML = originalHTML;
       actionsDiv.style.display = 'flex';
+      exitEditMode();
       addMessage(`Error editing message: ${error}`, false);
     }
   });
@@ -3735,6 +3761,54 @@ async function handleAvatarUpload() {
       characterMsg.className = 'validation-message error';
     }
   }
+}
+
+// Make avatar circle clickable for uploading
+function makeAvatarUploadable(avatarCircle, uploadHandler) {
+  if (!avatarCircle) return;
+
+  // Make clickable
+  avatarCircle.style.cursor = 'pointer';
+  avatarCircle.title = 'Click to upload avatar or drag & drop an image';
+
+  avatarCircle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Only trigger upload if no avatar is set (empty background)
+    const hasAvatar = avatarCircle.style.backgroundImage && avatarCircle.style.backgroundImage !== '';
+    if (!hasAvatar) {
+      uploadHandler();
+    } else {
+      // If avatar exists, show the full-size view (existing behavior)
+      // This will be handled by makeAvatarClickable which is called separately
+    }
+  });
+
+  // Add drag-drop support
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    avatarCircle.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  avatarCircle.addEventListener('dragenter', () => {
+    avatarCircle.style.transform = 'scale(1.05)';
+    avatarCircle.style.boxShadow = '0 4px 20px rgba(99, 102, 241, 0.5)';
+  });
+
+  avatarCircle.addEventListener('dragleave', () => {
+    avatarCircle.style.transform = '';
+    avatarCircle.style.boxShadow = '';
+  });
+
+  avatarCircle.addEventListener('drop', async (e) => {
+    avatarCircle.style.transform = '';
+    avatarCircle.style.boxShadow = '';
+
+    // For Tauri apps, trigger the file dialog instead of direct file access
+    // Direct file path access from drag-drop is restricted for security
+    uploadHandler();
+  });
 }
 
 function handleAvatarRemove() {
@@ -4791,6 +4865,29 @@ async function handleEditCharacterFromSidebar(character) {
   const avatarCircle = document.getElementById('edit-avatar-circle');
   const removeBtn = document.getElementById('edit-remove-avatar-btn');
 
+  // Make avatar circle uploadable for edit modal
+  const handleEditAvatarUpload = async () => {
+    try {
+      const characterId = document.getElementById('edit-character-id').value;
+      const avatarFilename = await invoke('select_and_upload_avatar', {
+        characterId: characterId
+      });
+
+      // Update preview
+      const avatarUrl = await getAvatarUrl(avatarFilename);
+      if (avatarUrl) {
+        avatarCircle.style.backgroundImage = `url('${avatarUrl}')`;
+        removeBtn.style.display = 'inline-block';
+      }
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      if (error && !error.toString().includes('No file selected')) {
+        setStatus('Failed to upload avatar', 'error');
+      }
+    }
+  };
+  makeAvatarUploadable(avatarCircle, handleEditAvatarUpload);
+
   if (character.avatar_path) {
     const avatarUrl = await getAvatarUrl(character.avatar_path);
     if (avatarUrl) {
@@ -5667,6 +5764,9 @@ async function handleNewCharacter() {
     newRemoveAvatarBtn.style.display = 'none';
   };
 
+  // Make avatar circle uploadable for new character
+  makeAvatarUploadable(newAvatarCircle, handleNewAvatarUpload);
+
   newUploadAvatarBtn.addEventListener('click', handleNewAvatarUpload);
   newRemoveAvatarBtn.addEventListener('click', handleNewAvatarRemove);
 
@@ -5930,6 +6030,10 @@ async function loadCharacterSettings() {
     // Load avatar preview
     const avatarPreview = document.querySelector('.avatar-circle-large');
     const removeAvatarBtn = document.getElementById('remove-avatar-btn');
+
+    // Make avatar circle uploadable (clickable + drag-drop)
+    makeAvatarUploadable(avatarPreview, handleAvatarUpload);
+
     if (character.avatar_path) {
       getAvatarUrl(character.avatar_path).then(url => {
         if (url) {
