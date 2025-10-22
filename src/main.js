@@ -6276,9 +6276,24 @@ function renderWorldInfoList(entries) {
     enableCheckbox.checked = entry.enabled;
     enableCheckbox.addEventListener('change', () => handleToggleWorldInfoEntry(entry.id, enableCheckbox.checked));
 
-    const keysText = document.createElement('span');
+    const infoSection = document.createElement('div');
+    infoSection.className = 'worldinfo-info-section';
+
+    const keysText = document.createElement('div');
     keysText.className = 'worldinfo-keys';
     keysText.textContent = entry.keys.join(', ');
+
+    // Add content preview
+    const contentPreview = document.createElement('div');
+    contentPreview.className = 'worldinfo-content-preview';
+    const maxLength = 100;
+    const previewText = entry.content.length > maxLength
+      ? entry.content.substring(0, maxLength) + '...'
+      : entry.content;
+    contentPreview.textContent = previewText;
+
+    infoSection.appendChild(keysText);
+    infoSection.appendChild(contentPreview);
 
     const priority = document.createElement('span');
     priority.className = 'worldinfo-priority';
@@ -6301,16 +6316,11 @@ function renderWorldInfoList(entries) {
     actionsDiv.appendChild(deleteBtn);
 
     header.appendChild(enableCheckbox);
-    header.appendChild(keysText);
+    header.appendChild(infoSection);
     header.appendChild(priority);
     header.appendChild(actionsDiv);
 
-    const content = document.createElement('div');
-    content.className = 'worldinfo-entry-content';
-    content.textContent = entry.content;
-
     entryDiv.appendChild(header);
-    entryDiv.appendChild(content);
     listContainer.appendChild(entryDiv);
   });
 }
