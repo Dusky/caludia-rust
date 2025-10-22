@@ -3419,7 +3419,8 @@ async function sendMessage(message, isRegenerate = false) {
         setTimeout(showSettings, 1000);
       } else {
         addMessage(`Error: ${error}`, false);
-        setStatus(`Error: ${error.substring(0, 50)}...`, 'error');
+        const errorMsg = error.toString();
+        setStatus(`Error: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`, 'error');
       }
       sendBtn.disabled = false;
       messageInput.disabled = false;
@@ -3447,7 +3448,8 @@ async function sendMessage(message, isRegenerate = false) {
         setTimeout(showSettings, 1000);
       } else {
         addMessage(`Error: ${error}`, false);
-        setStatus(`Error: ${error.substring(0, 50)}...`, 'error');
+        const errorMsg = error.toString();
+        setStatus(`Error: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`, 'error');
       }
     } finally {
       sendBtn.disabled = false;
@@ -5497,11 +5499,13 @@ async function loadCharacters() {
     characterHeaderName.textContent = activeCharacter.name;
     currentCharacter = activeCharacter;
 
-    // Update header avatar
+    // Update header avatar with race condition protection
     const headerAvatar = document.querySelector('.avatar-circle');
     if (headerAvatar && activeCharacter.avatar_path) {
+      const expectedCharacterId = activeCharacter.id;
       getAvatarUrl(activeCharacter.avatar_path).then(url => {
-        if (url) {
+        // Only update if this is still the active character (prevent race condition)
+        if (url && currentCharacter && currentCharacter.id === expectedCharacterId) {
           headerAvatar.style.backgroundImage = `url('${url}')`;
           makeAvatarClickable(headerAvatar, url);
         }
@@ -5611,6 +5615,9 @@ async function handleCharacterSwitch() {
 }
 
 // Handle new character creation
+// Store references to event handlers to prevent memory leaks
+let newCharacterHandlers = null;
+
 async function handleNewCharacter() {
   const modal = document.getElementById('new-character-modal');
   const overlay = modal.querySelector('.new-character-overlay');
@@ -5619,6 +5626,16 @@ async function handleNewCharacter() {
   const systemPromptInput = document.getElementById('new-character-system-prompt');
   const closeBtn = document.getElementById('close-new-character-btn');
   const cancelBtn = document.getElementById('cancel-new-character-btn');
+
+  // Remove any existing event listeners to prevent memory leak
+  if (newCharacterHandlers) {
+    form.removeEventListener('submit', newCharacterHandlers.handleSubmit);
+    overlay.removeEventListener('click', newCharacterHandlers.handleClose);
+    closeBtn.removeEventListener('click', newCharacterHandlers.handleClose);
+    cancelBtn.removeEventListener('click', newCharacterHandlers.handleClose);
+    document.getElementById('new-upload-avatar-btn').removeEventListener('click', newCharacterHandlers.handleNewAvatarUpload);
+    document.getElementById('new-remove-avatar-btn').removeEventListener('click', newCharacterHandlers.handleNewAvatarRemove);
+  }
 
   // Reset form
   form.reset();
@@ -5682,7 +5699,16 @@ async function handleNewCharacter() {
     const greeting = document.getElementById('new-character-greeting').value.trim() || null;
     const mesExample = document.getElementById('new-character-mes-example').value.trim() || null;
 
-    if (!name || !systemPrompt) return;
+    if (!name || !systemPrompt) {
+      showWarning('Missing Required Fields', 'Character name and system prompt are required');
+      return;
+    }
+
+    // Disable submit button to prevent duplicate submissions
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
 
     try {
       const newCharacter = await invoke('create_character', {
@@ -5711,6 +5737,9 @@ async function handleNewCharacter() {
       await loadCharacters();
       characterSelect.value = newCharacter.id;
 
+      // Show success feedback
+      showSuccess('Character Created', `${name} has been created successfully`);
+
       // Hide modal
       modal.style.display = 'none';
 
@@ -5723,7 +5752,11 @@ async function handleNewCharacter() {
       newRemoveAvatarBtn.removeEventListener('click', handleNewAvatarRemove);
     } catch (error) {
       console.error('Failed to create character:', error);
-      addMessage(`Failed to create character: ${error}`, false);
+      showError('Creation Failed', error.toString());
+
+      // Re-enable submit button on error
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
     }
   };
 
@@ -5736,6 +5769,14 @@ async function handleNewCharacter() {
     cancelBtn.removeEventListener('click', handleClose);
     newUploadAvatarBtn.removeEventListener('click', handleNewAvatarUpload);
     newRemoveAvatarBtn.removeEventListener('click', handleNewAvatarRemove);
+  };
+
+  // Store handlers for cleanup
+  newCharacterHandlers = {
+    handleSubmit,
+    handleClose,
+    handleNewAvatarUpload,
+    handleNewAvatarRemove
   };
 
   // Attach event listeners
@@ -5807,11 +5848,13 @@ async function handleExportCharacter() {
 // Load chat history
 async function loadChatHistory() {
   try {
+    // Clear container first to prevent flickering
+    messagesContainer.innerHTML = '';
+
     // Show skeleton loader while loading
     showMessageSkeleton(3);
 
     const history = await invoke('get_chat_history');
-    messagesContainer.innerHTML = '';
 
     if (history.length === 0) {
       if (currentCharacter && currentCharacter.greeting) {
@@ -6262,7 +6305,7 @@ async function handleAddWorldInfoEntry() {
     const priority = parseInt(document.getElementById('wi-add-priority').value) || 0;
 
     if (!keys || !content) {
-      alert('Keywords and content are required');
+      showWarning('Missing Fields', 'Keywords and content are required');
       return;
     }
 
@@ -6280,7 +6323,7 @@ async function handleAddWorldInfoEntry() {
       await loadRoleplaySettings();
     } catch (error) {
       console.error('Failed to add World Info entry:', error);
-      alert(`Failed to add entry: ${error}`);
+      showError('Failed to Add Entry', error.toString());
     }
   });
 }
@@ -6343,7 +6386,7 @@ async function handleEditWorldInfoEntry(entry) {
     const priority = parseInt(editForm.querySelector('.wi-edit-priority').value) || 0;
 
     if (!keys || !contentText) {
-      alert('Keywords and content are required');
+      showWarning('Missing Fields', 'Keywords and content are required');
       return;
     }
 
@@ -6362,7 +6405,7 @@ async function handleEditWorldInfoEntry(entry) {
       await loadRoleplaySettings();
     } catch (error) {
       console.error('Failed to update World Info entry:', error);
-      alert(`Failed to update entry: ${error}`);
+      showError('Failed to Update Entry', error.toString());
     }
   });
 }
@@ -6392,7 +6435,7 @@ async function handleToggleWorldInfoEntry(entryId, enabled) {
     updateFeatureBadges();
   } catch (error) {
     console.error('Failed to toggle World Info entry:', error);
-    alert(`Failed to toggle entry: ${error}`);
+    showError('Failed to Toggle Entry', error.toString());
   }
 }
 
@@ -6410,7 +6453,7 @@ async function handleDeleteWorldInfoEntry(entryId) {
     await loadRoleplaySettings();
   } catch (error) {
     console.error('Failed to delete World Info entry:', error);
-    alert(`Failed to delete entry: ${error}`);
+    showError('Failed to Delete Entry', error.toString());
   }
 }
 
@@ -6817,7 +6860,7 @@ async function handleCreatePreset() {
     const authorsNoteDefault = document.getElementById('preset-create-note').value.trim();
 
     if (!name || !description) {
-      alert('Name and description are required');
+      showWarning('Missing Fields', 'Name and description are required');
       return;
     }
 
@@ -6853,7 +6896,7 @@ async function handleCreatePreset() {
       await handlePresetSelect(id);
     } catch (error) {
       console.error('Failed to create preset:', error);
-      alert(`Failed to create preset: ${error}`);
+      showError('Failed to Create Preset', error.toString());
       setStatus('Failed to create preset', 'error');
       setTimeout(() => setStatus('Ready'), 2000);
     }
@@ -7182,7 +7225,7 @@ function addInstructionBlock() {
     const content = document.getElementById('inst-add-content').value.trim();
 
     if (!name || !content) {
-      alert('Name and content are required');
+      showWarning('Missing Fields', 'Name and content are required');
       return;
     }
 
@@ -7267,7 +7310,7 @@ function editInstruction(instruction) {
     const newContent = editForm.querySelector('.inst-edit-content').value.trim();
 
     if (!newName || !newContent) {
-      alert('Name and content are required');
+      showWarning('Missing Fields', 'Name and content are required');
       return;
     }
 
@@ -7343,7 +7386,7 @@ async function savePresetChanges() {
     await handlePresetSelect(currentEditingPreset.id);
   } catch (error) {
     console.error('Failed to save preset changes:', error);
-    alert(`Failed to save changes: ${error}`);
+    showError('Failed to Save Changes', error.toString());
     setStatus('Failed to save preset', 'error');
     setTimeout(() => setStatus('Ready'), 2000);
   }
@@ -7368,7 +7411,7 @@ async function deletePreset() {
     await loadPresets();
   } catch (error) {
     console.error('Failed to delete preset:', error);
-    alert(`Failed to delete preset: ${error}`);
+    showError('Failed to Delete Preset', error.toString());
     setStatus('Failed to delete preset', 'error');
     setTimeout(() => setStatus('Ready'), 2000);
   }
@@ -7417,7 +7460,7 @@ async function duplicatePreset() {
   document.getElementById('preset-duplicate-save').addEventListener('click', async () => {
     const newName = document.getElementById('preset-duplicate-name').value.trim();
     if (!newName) {
-      alert('Please enter a preset name');
+      showWarning('Missing Field', 'Please enter a preset name');
       return;
     }
 
@@ -7441,7 +7484,7 @@ async function duplicatePreset() {
       await handlePresetSelect(duplicatedPreset.id);
     } catch (error) {
       console.error('Failed to duplicate preset:', error);
-      alert(`Failed to duplicate preset: ${error}`);
+      showError('Failed to Duplicate Preset', error.toString());
       setStatus('Failed to duplicate preset', 'error');
       setTimeout(() => setStatus('Ready'), 2000);
     }
@@ -7454,7 +7497,7 @@ async function restoreBuiltinPreset() {
 
   const builtInIds = ['default', 'roleplay', 'creative-writing', 'assistant'];
   if (!builtInIds.includes(currentEditingPreset.id)) {
-    alert('Can only restore built-in presets');
+    showWarning('Invalid Action', 'Can only restore built-in presets');
     return;
   }
 
@@ -7477,7 +7520,7 @@ async function restoreBuiltinPreset() {
     await handlePresetSelect(restoredPreset.id);
   } catch (error) {
     console.error('Failed to restore preset:', error);
-    alert(`Failed to restore preset: ${error}`);
+    showError('Failed to Restore Preset', error.toString());
     setStatus('Failed to restore preset', 'error');
     setTimeout(() => setStatus('Ready'), 2000);
   }
@@ -7590,6 +7633,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const scenario = document.getElementById('edit-character-scenario').value.trim() || null;
     const mesExample = document.getElementById('edit-character-mes-example').value.trim() || null;
 
+    // Validate required fields
+    if (!name || !systemPrompt) {
+      showWarning('Missing Required Fields', 'Character name and system prompt are required');
+      return;
+    }
+
     // Extract advanced fields
     const postHistory = document.getElementById('edit-character-post-history').value.trim() || null;
 
@@ -7607,6 +7656,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const creator = document.getElementById('edit-character-creator').value.trim() || null;
     const characterVersion = document.getElementById('edit-character-version').value.trim() || null;
     const creatorNotes = document.getElementById('edit-character-creator-notes').value.trim() || null;
+
+    // Disable submit button to prevent duplicate submissions
+    const submitBtn = editCharacterForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
 
     try {
       setStatus('Updating character...', 'default');
@@ -7630,14 +7685,16 @@ window.addEventListener('DOMContentLoaded', () => {
       editCharacterModal.style.display = 'none';
       await loadCharacters();
       setStatus('Character updated', 'success');
+      showSuccess('Character Updated', `${name} has been updated successfully`);
       setTimeout(() => setStatus('Ready'), 2000);
     } catch (error) {
       console.error('Failed to update character:', error);
       setStatus('Failed to update character', 'error');
-      await window.__TAURI__.dialog.message(`Failed to update character: ${error}`, {
-        title: 'Error',
-        kind: 'error'
-      });
+      showError('Update Failed', error.toString());
+
+      // Re-enable submit button on error
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
     }
   });
 
@@ -8128,13 +8185,13 @@ async function handleUploadExpression() {
   const expressionName = nameInput.value.trim();
 
   if (!expressionName) {
-    alert('Please enter an expression name first');
+    showWarning('Missing Field', 'Please enter an expression name first');
     return;
   }
 
   // Validate expression name (alphanumeric, hyphens, underscores only)
   if (!/^[a-zA-Z0-9_-]+$/.test(expressionName)) {
-    alert('Expression name can only contain letters, numbers, hyphens, and underscores');
+    showWarning('Invalid Name', 'Expression name can only contain letters, numbers, hyphens, and underscores');
     return;
   }
 
@@ -8150,7 +8207,7 @@ async function handleUploadExpression() {
     await loadExpressionsGallery(characterId);
   } catch (error) {
     console.error('Failed to upload expression:', error);
-    alert(`Failed to upload expression: ${error}`);
+    showError('Failed to Upload Expression', error.toString());
   }
 }
 
@@ -8164,7 +8221,7 @@ async function handleDeleteExpression(characterId, expressionName) {
     await loadExpressionsGallery(characterId);
   } catch (error) {
     console.error('Failed to delete expression:', error);
-    alert(`Failed to delete expression: ${error}`);
+    showError('Failed to Delete Expression', error.toString());
   }
 }
 
@@ -8177,7 +8234,7 @@ async function handleDefaultExpressionChange() {
     await invoke('set_default_expression', { characterId, expressionName });
   } catch (error) {
     console.error('Failed to set default expression:', error);
-    alert(`Failed to set default expression: ${error}`);
+    showError('Failed to Set Default Expression', error.toString());
   }
 }
 
@@ -8925,7 +8982,8 @@ async function sendGroupMessage(message, isRegenerate = false) {
   } catch (error) {
     console.error('Failed to generate group response:', error);
     addMessage(`Error: ${error}`, false);
-    setStatus(`Error: ${error.toString().substring(0, 50)}...`, 'error');
+    const errorMsg = error.toString();
+    setStatus(`Error: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`, 'error');
   } finally {
     sendBtn.disabled = false;
     messageInput.disabled = false;
