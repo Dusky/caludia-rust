@@ -4310,22 +4310,7 @@ async function updateTokenCount() {
   }, 300); // Update after 300ms of no typing
 }
 
-// Toggle token breakdown display
-document.getElementById('token-details-btn').addEventListener('click', (e) => {
-  e.stopPropagation();
-  const breakdown = document.getElementById('token-breakdown');
-  breakdown.style.display = breakdown.style.display === 'none' ? 'block' : 'none';
-});
-
-// Close breakdown when clicking outside
-document.addEventListener('click', (e) => {
-  const breakdown = document.getElementById('token-breakdown');
-  const detailsBtn = document.getElementById('token-details-btn');
-
-  if (!breakdown.contains(e.target) && !detailsBtn.contains(e.target)) {
-    breakdown.style.display = 'none';
-  }
-});
+// Token breakdown is now always visible - no toggle needed
 
 // Update branch indicator in header
 async function updateBranchIndicator() {

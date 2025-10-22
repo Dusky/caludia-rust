@@ -1403,59 +1403,38 @@ body.show-timestamps .message-timestamp {
   border-radius: 6px;
 }
 
-.token-details-btn {
-  width: 20px;
-  height: 20px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-  padding: 0;
-}
-
-.token-details-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--accent);
-}
-
 .token-breakdown {
-  position: absolute;
-  bottom: 52px;
-  right: 16px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  z-index: 100;
-  min-width: 250px;
+  border-top: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 11px;
+  max-height: 120px;
+  overflow-y: auto;
 }
 
 .token-breakdown-header {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 8px;
-  padding-bottom: 8px;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .token-breakdown-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 4px 12px;
 }
 
 .token-breakdown-item {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
+  padding: 2px 0;
 }
 
 .token-breakdown-item span:first-child {
@@ -1465,17 +1444,19 @@ body.show-timestamps .message-timestamp {
 .token-breakdown-item span:last-child {
   color: var(--text-primary);
   font-weight: 500;
+  margin-left: 8px;
 }
 
 .token-breakdown-total {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--accent);
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 6px;
+  padding-top: 6px;
   border-top: 1px solid var(--border);
+  grid-column: 1 / -1;
 }
 
 @keyframes pulse {

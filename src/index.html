@@ -943,16 +943,10 @@
           <span id="status-text" class="status-text" role="status" aria-live="polite">Ready</span>
           <div id="token-counter" class="token-counter">
             <span id="token-count-total" class="token-count" role="status" aria-live="polite">0 tokens</span>
-            <button id="token-details-btn" class="token-details-btn" title="Show token breakdown" aria-label="Show detailed token breakdown" aria-expanded="false">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M8 7v4M8 5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
           </div>
         </div>
-        <!-- Token Breakdown Tooltip -->
-        <div id="token-breakdown" class="token-breakdown" style="display: none;">
+        <!-- Token Breakdown - Always Visible -->
+        <div id="token-breakdown" class="token-breakdown">
           <div class="token-breakdown-header">Token Breakdown</div>
           <div class="token-breakdown-list">
             <div class="token-breakdown-item">
