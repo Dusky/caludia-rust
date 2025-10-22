@@ -3999,7 +3999,6 @@ function setupAppControls() {
 
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
-  document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
 
   // Setup recursion depth change handler
   document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
@@ -6051,6 +6050,18 @@ async function loadCharacterSettings() {
 
     // Load expressions
     await loadExpressionsGallery(character.id);
+
+    // Load message examples settings
+    try {
+      const settings = await invoke('get_roleplay_settings', { characterId: character.id });
+      document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
+      document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+    } catch (error) {
+      console.error('Failed to load examples settings:', error);
+      // Set defaults if loading fails
+      document.getElementById('examples-enabled').checked = false;
+      document.getElementById('examples-position').value = 'after_system';
+    }
   } catch (error) {
     console.error('Failed to load character:', error);
   }
@@ -6105,7 +6116,25 @@ async function handleSaveCharacter(e) {
       avatarPath: pendingAvatarPath
     });
 
+    // Also save message examples settings
+    const characterId = document.getElementById('character-settings-select').value;
+    const examplesEnabled = document.getElementById('examples-enabled').checked;
+    const examplesPosition = document.getElementById('examples-position').value;
+
+    await invoke('update_examples_settings', {
+      characterId,
+      enabled: examplesEnabled,
+      position: examplesPosition
+    });
+
+    // Update currentRoleplaySettings if available
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.examples_enabled = examplesEnabled;
+      currentRoleplaySettings.examples_position = examplesPosition;
+    }
+
     await loadCharacters();
+    updateFeatureBadges();
     showSuccess('Character Saved', `${name} has been saved successfully.`);
   } catch (error) {
     showError('Save Failed', `Failed to save character: ${error}`);
@@ -6143,9 +6172,7 @@ async function loadRoleplaySettings() {
     document.getElementById('persona-description').value = settings.persona_description || '';
     document.getElementById('persona-enabled').checked = settings.persona_enabled || false;
 
-    // Load Message Examples
-    document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
-    document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+    // Message Examples settings now loaded in Character Tab (loadCharacterSettings)
 
     // Load Presets
     await loadPresets();
