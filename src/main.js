@@ -2364,16 +2364,23 @@ function renderAssistantContent(contentDiv, messageText) {
 }
 
 // Add message to chat
-async function addMessage(content, isUser = false, skipActions = false, timestamp = null) {
+async function addMessage(content, isUser = false, skipActions = false, timestamp = null, characterInfo = null) {
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${isUser ? 'user' : 'assistant'}`;
+
+  // For group chat messages, add a data attribute
+  if (characterInfo) {
+    messageDiv.dataset.characterId = characterInfo.id;
+  }
 
   const avatar = document.createElement('div');
   avatar.className = 'avatar-circle';
 
   // Set avatar image for assistant messages
-  if (!isUser && currentCharacter && currentCharacter.avatar_path) {
-    getAvatarUrl(currentCharacter.avatar_path).then(url => {
+  // Use characterInfo if provided (for group chats), otherwise use currentCharacter
+  const characterToShow = characterInfo || currentCharacter;
+  if (!isUser && characterToShow && characterToShow.avatar_path) {
+    getAvatarUrl(characterToShow.avatar_path).then(url => {
       if (url) {
         avatar.style.backgroundImage = `url('${url}')`;
         makeAvatarClickable(avatar, url);
@@ -2411,12 +2418,47 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
     }
   } else {
     // Assistant messages: render as markdown
-    // Add character name indicator if character exists
-    if (currentCharacter && currentCharacter.name) {
-      const nameIndicator = document.createElement('div');
-      nameIndicator.className = 'character-name-indicator';
-      nameIndicator.textContent = currentCharacter.name;
-      contentDiv.appendChild(nameIndicator);
+    // Add character badge for group chats, or simple name indicator for 1-on-1
+    const charToDisplay = characterInfo || currentCharacter;
+    if (charToDisplay && charToDisplay.name) {
+      if (characterInfo) {
+        // Group chat: show prominent character badge
+        const badge = document.createElement('div');
+        badge.className = 'character-badge';
+
+        // Generate consistent color for character
+        const badgeColor = generateCharacterColor(characterInfo.id);
+        badge.style.setProperty('--badge-color', badgeColor);
+
+        const badgeAvatar = document.createElement('div');
+        badgeAvatar.className = 'character-badge-avatar';
+
+        if (characterInfo.avatar_path) {
+          getAvatarUrl(characterInfo.avatar_path).then(url => {
+            if (url) {
+              badgeAvatar.style.backgroundImage = `url('${url}')`;
+            } else {
+              badgeAvatar.textContent = characterInfo.name.charAt(0).toUpperCase();
+            }
+          });
+        } else {
+          badgeAvatar.textContent = characterInfo.name.charAt(0).toUpperCase();
+        }
+
+        const badgeName = document.createElement('span');
+        badgeName.className = 'character-badge-name';
+        badgeName.textContent = characterInfo.name;
+
+        badge.appendChild(badgeAvatar);
+        badge.appendChild(badgeName);
+        contentDiv.appendChild(badge);
+      } else {
+        // 1-on-1 chat: simple name indicator
+        const nameIndicator = document.createElement('div');
+        nameIndicator.className = 'character-name-indicator';
+        nameIndicator.textContent = charToDisplay.name;
+        contentDiv.appendChild(nameIndicator);
+      }
     }
 
     const messageContent = document.createElement('div');
@@ -3549,7 +3591,12 @@ async function handleSubmit(e) {
   // Clear the auto-saved draft since message is being sent
   clearAutoSavedDraft();
 
-  await sendMessage(message);
+  // Check if we're in a group chat
+  if (currentGroupChat) {
+    await sendGroupMessage(message);
+  } else {
+    await sendMessage(message);
+  }
 }
 
 // Settings functionality
@@ -3907,6 +3954,11 @@ function setupAppControls() {
     sidebarNewCharBtn.addEventListener('click', handleNewCharacter);
   }
 
+  const sidebarImportCharBtn = document.getElementById('sidebar-import-character-btn');
+  if (sidebarImportCharBtn) {
+    sidebarImportCharBtn.addEventListener('click', handleImportCharacter);
+  }
+
   const sidebarSearch = document.getElementById('sidebar-character-search');
   if (sidebarSearch) {
     sidebarSearch.addEventListener('input', (e) => {
@@ -4171,6 +4223,27 @@ window.handleUninstallPlugin = handleUninstallPlugin;
 // Keyboard shortcuts
 function setupKeyboardShortcuts() {
   messageInput.addEventListener('keydown', (e) => {
+    // Handle mention autocomplete navigation
+    if (mentionAutocompleteVisible) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateMentionAutocomplete('down');
+        return;
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateMentionAutocomplete('up');
+        return;
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        selectCurrentMention();
+        return;
+      } else if (e.key === 'Escape') {
+        hideMentionAutocomplete();
+        return;
+      }
+    }
+
+    // Regular enter key handling
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -4180,6 +4253,7 @@ function setupKeyboardShortcuts() {
   messageInput.addEventListener('input', () => {
     autoResize(messageInput);
     updateTokenCount();
+    handleMentionInput(); // Check for @ mentions
   });
 }
 
@@ -4389,6 +4463,8 @@ async function openBranchManager() {
 
 // Character filter and sort state
 let allCharacters = [];
+let allGroupChats = [];
+let charactersMap = {}; // Map of character ID to character object
 let characterFilterText = '';
 let characterSortOrder = 'name-asc';
 
@@ -4425,19 +4501,41 @@ function filterAndSortCharacters(characters) {
 }
 
 // Populate character dropdown
-function populateCharacterDropdown(characters) {
+function populateCharacterDropdown(characters, groupChats = []) {
   const filtered = filterAndSortCharacters(characters);
   characterSelect.innerHTML = '';
-  filtered.forEach(char => {
-    const option = document.createElement('option');
-    option.value = char.id;
-    option.textContent = char.name;
-    characterSelect.appendChild(option);
-  });
+
+  // Add characters
+  if (filtered.length > 0) {
+    const charactersGroup = document.createElement('optgroup');
+    charactersGroup.label = 'Characters';
+    filtered.forEach(char => {
+      const option = document.createElement('option');
+      option.value = char.id;
+      option.textContent = char.name;
+      option.dataset.type = 'character';
+      charactersGroup.appendChild(option);
+    });
+    characterSelect.appendChild(charactersGroup);
+  }
+
+  // Add group chats
+  if (groupChats.length > 0) {
+    const groupsGroup = document.createElement('optgroup');
+    groupsGroup.label = 'Group Chats';
+    groupChats.forEach(group => {
+      const option = document.createElement('option');
+      option.value = group.id;
+      option.textContent = `👥 ${group.name} (${group.character_ids.length})`;
+      option.dataset.type = 'group';
+      groupsGroup.appendChild(option);
+    });
+    characterSelect.appendChild(groupsGroup);
+  }
 }
 
 // Populate sidebar character list (for spacious layout)
-function populateSidebarCharacterList(characters) {
+function populateSidebarCharacterList(characters, groupChats = []) {
   const sidebarList = document.getElementById('sidebar-character-list');
   if (!sidebarList) return;
 
@@ -4521,6 +4619,49 @@ function populateSidebarCharacterList(characters) {
 
     sidebarList.appendChild(item);
   });
+
+  // Add group chats section
+  if (groupChats && groupChats.length > 0) {
+    // Add separator
+    const separator = document.createElement('div');
+    separator.className = 'sidebar-separator';
+    separator.innerHTML = '<span>Group Chats</span>';
+    sidebarList.appendChild(separator);
+
+    groupChats.forEach(group => {
+      const item = document.createElement('div');
+      item.className = 'sidebar-character-item group-chat-item';
+      item.dataset.groupId = group.id;
+
+      const avatar = document.createElement('div');
+      avatar.className = 'sidebar-character-avatar group-avatar';
+      avatar.innerHTML = '👥';
+
+      const info = document.createElement('div');
+      info.className = 'sidebar-character-info';
+
+      const name = document.createElement('div');
+      name.className = 'sidebar-character-name';
+      name.textContent = group.name;
+
+      const memberCount = document.createElement('div');
+      memberCount.className = 'sidebar-character-desc';
+      memberCount.textContent = `${group.character_ids.length} members`;
+
+      info.appendChild(name);
+      info.appendChild(memberCount);
+      item.appendChild(avatar);
+      item.appendChild(info);
+
+      // Handle group chat selection
+      item.addEventListener('click', async () => {
+        characterSelect.value = group.id;
+        await handleCharacterSwitch();
+      });
+
+      sidebarList.appendChild(item);
+    });
+  }
 }
 
 // Update active character in sidebar
@@ -4634,8 +4775,165 @@ async function handleEditCharacterFromSidebar(character) {
   document.getElementById('edit-character-scenario').value = character.scenario || '';
   document.getElementById('edit-character-mes-example').value = character.mes_example || '';
 
+  // Load advanced fields
+  document.getElementById('edit-character-post-history').value = character.post_history_instructions || '';
+  document.getElementById('edit-character-alt-greetings').value =
+    character.alternate_greetings ? character.alternate_greetings.join('\n') : '';
+
+  // Load metadata fields
+  document.getElementById('edit-character-tags').value =
+    character.tags ? character.tags.join(', ') : '';
+  document.getElementById('edit-character-creator').value = character.creator || '';
+  document.getElementById('edit-character-version').value = character.character_version || '';
+  document.getElementById('edit-character-creator-notes').value = character.creator_notes || '';
+
+  // Load avatar preview
+  const avatarCircle = document.getElementById('edit-avatar-circle');
+  const removeBtn = document.getElementById('edit-remove-avatar-btn');
+
+  if (character.avatar_path) {
+    const avatarUrl = await getAvatarUrl(character.avatar_path);
+    if (avatarUrl) {
+      avatarCircle.style.backgroundImage = `url('${avatarUrl}')`;
+      removeBtn.style.display = 'inline-block';
+    } else {
+      avatarCircle.style.backgroundImage = '';
+      removeBtn.style.display = 'none';
+    }
+  } else {
+    avatarCircle.style.backgroundImage = '';
+    removeBtn.style.display = 'none';
+  }
+
+  // Load expressions
+  await loadEditExpressionsGallery(character.id);
+
+  // Load default expression
+  const defaultExprSelect = document.getElementById('edit-default-expression-select');
+  if (character.default_expression) {
+    defaultExprSelect.value = character.default_expression;
+  } else {
+    defaultExprSelect.value = '';
+  }
+
   // Show modal
   modal.style.display = 'flex';
+}
+
+// Load expressions gallery for edit modal
+async function loadEditExpressionsGallery(characterId) {
+  try {
+    const expressions = await invoke('get_character_expressions', { characterId });
+    const gallery = document.getElementById('edit-expressions-gallery');
+    const defaultSelect = document.getElementById('edit-default-expression-select');
+
+    // Clear gallery
+    gallery.innerHTML = '';
+
+    // Clear and repopulate default expression select
+    defaultSelect.innerHTML = '<option value="">None</option>';
+
+    // Display each expression
+    for (const [exprName, filename] of Object.entries(expressions)) {
+      // Get full path to expression image
+      const fullPath = await invoke('get_expression_full_path', {
+        characterId,
+        expressionFilename: filename
+      });
+
+      // Create expression item
+      const item = document.createElement('div');
+      item.className = 'expression-item';
+      item.innerHTML = `
+        <img src="${convertFileSrc(fullPath)}" alt="${exprName}" />
+        <div class="expression-item-name">${exprName}</div>
+        <button class="expression-item-delete" data-expr-name="${exprName}" title="Delete expression">×</button>
+      `;
+
+      // Add delete handler
+      const deleteBtn = item.querySelector('.expression-item-delete');
+      deleteBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await handleEditDeleteExpression(characterId, exprName);
+      });
+
+      gallery.appendChild(item);
+
+      // Add to default expression select
+      const option = document.createElement('option');
+      option.value = exprName;
+      option.textContent = exprName;
+      defaultSelect.appendChild(option);
+    }
+  } catch (error) {
+    console.error('Failed to load expressions:', error);
+  }
+}
+
+// Handle upload expression from edit modal
+async function handleEditUploadExpression() {
+  const nameInput = document.getElementById('edit-expression-name-input');
+  const expressionName = nameInput.value.trim();
+
+  if (!expressionName) {
+    await window.__TAURI__.dialog.message('Please enter an expression name first', {
+      title: 'Error',
+      kind: 'error'
+    });
+    return;
+  }
+
+  // Validate expression name (alphanumeric, hyphens, underscores only)
+  if (!/^[a-zA-Z0-9_-]+$/.test(expressionName)) {
+    await window.__TAURI__.dialog.message('Expression name can only contain letters, numbers, hyphens, and underscores', {
+      title: 'Error',
+      kind: 'error'
+    });
+    return;
+  }
+
+  try {
+    const characterId = document.getElementById('edit-character-id').value;
+    await invoke('select_and_upload_expression', {
+      characterId,
+      expressionName
+    });
+
+    // Clear input and reload gallery
+    nameInput.value = '';
+    await loadEditExpressionsGallery(characterId);
+  } catch (error) {
+    console.error('Failed to upload expression:', error);
+    if (error && !error.toString().includes('No file selected')) {
+      await window.__TAURI__.dialog.message(`Failed to upload expression: ${error}`, {
+        title: 'Error',
+        kind: 'error'
+      });
+    }
+  }
+}
+
+// Handle delete expression from edit modal
+async function handleEditDeleteExpression(characterId, expressionName) {
+  const confirmed = await window.__TAURI__.dialog.confirm(
+    `Delete expression "${expressionName}"?`,
+    { title: 'Confirm Delete', kind: 'warning' }
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await invoke('delete_expression', { characterId, expressionName });
+    await loadEditExpressionsGallery(characterId);
+  } catch (error) {
+    console.error('Failed to delete expression:', error);
+    await window.__TAURI__.dialog.message(`Failed to delete expression: ${error}`, {
+      title: 'Error',
+      kind: 'error'
+    });
+  }
 }
 
 // Handle duplicate character
@@ -5151,13 +5449,13 @@ function setupCharacterFilter() {
   // Filter input
   filterInput.addEventListener('input', (e) => {
     characterFilterText = e.target.value;
-    populateCharacterDropdown(allCharacters);
+    populateCharacterDropdown(allCharacters, allGroupChats);
   });
 
   // Sort select
   sortSelect.addEventListener('change', (e) => {
     characterSortOrder = e.target.value;
-    populateCharacterDropdown(allCharacters);
+    populateCharacterDropdown(allCharacters, allGroupChats);
   });
 }
 
@@ -5168,14 +5466,30 @@ async function loadCharacters() {
     const characters = await invoke('list_characters');
     console.log('Loaded characters:', characters);
 
-    // Store all characters for filtering/sorting
+    // Load group chats
+    let groupChats = [];
+    try {
+      groupChats = await invoke('list_group_chats');
+      console.log('Loaded group chats:', groupChats);
+    } catch (error) {
+      console.log('No group chats or error loading them:', error);
+    }
+
+    // Store all characters and group chats for filtering/sorting
     allCharacters = characters;
+    allGroupChats = groupChats;
+
+    // Build charactersMap for quick lookup
+    charactersMap = {};
+    for (const char of characters) {
+      charactersMap[char.id] = char;
+    }
 
     // Populate dropdown with filtered/sorted list
-    populateCharacterDropdown(characters);
+    populateCharacterDropdown(characters, groupChats);
 
     // Populate sidebar character list (for spacious layout)
-    populateSidebarCharacterList(characters);
+    populateSidebarCharacterList(characters, groupChats);
 
     const activeCharacter = await invoke('get_character');
     console.log('Active character:', activeCharacter);
@@ -5219,18 +5533,80 @@ async function loadCharacters() {
 
 // Handle character switching
 async function handleCharacterSwitch() {
-  const characterId = characterSelect.value;
-  setStatus('Switching character...', 'default');
+  const selectedId = characterSelect.value;
+  const selectedOption = characterSelect.options[characterSelect.selectedIndex];
+  const selectedType = selectedOption?.dataset.type || 'character';
+
+  setStatus('Switching...', 'default');
+  messagesContainer.innerHTML = '';
+
   try {
-    await invoke('set_active_character', { characterId });
-    messagesContainer.innerHTML = '';
-    await loadCharacters();
-    setStatus('Character switched', 'success');
+    if (selectedType === 'group') {
+      // Load group chat
+      const groupChat = await invoke('get_group_chat', { groupId: selectedId });
+      currentGroupChat = groupChat;
+      currentCharacter = null;
+
+      // Load the group's active chat history if exists
+      if (groupChat.active_chat_id) {
+        try {
+          const chatHistory = await invoke('load_group_chat_history', {
+            groupId: selectedId,
+            chatId: groupChat.active_chat_id
+          });
+
+          // Get messages from active branch
+          const activeBranchMessages = chatHistory.branch_messages[chatHistory.active_branch_id] || [];
+
+          // Render messages
+          for (const msg of activeBranchMessages) {
+            const isUser = msg.role === 'user';
+            let characterInfo = null;
+
+            if (!isUser && msg.character_id) {
+              const char = charactersMap[msg.character_id];
+              if (char) {
+                characterInfo = {
+                  id: msg.character_id,
+                  name: char.name,
+                  avatar_path: char.avatar_path
+                };
+              }
+            }
+
+            await addMessage(msg.content, isUser, true, msg.timestamp, characterInfo);
+          }
+        } catch (error) {
+          console.error('Failed to load group chat history:', error);
+        }
+      }
+
+      // Update header
+      characterHeaderName.textContent = `👥 ${groupChat.name}`;
+
+      // Show group UI elements
+      showGroupReplyControls(groupChat);
+      showGroupMembersPanel(groupChat);
+
+      setStatus('Group chat loaded', 'success');
+    } else {
+      // Regular character switch
+      currentGroupChat = null;
+      await invoke('set_active_character', { characterId: selectedId });
+      await loadCharacters();
+
+      // Hide group UI elements
+      hideGroupReplyControls();
+      hideGroupMembersPanel();
+
+      setStatus('Character switched', 'success');
+    }
+
     setTimeout(() => setStatus('Ready'), 2000);
   } catch (error) {
-    console.error('Failed to switch character:', error);
-    setStatus('Failed to switch character', 'error');
-    addMessage(`Failed to switch character: ${error}`, false);
+    console.error('Failed to switch:', error);
+    setStatus('Failed to switch', 'error');
+    addMessage(`Failed to switch: ${error}`, false);
   }
 }
 
@@ -5248,11 +5624,51 @@ async function handleNewCharacter() {
   form.reset();
   systemPromptInput.value = 'You are a helpful AI assistant.';
 
+  // Reset avatar preview
+  const newAvatarCircle = document.getElementById('new-avatar-circle');
+  const newRemoveAvatarBtn = document.getElementById('new-remove-avatar-btn');
+  newAvatarCircle.style.backgroundImage = '';
+  newRemoveAvatarBtn.style.display = 'none';
+  let newCharacterAvatarPath = null;
+
   // Show modal
   modal.style.display = 'flex';
 
   // Focus name input after a brief delay to ensure it's visible
   setTimeout(() => nameInput.focus(), 100);
+
+  // Avatar upload handler for new character
+  const newUploadAvatarBtn = document.getElementById('new-upload-avatar-btn');
+  const handleNewAvatarUpload = async () => {
+    try {
+      const selected = await window.__TAURI__.dialog.open({
+        multiple: false,
+        filters: [{
+          name: 'Images',
+          extensions: ['png', 'jpg', 'jpeg', 'webp']
+        }]
+      });
+
+      if (selected) {
+        newCharacterAvatarPath = selected;
+        // Preview using file path
+        const avatarUrl = convertFileSrc(selected);
+        newAvatarCircle.style.backgroundImage = `url('${avatarUrl}')`;
+        newRemoveAvatarBtn.style.display = 'inline-block';
+      }
+    } catch (error) {
+      console.error('Avatar selection error:', error);
+    }
+  };
+
+  const handleNewAvatarRemove = () => {
+    newCharacterAvatarPath = null;
+    newAvatarCircle.style.backgroundImage = '';
+    newRemoveAvatarBtn.style.display = 'none';
+  };
+
+  newUploadAvatarBtn.addEventListener('click', handleNewAvatarUpload);
+  newRemoveAvatarBtn.addEventListener('click', handleNewAvatarRemove);
 
   // Handle form submission
   const handleSubmit = async (e) => {
@@ -5278,6 +5694,20 @@ async function handleNewCharacter() {
         greeting,
         mesExample
       });
+
+      // Upload avatar if one was selected
+      if (newCharacterAvatarPath) {
+        try {
+          await invoke('upload_avatar', {
+            sourcePath: newCharacterAvatarPath,
+            characterId: newCharacter.id
+          });
+        } catch (avatarError) {
+          console.error('Failed to upload avatar:', avatarError);
+          // Continue anyway - character was created successfully
+        }
+      }
+
       await loadCharacters();
       characterSelect.value = newCharacter.id;
 
@@ -5289,6 +5719,8 @@ async function handleNewCharacter() {
       overlay.removeEventListener('click', handleClose);
       closeBtn.removeEventListener('click', handleClose);
       cancelBtn.removeEventListener('click', handleClose);
+      newUploadAvatarBtn.removeEventListener('click', handleNewAvatarUpload);
+      newRemoveAvatarBtn.removeEventListener('click', handleNewAvatarRemove);
     } catch (error) {
       console.error('Failed to create character:', error);
       addMessage(`Failed to create character: ${error}`, false);
@@ -5302,6 +5734,8 @@ async function handleNewCharacter() {
     overlay.removeEventListener('click', handleClose);
     closeBtn.removeEventListener('click', handleClose);
     cancelBtn.removeEventListener('click', handleClose);
+    newUploadAvatarBtn.removeEventListener('click', handleNewAvatarUpload);
+    newRemoveAvatarBtn.removeEventListener('click', handleNewAvatarRemove);
   };
 
   // Attach event listeners
@@ -7156,6 +7590,24 @@ window.addEventListener('DOMContentLoaded', () => {
     const scenario = document.getElementById('edit-character-scenario').value.trim() || null;
     const mesExample = document.getElementById('edit-character-mes-example').value.trim() || null;
 
+    // Extract advanced fields
+    const postHistory = document.getElementById('edit-character-post-history').value.trim() || null;
+
+    const altGreetingsText = document.getElementById('edit-character-alt-greetings').value.trim();
+    const alternateGreetings = altGreetingsText
+      ? altGreetingsText.split('\n').map(s => s.trim()).filter(s => s)
+      : null;
+
+    // Extract metadata fields
+    const tagsText = document.getElementById('edit-character-tags').value.trim();
+    const tags = tagsText
+      ? tagsText.split(',').map(s => s.trim()).filter(s => s)
+      : null;
+
+    const creator = document.getElementById('edit-character-creator').value.trim() || null;
+    const characterVersion = document.getElementById('edit-character-version').value.trim() || null;
+    const creatorNotes = document.getElementById('edit-character-creator-notes').value.trim() || null;
+
     try {
       setStatus('Updating character...', 'default');
       await invoke('update_character', {
@@ -7167,12 +7619,12 @@ window.addEventListener('DOMContentLoaded', () => {
         description,
         scenario,
         mesExample,
-        postHistory: null,
-        alternateGreetings: null,
-        tags: null,
-        creator: null,
-        creatorNotes: null,
-        characterVersion: null
+        postHistory,
+        alternateGreetings,
+        tags,
+        creator,
+        creatorNotes,
+        characterVersion
       });
 
       editCharacterModal.style.display = 'none';
@@ -7199,6 +7651,65 @@ window.addEventListener('DOMContentLoaded', () => {
 
   editOverlay.addEventListener('click', () => {
     editCharacterModal.style.display = 'none';
+  });
+
+  // Edit modal expression handlers
+  const editUploadExpressionBtn = document.getElementById('edit-upload-expression-btn');
+  editUploadExpressionBtn.addEventListener('click', handleEditUploadExpression);
+
+  const editDefaultExpressionSelect = document.getElementById('edit-default-expression-select');
+  editDefaultExpressionSelect.addEventListener('change', async () => {
+    const characterId = document.getElementById('edit-character-id').value;
+    const expressionName = editDefaultExpressionSelect.value || null;
+
+    try {
+      await invoke('set_default_expression', { characterId, expressionName });
+    } catch (error) {
+      console.error('Failed to set default expression:', error);
+      setStatus('Failed to set default expression', 'error');
+    }
+  });
+
+  // Edit modal avatar handlers
+  const editUploadAvatarBtn = document.getElementById('edit-upload-avatar-btn');
+  const editRemoveAvatarBtn = document.getElementById('edit-remove-avatar-btn');
+
+  editUploadAvatarBtn.addEventListener('click', async () => {
+    try {
+      const characterId = document.getElementById('edit-character-id').value;
+      const avatarFilename = await invoke('select_and_upload_avatar', {
+        characterId: characterId
+      });
+
+      // Update preview
+      const avatarCircle = document.getElementById('edit-avatar-circle');
+      const avatarUrl = await getAvatarUrl(avatarFilename);
+      if (avatarUrl) {
+        avatarCircle.style.backgroundImage = `url('${avatarUrl}')`;
+        editRemoveAvatarBtn.style.display = 'inline-block';
+      }
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      // Don't show error if user just cancelled the dialog
+      if (error && !error.toString().includes('No file selected')) {
+        setStatus('Failed to upload avatar', 'error');
+      }
+    }
+  });
+
+  editRemoveAvatarBtn.addEventListener('click', async () => {
+    try {
+      const characterId = document.getElementById('edit-character-id').value;
+      await invoke('remove_avatar', { characterId: characterId });
+
+      // Update preview
+      const avatarCircle = document.getElementById('edit-avatar-circle');
+      avatarCircle.style.backgroundImage = '';
+      editRemoveAvatarBtn.style.display = 'none';
+    } catch (error) {
+      console.error('Avatar remove error:', error);
+      setStatus('Failed to remove avatar', 'error');
+    }
   });
 
   setupAppControls();
@@ -7773,3 +8284,680 @@ async function detectMessageExpression(messageText) {
     return null;
   }
 }
+
+// ============================================================================
+// Group Chat Modal Functions
+// ============================================================================
+
+let selectedCharacterIds = [];
+
+async function openGroupChatModal() {
+  const modal = document.getElementById('group-chat-modal');
+  const nameInput = document.getElementById('group-chat-name');
+  const characterList = document.getElementById('group-character-list');
+
+  // Reset state
+  selectedCharacterIds = [];
+  nameInput.value = '';
+  characterList.innerHTML = '';
+  updateSelectedCount();
+  updateCreateButton();
+
+  // Load characters
+  try {
+    const characters = await invoke('list_characters');
+
+    if (characters.length < 2) {
+      showToast('You need at least 2 characters to create a group chat', 'warning');
+      return;
+    }
+
+    // Display characters as checkboxes
+    characters.forEach(character => {
+      const item = document.createElement('div');
+      item.className = 'group-character-item';
+      item.innerHTML = `
+        <input type="checkbox" id="char-${character.id}" value="${character.id}">
+        <div class="group-character-avatar">
+          ${character.avatar_path ?
+            `<img src="asset://localhost/${character.avatar_path}" alt="${character.name}">` :
+            `<div class="group-character-avatar-placeholder">${character.name.charAt(0).toUpperCase()}</div>`
+          }
+        </div>
+        <div class="group-character-info">
+          <div class="group-character-name">${character.name}</div>
+          <div class="group-character-desc">${character.description || character.personality || 'No description'}</div>
+        </div>
+      `;
+
+      // Make the whole item clickable
+      item.addEventListener('click', (e) => {
+        if (e.target.tagName !== 'INPUT') {
+          const checkbox = item.querySelector('input[type="checkbox"]');
+          checkbox.checked = !checkbox.checked;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+
+      // Handle checkbox changes
+      const checkbox = item.querySelector('input[type="checkbox"]');
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          selectedCharacterIds.push(character.id);
+        } else {
+          selectedCharacterIds = selectedCharacterIds.filter(id => id !== character.id);
+        }
+        updateSelectedCount();
+        updateCreateButton();
+      });
+
+      characterList.appendChild(item);
+    });
+
+    modal.style.display = 'flex';
+    nameInput.focus();
+  } catch (error) {
+    console.error('Failed to load characters:', error);
+    showToast('Failed to load characters', 'error');
+  }
+}
+
+function closeGroupChatModal() {
+  const modal = document.getElementById('group-chat-modal');
+  modal.style.display = 'none';
+  selectedCharacterIds = [];
+}
+
+function updateSelectedCount() {
+  const countEl = document.getElementById('selected-count');
+  countEl.textContent = `${selectedCharacterIds.length} selected`;
+}
+
+function updateCreateButton() {
+  const createBtn = document.getElementById('group-chat-create-btn');
+  createBtn.disabled = selectedCharacterIds.length < 2;
+}
+
+async function createGroupChat() {
+  const nameInput = document.getElementById('group-chat-name');
+  const name = nameInput.value.trim();
+
+  if (!name) {
+    showToast('Please enter a group name', 'warning');
+    nameInput.focus();
+    return;
+  }
+
+  if (selectedCharacterIds.length < 2) {
+    showToast('Please select at least 2 characters', 'warning');
+    return;
+  }
+
+  try {
+    const groupChat = await invoke('create_group_chat', {
+      characterIds: selectedCharacterIds,
+      name
+    });
+
+    showToast(`Group chat "${name}" created successfully!`, 'success');
+    closeGroupChatModal();
+
+    // Reload characters and group chats to show the new group
+    await loadCharacters();
+
+    console.log('Created group chat:', groupChat);
+  } catch (error) {
+    console.error('Failed to create group chat:', error);
+    showToast(`Failed to create group chat: ${error}`, 'error');
+  }
+}
+
+// Helper function to generate consistent color for a character
+function generateCharacterColor(characterId) {
+  // Use a simple hash function to convert character ID to a color
+  let hash = 0;
+  for (let i = 0; i < characterId.length; i++) {
+    hash = characterId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  // Generate hue from hash (0-360)
+  const hue = Math.abs(hash % 360);
+
+  // Use high saturation and medium-light lightness for vibrant colors
+  return `hsl(${hue}, 70%, 55%)`;
+}
+
+// ============================================================================
+// Group Members Panel Functions
+// ============================================================================
+
+let currentGroupChat = null;
+
+async function showGroupMembersPanel(groupChat) {
+  currentGroupChat = groupChat;
+  const panel = document.getElementById('group-members-panel');
+  const membersList = document.getElementById('group-members-list');
+  const memberCount = document.getElementById('group-member-count');
+
+  if (!panel || !membersList) return;
+
+  // Show panel
+  panel.style.display = 'block';
+
+  // Update count
+  memberCount.textContent = `${groupChat.character_ids.length} members`;
+
+  // Clear existing members
+  membersList.innerHTML = '';
+
+  // Load group settings to check mute status
+  const groupSettings = groupChat.settings || {};
+  const talkSettings = groupSettings.character_talk_settings || {};
+
+  try {
+
+    // Populate member list
+    for (const charId of groupChat.character_ids) {
+      const character = charactersMap[charId];
+      if (!character) continue;
+
+      const charSettings = talkSettings[charId] || { muted: false, talkativeness: 50 };
+
+      const memberItem = document.createElement('div');
+      memberItem.className = 'group-member-item';
+      memberItem.dataset.characterId = charId;
+
+      // Avatar
+      const avatar = document.createElement('div');
+      avatar.className = 'group-member-avatar';
+
+      if (character.avatar_path) {
+        const url = await getAvatarUrl(character.avatar_path);
+        if (url) {
+          avatar.style.backgroundImage = `url('${url}')`;
+        } else {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'group-member-avatar-placeholder';
+          placeholder.textContent = character.name.charAt(0).toUpperCase();
+          avatar.appendChild(placeholder);
+        }
+      } else {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'group-member-avatar-placeholder';
+        placeholder.textContent = character.name.charAt(0).toUpperCase();
+        avatar.appendChild(placeholder);
+      }
+
+      // Info
+      const info = document.createElement('div');
+      info.className = 'group-member-info';
+
+      const name = document.createElement('div');
+      name.className = 'group-member-name';
+      name.textContent = character.name;
+
+      const statusContainer = document.createElement('div');
+      statusContainer.className = 'group-member-status-container';
+
+      const statusLabel = document.createElement('div');
+      statusLabel.className = `group-member-status${charSettings.muted ? ' muted' : ''}`;
+      statusLabel.textContent = charSettings.muted ? 'Muted' : 'Talkativeness';
+
+      info.appendChild(name);
+      info.appendChild(statusContainer);
+      statusContainer.appendChild(statusLabel);
+
+      // Talkativeness slider (only shown when not muted)
+      if (!charSettings.muted) {
+        const sliderContainer = document.createElement('div');
+        sliderContainer.className = 'group-member-slider-container';
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0';
+        slider.max = '100';
+        slider.value = charSettings.talkativeness.toString();
+        slider.className = 'group-member-slider';
+
+        const valueLabel = document.createElement('span');
+        valueLabel.className = 'group-member-slider-value';
+        valueLabel.textContent = `${charSettings.talkativeness}%`;
+
+        slider.addEventListener('input', (e) => {
+          valueLabel.textContent = `${e.target.value}%`;
+        });
+
+        slider.addEventListener('change', async (e) => {
+          await updateMemberTalkativeness(groupChat.id, charId, parseInt(e.target.value));
+        });
+
+        sliderContainer.appendChild(slider);
+        sliderContainer.appendChild(valueLabel);
+        statusContainer.appendChild(sliderContainer);
+      }
+
+      // Actions
+      const actions = document.createElement('div');
+      actions.className = 'group-member-actions';
+
+      // Mute/Unmute button
+      const muteBtn = document.createElement('button');
+      muteBtn.className = 'group-member-action-btn';
+      muteBtn.title = charSettings.muted ? 'Unmute' : 'Mute';
+      muteBtn.innerHTML = charSettings.muted
+        ? `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 2v8M2 5l4-3 4 3v4l-4 3-4-3V5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>`
+        : `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 4v4M10 4v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <rect x="3" y="2" width="6" height="8" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          </svg>`;
+      muteBtn.addEventListener('click', () => toggleMemberMute(groupChat.id, charId));
+      actions.appendChild(muteBtn);
+
+      // Remove button (only if more than 2 members)
+      if (groupChat.character_ids.length > 2) {
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'group-member-action-btn danger';
+        removeBtn.title = 'Remove from group';
+        removeBtn.innerHTML = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>`;
+        removeBtn.addEventListener('click', () => removeMemberFromGroup(groupChat.id, charId, character.name));
+        actions.appendChild(removeBtn);
+      }
+
+      memberItem.appendChild(avatar);
+      memberItem.appendChild(info);
+      memberItem.appendChild(actions);
+      membersList.appendChild(memberItem);
+    }
+  } catch (error) {
+    console.error('Failed to populate group members:', error);
+  }
+}
+
+function hideGroupMembersPanel() {
+  const panel = document.getElementById('group-members-panel');
+  if (panel) {
+    panel.style.display = 'none';
+  }
+  currentGroupChat = null;
+}
+
+async function toggleMemberMute(groupId, characterId) {
+  try {
+    const isMuted = await invoke('toggle_character_mute', { groupId, characterId });
+
+    // Refresh the group chat data
+    const updatedGroup = await invoke('get_group_chat', { groupId });
+    await showGroupMembersPanel(updatedGroup);
+
+    showToast(isMuted ? 'Member muted' : 'Member unmuted', 'success');
+  } catch (error) {
+    console.error('Failed to toggle mute:', error);
+    showToast(`Failed to toggle mute: ${error}`, 'error');
+  }
+}
+
+async function updateMemberTalkativeness(groupId, characterId, talkativeness) {
+  try {
+    await invoke('update_character_talk_settings', {
+      groupId,
+      characterId,
+      settings: {
+        talkativeness,
+        muted: false,
+        priority: 0
+      }
+    });
+
+    // Update current group chat state
+    const updatedGroup = await invoke('get_group_chat', { groupId });
+    currentGroupChat = updatedGroup;
+
+    showToast(`Talkativeness updated to ${talkativeness}%`, 'success');
+  } catch (error) {
+    console.error('Failed to update talkativeness:', error);
+    showToast(`Failed to update talkativeness: ${error}`, 'error');
+  }
+}
+
+async function removeMemberFromGroup(groupId, characterId, characterName) {
+  // Confirm removal
+  const confirmed = confirm(`Remove ${characterName} from the group?`);
+  if (!confirmed) return;
+
+  try {
+    await invoke('remove_character_from_group', { groupId, characterId });
+
+    // Refresh the group chat data
+    const updatedGroup = await invoke('get_group_chat', { groupId });
+    await showGroupMembersPanel(updatedGroup);
+
+    showToast(`${characterName} removed from group`, 'success');
+  } catch (error) {
+    console.error('Failed to remove member:', error);
+    showToast(`Failed to remove member: ${error}`, 'error');
+  }
+}
+
+// ============================================================================
+// @Mention Autocomplete Functions
+// ============================================================================
+
+let mentionAutocompleteVisible = false;
+let mentionSelectedIndex = -1;
+let mentionStartPos = -1;
+let mentionSearchText = '';
+
+function showMentionAutocomplete(searchText, cursorPos) {
+  if (!currentGroupChat) return;
+
+  const autocompleteDiv = document.getElementById('mention-autocomplete');
+  mentionSearchText = searchText.toLowerCase();
+  mentionStartPos = cursorPos - searchText.length - 1; // -1 for the @ symbol
+
+  // Filter group members based on search text
+  const matchingMembers = currentGroupChat.character_ids.filter(charId => {
+    const character = charactersMap[charId];
+    return character && character.name.toLowerCase().includes(mentionSearchText);
+  });
+
+  if (matchingMembers.length === 0) {
+    hideMentionAutocomplete();
+    return;
+  }
+
+  // Populate autocomplete list
+  autocompleteDiv.innerHTML = '';
+  matchingMembers.forEach((charId, index) => {
+    const character = charactersMap[charId];
+    if (!character) return;
+
+    const item = document.createElement('div');
+    item.className = 'mention-autocomplete-item';
+    if (index === 0) {
+      item.classList.add('selected');
+      mentionSelectedIndex = 0;
+    }
+
+    // Avatar
+    const avatar = document.createElement('div');
+    if (character.avatar_path) {
+      avatar.className = 'mention-autocomplete-avatar';
+      getAvatarUrl(character.avatar_path).then(url => {
+        if (url) {
+          avatar.style.backgroundImage = `url('${url}')`;
+        }
+      });
+    } else {
+      avatar.className = 'mention-autocomplete-avatar-placeholder';
+      avatar.textContent = character.name.charAt(0).toUpperCase();
+    }
+
+    // Name
+    const name = document.createElement('div');
+    name.className = 'mention-autocomplete-name';
+    name.textContent = character.name;
+
+    item.appendChild(avatar);
+    item.appendChild(name);
+
+    // Click handler
+    item.addEventListener('click', () => {
+      insertMention(character.name);
+    });
+
+    autocompleteDiv.appendChild(item);
+  });
+
+  autocompleteDiv.style.display = 'block';
+  mentionAutocompleteVisible = true;
+}
+
+function hideMentionAutocomplete() {
+  const autocompleteDiv = document.getElementById('mention-autocomplete');
+  autocompleteDiv.style.display = 'none';
+  mentionAutocompleteVisible = false;
+  mentionSelectedIndex = -1;
+  mentionStartPos = -1;
+  mentionSearchText = '';
+}
+
+function insertMention(characterName) {
+  const input = messageInput;
+  const text = input.value;
+  const before = text.substring(0, mentionStartPos);
+  const after = text.substring(input.selectionStart);
+
+  // Insert mention with @ symbol
+  const newText = before + '@' + characterName + ' ' + after;
+  input.value = newText;
+
+  // Set cursor position after the mention
+  const newCursorPos = (before + '@' + characterName + ' ').length;
+  input.setSelectionRange(newCursorPos, newCursorPos);
+
+  hideMentionAutocomplete();
+  input.focus();
+}
+
+function navigateMentionAutocomplete(direction) {
+  const autocompleteDiv = document.getElementById('mention-autocomplete');
+  const items = autocompleteDiv.querySelectorAll('.mention-autocomplete-item');
+
+  if (items.length === 0) return;
+
+  // Remove current selection
+  if (mentionSelectedIndex >= 0 && mentionSelectedIndex < items.length) {
+    items[mentionSelectedIndex].classList.remove('selected');
+  }
+
+  // Update index
+  if (direction === 'down') {
+    mentionSelectedIndex = (mentionSelectedIndex + 1) % items.length;
+  } else {
+    mentionSelectedIndex = (mentionSelectedIndex - 1 + items.length) % items.length;
+  }
+
+  // Add new selection
+  items[mentionSelectedIndex].classList.add('selected');
+
+  // Scroll into view
+  items[mentionSelectedIndex].scrollIntoView({ block: 'nearest' });
+}
+
+function selectCurrentMention() {
+  const autocompleteDiv = document.getElementById('mention-autocomplete');
+  const items = autocompleteDiv.querySelectorAll('.mention-autocomplete-item');
+
+  if (mentionSelectedIndex >= 0 && mentionSelectedIndex < items.length) {
+    const selectedItem = items[mentionSelectedIndex];
+    const characterName = selectedItem.querySelector('.mention-autocomplete-name').textContent;
+    insertMention(characterName);
+  }
+}
+
+// Detect @ mentions in message input
+function handleMentionInput() {
+  if (!currentGroupChat) {
+    hideMentionAutocomplete();
+    return;
+  }
+
+  const input = messageInput;
+  const text = input.value;
+  const cursorPos = input.selectionStart;
+
+  // Find @ symbol before cursor
+  let atPos = -1;
+  for (let i = cursorPos - 1; i >= 0; i--) {
+    if (text[i] === '@') {
+      atPos = i;
+      break;
+    }
+    if (text[i] === ' ' || text[i] === '\n') {
+      break;
+    }
+  }
+
+  if (atPos >= 0) {
+    // Extract search text after @
+    const searchText = text.substring(atPos + 1, cursorPos);
+
+    // Only show autocomplete if @ is at start or preceded by whitespace
+    const beforeAt = atPos > 0 ? text[atPos - 1] : ' ';
+    if (beforeAt === ' ' || beforeAt === '\n' || atPos === 0) {
+      showMentionAutocomplete(searchText, cursorPos);
+    } else {
+      hideMentionAutocomplete();
+    }
+  } else {
+    hideMentionAutocomplete();
+  }
+}
+
+// Group Reply Controls Management
+function showGroupReplyControls(groupChat) {
+  const controls = document.getElementById('group-reply-controls');
+  const characterSelect = document.getElementById('group-reply-character');
+  const autoToggle = document.getElementById('group-auto-mode-toggle');
+
+  controls.style.display = 'flex';
+
+  // Populate character dropdown with group members
+  characterSelect.innerHTML = '<option value="">Select character...</option>';
+
+  for (const charId of groupChat.character_ids) {
+    const character = charactersMap[charId];
+    if (character) {
+      const option = document.createElement('option');
+      option.value = charId;
+      option.textContent = character.name;
+      characterSelect.appendChild(option);
+    }
+  }
+
+  // Set auto-mode toggle state
+  autoToggle.checked = groupChat.settings?.auto_mode || false;
+
+  // Disable character select if auto-mode is on
+  characterSelect.disabled = autoToggle.checked;
+}
+
+function hideGroupReplyControls() {
+  const controls = document.getElementById('group-reply-controls');
+  controls.style.display = 'none';
+}
+
+async function handleGroupAutoModeToggle() {
+  if (!currentGroupChat) return;
+
+  try {
+    const isAutoMode = await invoke('toggle_auto_mode', { groupId: currentGroupChat.id });
+    const characterSelect = document.getElementById('group-reply-character');
+    characterSelect.disabled = isAutoMode;
+
+    // Update current group chat state
+    const updatedGroup = await invoke('get_group_chat', { groupId: currentGroupChat.id });
+    currentGroupChat = updatedGroup;
+
+    showToast(isAutoMode ? 'Auto-mode enabled' : 'Auto-mode disabled', 'success');
+  } catch (error) {
+    console.error('Failed to toggle auto-mode:', error);
+    showToast(`Failed to toggle auto-mode: ${error}`, 'error');
+  }
+}
+
+async function sendGroupMessage(message, isRegenerate = false) {
+  const autoToggle = document.getElementById('group-auto-mode-toggle');
+  const characterSelect = document.getElementById('group-reply-character');
+  const isAutoMode = autoToggle.checked;
+
+  if (!isRegenerate) {
+    await addMessage(message, true, false, Date.now());
+  }
+
+  sendBtn.disabled = true;
+  messageInput.disabled = true;
+  setStatus('Generating group response...', 'default');
+
+  try {
+    let response;
+    let respondingCharacterId;
+
+    if (isAutoMode) {
+      // Auto-mode: backend selects the character
+      const result = await invoke('generate_group_response_auto', {
+        groupId: currentGroupChat.id,
+        userMessage: message
+      });
+      response = result.response;
+      respondingCharacterId = result.character_id;
+    } else {
+      // Manual mode: user selects the character
+      respondingCharacterId = characterSelect.value;
+
+      if (!respondingCharacterId) {
+        throw new Error('Please select a character to respond');
+      }
+
+      response = await invoke('generate_group_response', {
+        groupId: currentGroupChat.id,
+        characterId: respondingCharacterId,
+        userMessage: message
+      });
+    }
+
+    // Get character info for the responding character
+    const respondingCharacter = charactersMap[respondingCharacterId];
+
+    // Add the response with character info
+    await addMessage(response, false, false, Date.now(), {
+      id: respondingCharacterId,
+      name: respondingCharacter?.name || 'Unknown',
+      avatar_path: respondingCharacter?.avatar_path
+    });
+
+    setStatus('Response complete', 'success');
+    setTimeout(() => setStatus('Ready'), 2000);
+  } catch (error) {
+    console.error('Failed to generate group response:', error);
+    addMessage(`Error: ${error}`, false);
+    setStatus(`Error: ${error.toString().substring(0, 50)}...`, 'error');
+  } finally {
+    sendBtn.disabled = false;
+    messageInput.disabled = false;
+    messageInput.focus();
+  }
+}
+
+// Event listeners for group chat modal
+document.addEventListener('DOMContentLoaded', () => {
+  const newGroupChatBtn = document.getElementById('new-group-chat-btn');
+  const groupChatModal = document.getElementById('group-chat-modal');
+  const groupChatOverlay = groupChatModal.querySelector('.group-chat-overlay');
+  const closeBtn = document.getElementById('group-chat-close-btn');
+  const cancelBtn = document.getElementById('group-chat-cancel-btn');
+  const createBtn = document.getElementById('group-chat-create-btn');
+
+  newGroupChatBtn.addEventListener('click', openGroupChatModal);
+  groupChatOverlay.addEventListener('click', closeGroupChatModal);
+  closeBtn.addEventListener('click', closeGroupChatModal);
+  cancelBtn.addEventListener('click', closeGroupChatModal);
+  createBtn.addEventListener('click', createGroupChat);
+
+  // Handle Enter key in group name input
+  document.getElementById('group-chat-name').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && selectedCharacterIds.length >= 2) {
+      createGroupChat();
+    }
+  });
+
+  // Group reply controls event listeners
+  const autoModeToggle = document.getElementById('group-auto-mode-toggle');
+  if (autoModeToggle) {
+    autoModeToggle.addEventListener('change', handleGroupAutoModeToggle);
+  }
+});

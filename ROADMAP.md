@@ -407,6 +407,228 @@
 
 **Why Important:** Reduces friction for new users and speeds up common tasks. Templates provide starting points for customization.
 
+## Phase 9: Technical Debt & Code Quality (High Priority)
+**Goal: Improve code maintainability, security, and testability**
+
+### 🔴 Critical Security & Stability Fixes
+
+#### 1. Enable Content Security Policy (CSP)
+- [ ] Add CSP configuration to tauri.conf.json
+- [ ] Allow CDN resources (marked.js, highlight.js)
+- [ ] Test with inline scripts and styles
+- [ ] Verify asset protocol still works
+
+**Why Important:** CSP prevents XSS attacks by restricting what resources can be loaded. Currently disabled (security risk). **Effort: 5 minutes**
+
+**File:** `src-tauri/tauri.conf.json:28`
+
+#### 2. Remove Unsafe `.unwrap()` Calls
+- [ ] Replace `.unwrap()` with `.unwrap_or_else()` in timestamp generation
+- [ ] Add safe fallbacks for all unwrap calls
+- [ ] Test edge cases (system clock issues)
+
+**Why Important:** `.unwrap()` can crash the entire app if it fails. Crashes mean lost user work. **Effort: 15 minutes**
+
+**Files:** `src-tauri/src/lib.rs:209, 227, etc.`
+
+### 🟡 Architecture Refactoring
+
+#### 3. Modularize lib.rs (4,300+ lines → organized modules)
+- [ ] Create module structure (models/, services/, commands/, utils/)
+- [ ] Extract data structures to models/
+- [ ] Move business logic to services/
+- [ ] Convert commands to thin wrappers
+- [ ] Update imports throughout codebase
+
+**Why Important:** 4,300-line files are hard to navigate and maintain. Modular code is easier to test and extend. **Effort: 8-10 hours over several days**
+
+**See:** `REFACTORING_GUIDE.md` for detailed step-by-step instructions
+
+**New structure:**
+```
+src-tauri/src/
+├── main.rs
+├── lib.rs (just re-exports)
+├── models/
+│   ├── mod.rs
+│   ├── character.rs
+│   ├── message.rs
+│   ├── config.rs
+│   └── roleplay.rs
+├── services/
+│   ├── mod.rs
+│   ├── api_client.rs
+│   ├── character_service.rs
+│   ├── chat_service.rs
+│   └── roleplay_service.rs
+├── utils/
+│   ├── mod.rs
+│   ├── character_card.rs
+│   ├── file_paths.rs
+│   └── templates.rs
+├── commands/
+│   ├── mod.rs
+│   ├── character.rs
+│   ├── chat.rs
+│   └── config.rs
+└── plugin_manager.rs
+```
+
+#### 4. Implement Proper Error Handling
+- [ ] Add `thiserror` dependency
+- [ ] Create `ClaudiaError` enum
+- [ ] Replace all `Result<T, String>` with `Result<T, ClaudiaError>`
+- [ ] Add error context with error chains
+- [ ] Improve frontend error messages
+
+**Why Important:** String-based errors lose context and make debugging hard. Proper error types enable better error handling and user feedback. **Effort: 2-3 hours**
+
+**Files:** New `src-tauri/src/error.rs`, update all commands
+
+#### 5. Frontend Modularization
+- [ ] Split main.js (7,223 lines) into ES6 modules
+- [ ] Extract chat logic to modules/chat.js
+- [ ] Extract character management to modules/characters.js
+- [ ] Extract settings to modules/settings.js
+- [ ] Extract plugin system to modules/plugins.js
+- [ ] Update imports in index.html
+
+**Why Important:** Large files are hard to navigate. Modules enable code reuse and better organization. **Effort: 3-4 hours**
+
+**New structure:**
+```
+src/
+├── main.js (entry point)
+├── modules/
+│   ├── chat.js
+│   ├── characters.js
+│   ├── settings.js
+│   ├── plugins.js
+│   ├── roleplay.js
+│   └── ui.js
+├── lib/
+│   ├── store.js
+│   └── utils.js
+└── types.ts (optional)
+```
+
+### 🟡 Testing Infrastructure
+
+#### 6. Add Unit Tests
+- [ ] Add test modules for models (Message, Character, WorldInfoEntry)
+- [ ] Add tests for template variable replacement
+- [ ] Add tests for World Info keyword matching
+- [ ] Add tests for PNG character card parsing
+- [ ] Set up CI to run tests automatically
+
+**Why Important:** Tests catch bugs early and enable confident refactoring. Currently NO tests exist. **Effort: 3-4 hours for basic coverage**
+
+**Files:** `src-tauri/src/models/*/tests.rs`, `src-tauri/tests/integration_test.rs`
+
+#### 7. Add Integration Tests for Tauri Commands
+- [ ] Test character CRUD operations
+- [ ] Test chat history operations
+- [ ] Test branching system
+- [ ] Test preset system
+
+**Why Important:** Integration tests verify that the full stack works together correctly. **Effort: 2-3 hours**
+
+### 🟢 Code Quality Improvements
+
+#### 8. Add TypeScript to Frontend
+- [ ] Install TypeScript and type definitions
+- [ ] Create types.ts for Rust data structures
+- [ ] Migrate one module to TypeScript
+- [ ] Set up tsconfig.json
+- [ ] Gradually migrate remaining modules
+
+**Why Important:** TypeScript catches frontend bugs at compile time and provides better IDE support. **Effort: 1 hour setup + gradual migration**
+
+#### 9. Improve Plugin Security
+- [ ] Validate plugin permissions against allowlist
+- [ ] Add permission checking to ClaudiaPluginAPI
+- [ ] Show permission requests to user before enabling plugins
+- [ ] Sandbox plugin execution
+
+**Why Important:** Plugins currently have unlimited access to all Tauri commands. Need permission system for security. **Effort: 3-4 hours**
+
+#### 10. Extract Magic Numbers to Constants
+- [ ] Create constants module for defaults
+- [ ] Replace magic numbers (depth: 3, scan_depth: 20, etc.)
+- [ ] Document what each constant means
+
+**Why Important:** Magic numbers make code hard to understand and tune. Constants are self-documenting. **Effort: 30 minutes**
+
+### 🟢 New Features from Code Audit
+
+#### 11. Chat Templates/Macros System
+- [ ] Create template data structure (id, name, template, variables)
+- [ ] Add backend commands for template CRUD
+- [ ] Build frontend UI for template management
+- [ ] Implement variable substitution
+- [ ] Add template library (common scenarios)
+
+**Why Important:** Save time on repetitive prompts. Essential for testing character responses. **Effort: 2-3 hours**
+
+**See:** `FEATURES_GUIDE.md` Section 1 for implementation details
+
+#### 12. Voice Input/Output (TTS/STT)
+- [ ] Add TTS for reading assistant messages aloud
+- [ ] Add STT for voice message input
+- [ ] Use Web Speech API (no dependencies needed)
+- [ ] Add voice selection UI
+- [ ] Add auto-read toggle in settings
+
+**Why Important:** Accessibility for vision-impaired users. Hands-free mode for multitasking. More immersive roleplay. **Effort: 1-2 hours**
+
+**See:** `FEATURES_GUIDE.md` Section 2 for implementation details
+
+#### 13. Multi-Model Comparison
+- [ ] Add backend command to send same prompt to multiple APIs
+- [ ] Implement concurrent request handling
+- [ ] Build side-by-side response UI
+- [ ] Add rating/preference system
+- [ ] Save comparison results
+
+**Why Important:** Helps users choose the best model for their use case. Great for testing character consistency. **Effort: 3-4 hours**
+
+**See:** `FEATURES_GUIDE.md` Section 3 for implementation details
+
+#### 14. Automatic Chat Summaries
+- [ ] Add backend command to generate summaries
+- [ ] Trigger summary every N messages (configurable)
+- [ ] Store summaries as special message type
+- [ ] Inject summaries instead of full history when context is full
+- [ ] Add UI to view/edit summaries
+
+**Why Important:** Reduces token usage in long conversations. Improves long-term memory. **Effort: 3-4 hours**
+
+**See:** `FEATURES_GUIDE.md` Section 4 for implementation details
+
+### Quick Wins (Low Effort, High Impact)
+
+#### 15. Export Chat as PDF
+- [ ] Use existing HTML export + wkhtmltopdf (or similar)
+- [ ] Add backend command to convert HTML → PDF
+- [ ] Add menu option in export dropdown
+
+**Effort: 30 minutes**
+
+#### 16. Message Bookmarks
+- [ ] Add `bookmarked: bool` field to Message struct
+- [ ] Add toggle_message_bookmark command
+- [ ] Add bookmark icon to message UI
+- [ ] Add "Jump to bookmarks" feature
+
+**Effort: 1 hour**
+
+#### 17. Keyboard Shortcut Help Modal
+- [ ] Create shortcuts modal with all keybindings
+- [ ] Trigger with Ctrl+? or ? key
+- [ ] Style as cheatsheet with categories
+
+**Effort: 30 minutes**
+
 ## Implementation Priority Ranking
 
 ### Must-Have for Basic Roleplay:

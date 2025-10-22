@@ -29,6 +29,12 @@
                 <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </button>
+            <button id="sidebar-import-character-btn" class="icon-btn" title="Import Character Card" aria-label="Import character from PNG card">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 13V5M8 13L5 10M8 13L11 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M15 5V3C15 1.89543 14.1046 1 13 1H3C1.89543 1 1 1.89543 1 3V5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
             <button id="toggle-left-sidebar" class="icon-btn" title="Collapse sidebar" aria-label="Collapse character sidebar" aria-expanded="true" aria-controls="sidebar-character-list">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path d="M6 4L10 8L6 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -128,6 +134,14 @@
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="2" y="3" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
                 <path d="M9 5h5M9 8h4M9 11h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button id="new-group-chat-btn" class="icon-btn" title="New Group Chat (Ctrl+G)" aria-label="Create new group chat">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="5" cy="5" r="2.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <circle cx="11" cy="5" r="2.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <circle cx="8" cy="11" r="2.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <path d="M7 5.5L9 5.5M6.5 7L7.5 9M9.5 7L8.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               </svg>
             </button>
             <button id="import-chat-btn" class="icon-btn" title="Import conversation" aria-label="Import chat history from file">
@@ -928,6 +942,35 @@
             </svg>
           </button>
         </form>
+
+        <!-- @Mention Autocomplete Dropdown -->
+        <div id="mention-autocomplete" class="mention-autocomplete" style="display: none;">
+          <!-- Autocomplete suggestions will be populated here -->
+        </div>
+
+        <!-- Group Reply Controls (shown only for group chats) -->
+        <div id="group-reply-controls" class="group-reply-controls" style="display: none;">
+          <div class="group-reply-mode">
+            <label class="group-reply-label">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2C5.79086 2 4 3.79086 4 6C4 8.20914 5.79086 10 8 10C10.2091 10 12 8.20914 12 6C12 3.79086 10.2091 2 8 2Z" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M3 14C3 11.7909 4.79086 10 7 10H9C11.2091 10 13 11.7909 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Reply as:
+            </label>
+            <select id="group-reply-character" class="group-reply-select">
+              <option value="">Select character...</option>
+            </select>
+          </div>
+          <div class="group-reply-auto">
+            <label class="toggle-label">
+              <input type="checkbox" id="group-auto-mode-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Auto-mode</span>
+            </label>
+          </div>
+        </div>
+
         <div class="status-bar">
           <span id="status-text" class="status-text" role="status" aria-live="polite">Ready</span>
           <div id="token-counter" class="token-counter">
@@ -997,6 +1040,25 @@
           </button>
         </div>
         <div class="right-sidebar-content">
+          <!-- Group Members Panel (shown only for group chats) -->
+          <div id="group-members-panel" class="group-members-panel" style="display: none;">
+            <div class="group-members-header">
+              <h3>Group Members</h3>
+              <span id="group-member-count" class="member-count">0 members</span>
+            </div>
+            <div class="group-members-list" id="group-members-list">
+              <!-- Members will be populated here -->
+            </div>
+            <div class="group-members-actions">
+              <button id="add-member-btn" class="secondary-btn-sm">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Add Member
+              </button>
+            </div>
+          </div>
+
           <!-- Roleplay panel will be moved here in spacious mode -->
           <div id="roleplay-sidebar-tab">
             <!-- Roleplay tools will be moved here -->
@@ -1076,6 +1138,21 @@
               required
               autofocus
             />
+          </div>
+
+          <div class="form-group">
+            <label for="new-character-avatar">Avatar (Optional)</label>
+            <div class="avatar-upload">
+              <div id="new-avatar-preview" class="avatar-preview">
+                <div class="avatar-circle-large" id="new-avatar-circle"></div>
+              </div>
+              <button type="button" id="new-upload-avatar-btn" class="btn-secondary">
+                Choose Image
+              </button>
+              <button type="button" id="new-remove-avatar-btn" class="btn-secondary" style="display: none;">
+                Remove
+              </button>
+            </div>
           </div>
 
           <div class="form-group">
@@ -1161,8 +1238,9 @@
         <form id="edit-character-form">
           <input type="hidden" id="edit-character-id" />
 
+          <!-- Basic Info -->
           <div class="form-group">
-            <label for="edit-character-name">Character Name</label>
+            <label for="edit-character-name">Character Name *</label>
             <input
               type="text"
               id="edit-character-name"
@@ -1172,7 +1250,22 @@
           </div>
 
           <div class="form-group">
-            <label for="edit-character-system-prompt">System Prompt</label>
+            <label for="edit-character-avatar">Avatar (Optional)</label>
+            <div class="avatar-upload">
+              <div id="edit-avatar-preview" class="avatar-preview">
+                <div class="avatar-circle-large" id="edit-avatar-circle"></div>
+              </div>
+              <button type="button" id="edit-upload-avatar-btn" class="btn-secondary">
+                Choose Image
+              </button>
+              <button type="button" id="edit-remove-avatar-btn" class="btn-secondary" style="display: none;">
+                Remove
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="edit-character-system-prompt">System Prompt *</label>
             <textarea
               id="edit-character-system-prompt"
               placeholder="You are a helpful AI assistant..."
@@ -1182,7 +1275,7 @@
           </div>
 
           <div class="form-group">
-            <label for="edit-character-greeting">Greeting (Optional)</label>
+            <label for="edit-character-greeting">First Message (Optional)</label>
             <textarea
               id="edit-character-greeting"
               placeholder="Hello! How can I help you today?"
@@ -1190,8 +1283,9 @@
             ></textarea>
           </div>
 
+          <!-- Roleplay Details -->
           <div class="form-group">
-            <label for="edit-character-personality">Personality Tags (Optional)</label>
+            <label for="edit-character-personality">Personality (Optional)</label>
             <input
               type="text"
               id="edit-character-personality"
@@ -1225,6 +1319,106 @@
               rows="3"
             ></textarea>
           </div>
+
+          <!-- Advanced Settings (Collapsible) -->
+          <details class="form-details">
+            <summary>Advanced Settings</summary>
+            <div class="form-group">
+              <label for="edit-character-post-history">Post-History Instructions (Optional)</label>
+              <textarea
+                id="edit-character-post-history"
+                placeholder="Instructions to apply after chat history..."
+                rows="2"
+              ></textarea>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-character-alt-greetings">Alternate Greetings (Optional)</label>
+              <textarea
+                id="edit-character-alt-greetings"
+                placeholder="One greeting per line..."
+                rows="2"
+              ></textarea>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Enter one greeting per line</small>
+            </div>
+          </details>
+
+          <!-- Metadata (Collapsible) -->
+          <details class="form-details">
+            <summary>Metadata</summary>
+            <div class="form-group">
+              <label for="edit-character-tags">Tags (Optional)</label>
+              <input
+                type="text"
+                id="edit-character-tags"
+                placeholder="fantasy, adventure, comedy"
+              />
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Comma-separated tags</small>
+            </div>
+
+            <div class="form-group">
+              <label for="edit-character-creator">Creator (Optional)</label>
+              <input
+                type="text"
+                id="edit-character-creator"
+                placeholder="Card creator name"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-character-version">Character Version (Optional)</label>
+              <input
+                type="text"
+                id="edit-character-version"
+                placeholder="1.0"
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="edit-character-creator-notes">Creator Notes (Optional)</label>
+              <textarea
+                id="edit-character-creator-notes"
+                placeholder="Notes from the creator..."
+                rows="2"
+              ></textarea>
+            </div>
+          </details>
+
+          <!-- Expressions (Collapsible) -->
+          <details class="form-details">
+            <summary>Expressions (Visual Novel Mode)</summary>
+
+            <div class="form-group">
+              <label for="edit-default-expression-select">Default Expression</label>
+              <select id="edit-default-expression-select">
+                <option value="">None</option>
+              </select>
+              <small>Expression to use by default</small>
+            </div>
+
+            <div class="form-group">
+              <label>Upload Expression</label>
+              <div style="display: flex; gap: 8px;">
+                <input
+                  type="text"
+                  id="edit-expression-name-input"
+                  placeholder="Expression name (e.g. happy, sad, angry)"
+                  style="flex: 1;"
+                />
+                <button type="button" id="edit-upload-expression-btn" class="btn-secondary">
+                  Choose Image
+                </button>
+              </div>
+              <small>Name your expression and upload an image (PNG, JPG, WebP)</small>
+            </div>
+
+            <div class="form-group">
+              <label>Current Expressions</label>
+              <div id="edit-expressions-gallery" class="expressions-gallery">
+                <!-- Expression items will be dynamically inserted here -->
+              </div>
+            </div>
+          </details>
 
           <div class="new-character-actions">
             <button type="button" id="cancel-edit-character-btn" class="btn-secondary">
@@ -1402,6 +1596,43 @@
               <div class="export-option-desc">Formatted text ready to paste</div>
             </div>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Group Chat Creation Modal -->
+    <div id="group-chat-modal" class="group-chat-modal" style="display: none;" role="dialog" aria-labelledby="group-chat-title" aria-modal="true">
+      <div class="group-chat-overlay" aria-hidden="true"></div>
+      <div class="group-chat-content">
+        <div class="group-chat-header">
+          <h3 id="group-chat-title">Create Group Chat</h3>
+          <button class="close-btn" id="group-chat-close-btn" aria-label="Close group chat modal">&times;</button>
+        </div>
+        <div class="group-chat-body">
+          <div class="form-group">
+            <label for="group-chat-name">Group Name</label>
+            <input
+              type="text"
+              id="group-chat-name"
+              class="form-input"
+              placeholder="Enter group name..."
+              aria-label="Group name input"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Select Characters (minimum 2)</label>
+            <div class="character-selection-info">
+              <span id="selected-count">0 selected</span>
+            </div>
+            <div id="group-character-list" class="group-character-list">
+              <!-- Character checkboxes will be populated here -->
+            </div>
+          </div>
+        </div>
+        <div class="group-chat-footer">
+          <button id="group-chat-cancel-btn" class="secondary-btn">Cancel</button>
+          <button id="group-chat-create-btn" class="primary-btn" disabled>Create Group</button>
         </div>
       </div>
     </div>

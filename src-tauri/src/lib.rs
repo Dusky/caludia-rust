@@ -46,6 +46,10 @@ fn default_context_limit() -> u32 {
     200000
 }
 
+fn default_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Character {
     id: String,
@@ -68,7 +72,7 @@ struct Character {
     #[serde(default)]
     alternate_greetings: Vec<String>,
     #[serde(default)]
-    character_book: Option<serde_json::Value>,
+    character_book: Option<CharacterBook>,
     #[serde(default)]
     tags: Vec<String>,
     #[serde(default)]
@@ -189,7 +193,8 @@ impl From<Character> for CharacterCardV2Data {
             system_prompt: Some(character.system_prompt),
             post_history_instructions: character.post_history_instructions,
             alternate_greetings: character.alternate_greetings,
-            character_book: character.character_book,
+            character_book: character.character_book
+                .and_then(|book| serde_json::to_value(book).ok()),
             tags: character.tags,
             creator: character.creator,
             character_version: character.character_version,
@@ -216,6 +221,8 @@ struct Message {
     hidden: bool, // Whether this message is temporarily hidden from view
     #[serde(default)]
     expression: Option<String>, // Expression name used for this message
+    #[serde(default)]
+    character_id: Option<String>, // For group chats: which character sent this message (None = user)
 }
 
 impl Message {
@@ -234,6 +241,7 @@ impl Message {
             pinned: false,
             hidden: false,
             expression: None,
+            character_id: None,
         }
     }
 
@@ -252,6 +260,27 @@ impl Message {
             pinned: false,
             hidden: false,
             expression: None,
+            character_id: None,
+        }
+    }
+
+    // Constructor for group chat assistant messages with character ID
+    fn new_assistant_with_character(content: String, character_id: String) -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        Self {
+            role: "assistant".to_string(),
+            content: content.clone(),
+            swipes: vec![content],
+            current_swipe: 0,
+            timestamp,
+            pinned: false,
+            hidden: false,
+            expression: None,
+            character_id: Some(character_id),
         }
     }
 
@@ -300,6 +329,52 @@ struct WorldInfoEntry {
     priority: i32, // Higher priority entries are injected first
     #[serde(default)]
     use_regex: bool, // Use regex matching instead of literal string matching
+}
+
+// Character Book Entry (from Character Card V2 embedded lorebook)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CharacterBookEntry {
+    keys: Vec<String>, // Keywords that trigger this entry
+    content: String, // The lore content to inject
+    #[serde(default = "default_true")]
+    enabled: bool,
+    #[serde(default)]
+    insertion_order: i32, // Order in which to insert (higher = inserted later)
+    #[serde(default)]
+    case_sensitive: bool,
+    #[serde(default)]
+    name: Option<String>, // Optional name/label for the entry
+    #[serde(default)]
+    priority: i32, // Higher priority entries are checked first
+    #[serde(default)]
+    id: Option<String>, // Optional unique identifier
+    #[serde(default)]
+    comment: Option<String>, // Optional comment/description
+    #[serde(default)]
+    selective: bool, // If true, requires ALL keys to match
+    #[serde(default)]
+    secondary_keys: Vec<String>, // Additional keys for selective matching
+    #[serde(default)]
+    constant: bool, // If true, always included regardless of keywords
+    #[serde(default)]
+    position: Option<String>, // before_char, after_char (insertion position)
+}
+
+// Character Book (Character Card V2 embedded lorebook)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CharacterBook {
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    scan_depth: Option<usize>, // Override default scan depth
+    #[serde(default)]
+    token_budget: Option<usize>, // Max tokens for character book entries
+    #[serde(default)]
+    recursive_scanning: Option<bool>, // Enable recursive activation
+    #[serde(default)]
+    entries: Vec<CharacterBookEntry>,
 }
 
 // Roleplay Settings (Author's Note, Persona, World Info, Prompt Presets)
@@ -624,6 +699,88 @@ fn default_active_branch() -> String {
     "main".to_string()
 }
 
+// Group Chat Data Structures
+
+// Character-specific settings for group chats
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct CharacterTalkSettings {
+    #[serde(default = "default_talkativeness")]
+    talkativeness: u8, // 0-100: likelihood to respond in auto-mode
+    #[serde(default)]
+    muted: bool, // Whether this character can currently respond
+    #[serde(default)]
+    priority: i32, // Used for ordering/tie-breaking
+}
+
+fn default_talkativeness() -> u8 {
+    50 // Default 50% talkativeness
+}
+
+impl Default for CharacterTalkSettings {
+    fn default() -> Self {
+        Self {
+            talkativeness: default_talkativeness(),
+            muted: false,
+            priority: 0,
+        }
+    }
+}
+
+// Group chat settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GroupChatSettings {
+    #[serde(default)]
+    auto_mode: bool, // If true, auto-select next character; if false, user selects manually
+    #[serde(default)]
+    character_talk_settings: std::collections::HashMap<String, CharacterTalkSettings>,
+    #[serde(default = "default_reply_order_preset")]
+    reply_order_preset: String, // "natural", "round_robin", "weighted_random"
+    #[serde(default)]
+    group_world_info: Vec<WorldInfoEntry>, // Shared lorebook entries for the group
+}
+
+fn default_reply_order_preset() -> String {
+    "natural".to_string()
+}
+
+impl Default for GroupChatSettings {
+    fn default() -> Self {
+        Self {
+            auto_mode: false,
+            character_talk_settings: std::collections::HashMap::new(),
+            reply_order_preset: default_reply_order_preset(),
+            group_world_info: Vec::new(),
+        }
+    }
+}
+
+// Group chat metadata
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GroupChat {
+    id: String, // UUID
+    name: String, // User-defined name for this group chat
+    created_at: i64, // Unix timestamp in milliseconds
+    last_message_at: Option<i64>, // Unix timestamp in milliseconds
+    character_ids: Vec<String>, // List of character IDs in this group
+    #[serde(default)]
+    settings: GroupChatSettings, // Group-specific settings
+    #[serde(default)]
+    active_chat_id: Option<String>, // Currently active chat within this group
+}
+
+// Group chat info with computed fields for frontend display
+#[derive(Debug, Clone, Serialize)]
+struct GroupChatInfo {
+    id: String,
+    name: String,
+    created_at: i64,
+    last_message_at: Option<i64>,
+    character_ids: Vec<String>,
+    character_count: usize, // Number of characters in group
+    message_count: usize, // Total messages in active chat
+    is_group: bool, // Always true for group chats
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct ChatRequest {
     model: String,
@@ -743,6 +900,151 @@ fn save_roleplay_settings(character_id: &str, settings: &RoleplaySettings) -> Re
     }
     let contents = serde_json::to_string_pretty(settings).map_err(|e| e.to_string())?;
     fs::write(path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Group Chat Storage Functions
+
+fn get_group_chats_dir() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/group_chats")
+}
+
+fn get_group_chat_history_path(group_id: &str, chat_id: &str) -> PathBuf {
+    get_group_chats_dir().join(group_id).join(format!("chat_{}.json", chat_id))
+}
+
+fn get_group_chats_index_path() -> PathBuf {
+    get_group_chats_dir().join("index.json")
+}
+
+// Load all group chats from index
+fn load_group_chats_index() -> Vec<GroupChat> {
+    let index_path = get_group_chats_index_path();
+    if let Ok(contents) = fs::read_to_string(&index_path) {
+        serde_json::from_str(&contents).unwrap_or_default()
+    } else {
+        Vec::new()
+    }
+}
+
+// Save group chats index
+fn save_group_chats_index(groups: &Vec<GroupChat>) -> Result<(), String> {
+    let index_path = get_group_chats_index_path();
+    if let Some(parent) = index_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let contents = serde_json::to_string_pretty(groups).map_err(|e| e.to_string())?;
+    fs::write(index_path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Load a specific group chat
+fn load_group_chat(group_id: &str) -> Result<GroupChat, String> {
+    let groups = load_group_chats_index();
+    groups
+        .iter()
+        .find(|g| g.id == group_id)
+        .cloned()
+        .ok_or_else(|| format!("Group chat not found: {}", group_id))
+}
+
+// Save a group chat
+fn save_group_chat(group: &GroupChat) -> Result<(), String> {
+    let mut groups = load_group_chats_index();
+
+    // Update or insert group
+    if let Some(existing) = groups.iter_mut().find(|g| g.id == group.id) {
+        *existing = group.clone();
+    } else {
+        groups.push(group.clone());
+    }
+
+    save_group_chats_index(&groups)?;
+    Ok(())
+}
+
+// Load a specific group chat history (internal function)
+fn load_group_chat_history_internal(group_id: &str, chat_id: &str) -> Result<FullChatHistory, String> {
+    let chat_path = get_group_chat_history_path(group_id, chat_id);
+    let contents = fs::read_to_string(&chat_path)
+        .map_err(|e| format!("Failed to read group chat: {}", e))?;
+
+    let mut chat_history: FullChatHistory = serde_json::from_str(&contents)
+        .map_err(|e| format!("Failed to parse group chat: {}", e))?;
+
+    // Migrate old messages to new format
+    for messages in chat_history.branch_messages.values_mut() {
+        for msg in messages {
+            msg.migrate();
+        }
+    }
+
+    Ok(chat_history)
+}
+
+// Load group chat history (exposed to frontend)
+#[tauri::command]
+fn load_group_chat_history(group_id: String, chat_id: String) -> Result<FullChatHistory, String> {
+    load_group_chat_history_internal(&group_id, &chat_id)
+}
+
+// Create a new group chat history
+fn create_group_chat_history(group_id: &str, chat_id: &str) -> FullChatHistory {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let main_branch_id = uuid::Uuid::new_v4().to_string();
+    let main_branch = Branch {
+        id: main_branch_id.clone(),
+        name: "Main".to_string(),
+        created_at: now,
+        parent_branch_id: None,
+        diverge_at_index: 0,
+    };
+
+    let mut branch_messages = std::collections::HashMap::new();
+    branch_messages.insert(main_branch_id.clone(), Vec::new());
+
+    FullChatHistory {
+        chat: Chat {
+            id: chat_id.to_string(),
+            name: "Group Chat".to_string(),
+            created_at: now,
+            last_message_at: None,
+            character_id: group_id.to_string(), // Use group_id as character_id for group chats
+        },
+        branches: vec![main_branch],
+        active_branch_id: main_branch_id,
+        branch_messages,
+    }
+}
+
+// Save a group chat history
+fn save_group_chat_history(group_id: &str, chat_history: &FullChatHistory) -> Result<(), String> {
+    let chat_path = get_group_chat_history_path(group_id, &chat_history.chat.id);
+    if let Some(parent) = chat_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let contents = serde_json::to_string_pretty(chat_history).map_err(|e| e.to_string())?;
+    fs::write(chat_path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// Delete a group chat
+fn delete_group_chat_file(group_id: &str) -> Result<(), String> {
+    let mut groups = load_group_chats_index();
+    groups.retain(|g| g.id != group_id);
+    save_group_chats_index(&groups)?;
+
+    // Delete the group directory and all its chats
+    let group_dir = get_group_chats_dir().join(group_id);
+    if group_dir.exists() {
+        fs::remove_dir_all(&group_dir).map_err(|e| e.to_string())?;
+    }
+
     Ok(())
 }
 
@@ -1269,6 +1571,20 @@ fn load_branched_history(character_id: &str) -> BranchedChatHistory {
 
 // Legacy function - returns active branch messages
 fn load_history(character_id: &str) -> ChatHistory {
+    let config = load_config().unwrap_or_default();
+
+    // If there's an active chat, load from that chat's history
+    if let Some(chat_id) = &config.active_chat_id {
+        if let Ok(chat_history) = load_chat_history(character_id, chat_id) {
+            let messages = chat_history.branch_messages
+                .get(&chat_history.active_branch_id)
+                .cloned()
+                .unwrap_or_default();
+            return ChatHistory { messages };
+        }
+    }
+
+    // Otherwise load from old flat history for backward compatibility
     let branched = load_branched_history(character_id);
     let messages = branched.branch_messages
         .get(&branched.active_branch_id)
@@ -1289,6 +1605,20 @@ fn save_branched_history(character_id: &str, history: &BranchedChatHistory) -> R
 
 // Legacy function - saves to active branch
 fn save_history(character_id: &str, history: &ChatHistory) -> Result<(), String> {
+    let config = load_config().unwrap_or_default();
+
+    // If there's an active chat, save to that chat's history
+    if let Some(chat_id) = config.active_chat_id {
+        let mut chat_history = load_chat_history(character_id, &chat_id)?;
+        // Update the active branch's messages
+        chat_history.branch_messages.insert(
+            chat_history.active_branch_id.clone(),
+            history.messages.clone()
+        );
+        return save_chat_history(character_id, &chat_history);
+    }
+
+    // Otherwise save to old flat history for backward compatibility
     let mut branched = load_branched_history(character_id);
     branched.branch_messages.insert(branched.active_branch_id.clone(), history.messages.clone());
     save_branched_history(character_id, &branched)
@@ -1619,6 +1949,149 @@ fn scan_for_world_info_recursive(
     activated_entries
 }
 
+// Helper function to check if text contains keyword for character book entry
+fn text_matches_character_book_entry(text: &str, entry: &CharacterBookEntry, keys: &[String]) -> bool {
+    for keyword in keys {
+        let matches = if entry.case_sensitive {
+            text.contains(keyword.as_str())
+        } else {
+            text.to_lowercase().contains(&keyword.to_lowercase())
+        };
+
+        if matches {
+            return true;
+        }
+    }
+    false
+}
+
+// Scan messages for Character Book keywords and return activated entries
+fn scan_for_character_book(
+    messages: &[Message],
+    character_book: &CharacterBook,
+    scan_depth: usize,
+    recursion_depth: usize,
+) -> Vec<CharacterBookEntry> {
+    use std::collections::HashSet;
+
+    let mut activated_ids: HashSet<String> = HashSet::new();
+    let mut activated_entries: Vec<CharacterBookEntry> = Vec::new();
+
+    // Get scan depth from character book settings or use provided default
+    let effective_scan_depth = character_book.scan_depth.unwrap_or(scan_depth);
+    let effective_recursion = if character_book.recursive_scanning.unwrap_or(true) {
+        recursion_depth
+    } else {
+        1 // No recursion
+    };
+
+    // First, add all constant entries (always included)
+    for (idx, entry) in character_book.entries.iter().enumerate() {
+        if entry.enabled && entry.constant {
+            let id = entry.id.clone().unwrap_or_else(|| idx.to_string());
+            activated_ids.insert(id.clone());
+            activated_entries.push(entry.clone());
+        }
+    }
+
+    // Collect text to scan from messages
+    let messages_to_scan: Vec<&Message> = messages.iter()
+        .rev()
+        .take(effective_scan_depth)
+        .collect();
+
+    let mut scan_texts: Vec<String> = messages_to_scan
+        .iter()
+        .map(|msg| msg.get_content().to_string())
+        .collect();
+
+    // Iteratively scan for keywords with depth limit
+    for current_depth in 0..effective_recursion {
+        let mut newly_activated = Vec::new();
+
+        // Check each enabled entry against current scan texts
+        for (idx, entry) in character_book.entries.iter().enumerate() {
+            if !entry.enabled || entry.constant {
+                continue; // Skip disabled or already-added constant entries
+            }
+
+            let id = entry.id.clone().unwrap_or_else(|| idx.to_string());
+            if activated_ids.contains(&id) {
+                continue; // Already activated
+            }
+
+            // Check if this entry matches any of the scan texts
+            for text in &scan_texts {
+                let matches;
+
+                if entry.selective {
+                    // Selective mode: ALL primary keys AND ALL secondary keys must match
+                    let primary_matches = if entry.keys.is_empty() {
+                        true // No primary keys means auto-match
+                    } else {
+                        entry.keys.iter().all(|key| {
+                            if entry.case_sensitive {
+                                text.contains(key.as_str())
+                            } else {
+                                text.to_lowercase().contains(&key.to_lowercase())
+                            }
+                        })
+                    };
+
+                    let secondary_matches = if entry.secondary_keys.is_empty() {
+                        true // No secondary keys means auto-match
+                    } else {
+                        entry.secondary_keys.iter().all(|key| {
+                            if entry.case_sensitive {
+                                text.contains(key.as_str())
+                            } else {
+                                text.to_lowercase().contains(&key.to_lowercase())
+                            }
+                        })
+                    };
+
+                    matches = primary_matches && secondary_matches;
+                } else {
+                    // Non-selective mode: ANY key matches
+                    matches = text_matches_character_book_entry(text, entry, &entry.keys);
+                }
+
+                if matches {
+                    activated_ids.insert(id.clone());
+                    newly_activated.push(entry.clone());
+                    break;
+                }
+            }
+        }
+
+        // If no new entries were activated, stop recursion
+        if newly_activated.is_empty() {
+            break;
+        }
+
+        // Add newly activated entries to results
+        activated_entries.extend(newly_activated.clone());
+
+        // For next iteration, scan the content of newly activated entries
+        if current_depth + 1 < effective_recursion {
+            scan_texts = newly_activated
+                .iter()
+                .map(|entry| entry.content.clone())
+                .collect();
+        }
+    }
+
+    // Sort by priority (higher first), then by insertion_order (higher = later)
+    activated_entries.sort_by(|a, b| {
+        match b.priority.cmp(&a.priority) {
+            std::cmp::Ordering::Equal => a.insertion_order.cmp(&b.insertion_order),
+            other => other,
+        }
+    });
+
+    activated_entries
+}
+
 // Replace template variables in text
 fn replace_template_variables(
     text: &str,
@@ -1648,6 +2121,21 @@ fn replace_template_variables(
     // {{time}} - Current time (HH:MM format)
     let time_str = now.format("%H:%M").to_string();
     result = result.replace("{{time}}", &time_str);
+
+    // {{description}} - Character description
+    if let Some(desc) = &character.description {
+        result = result.replace("{{description}}", desc);
+    }
+
+    // {{personality}} - Character personality
+    if let Some(personality) = &character.personality {
+        result = result.replace("{{personality}}", personality);
+    }
+
+    // {{scenario}} - Character scenario
+    if let Some(scenario) = &character.scenario {
+        result = result.replace("{{scenario}}", scenario);
+    }
 
     result
 }
@@ -1779,6 +2267,26 @@ fn build_roleplay_context(
         system_additions.push_str("\n]");
     }
 
+    // 2b. Scan for Character Book entries and add to system prompt (with template variables replaced)
+    if let Some(character_book) = &character.character_book {
+        let activated_book_entries = scan_for_character_book(
+            messages,
+            character_book,
+            settings.scan_depth,
+            settings.recursion_depth,
+        );
+
+        if !activated_book_entries.is_empty() {
+            system_additions.push_str("\n\n[Character Lore:");
+            for entry in activated_book_entries {
+                let processed_content = replace_template_variables(&entry.content, character, settings);
+                let entry_label = entry.name.as_deref().unwrap_or("Entry");
+                system_additions.push_str(&format!("\n- {}: {}", entry_label, processed_content));
+            }
+            system_additions.push_str("\n]");
+        }
+    }
+
     // 3. Store Author's Note for later injection (with template variables replaced)
     // User's explicit Author's Note overrides preset default
     if settings.authors_note_enabled {
@@ -1804,8 +2312,38 @@ fn build_api_messages(
 
     // Build messages with system prompt first - use simple Message for API (with template variables replaced)
     let processed_system_prompt = replace_template_variables(&character.system_prompt, character, roleplay_settings);
-    let enhanced_system_prompt = format!("{}{}", processed_system_prompt, system_additions);
-    let mut api_messages = vec![Message::new_user(enhanced_system_prompt)];
+
+    // Build enhanced system prompt with character info
+    let mut system_content = processed_system_prompt;
+
+    // Add character description if it exists
+    if let Some(desc) = &character.description {
+        if !desc.is_empty() {
+            let processed_desc = replace_template_variables(desc, character, roleplay_settings);
+            system_content.push_str(&format!("\n\n[Character: {}]\n{}", character.name, processed_desc));
+        }
+    }
+
+    // Add personality if it exists
+    if let Some(personality) = &character.personality {
+        if !personality.is_empty() {
+            let processed_personality = replace_template_variables(personality, character, roleplay_settings);
+            system_content.push_str(&format!("\n\n[Personality: {}]", processed_personality));
+        }
+    }
+
+    // Add scenario if it exists
+    if let Some(scenario) = &character.scenario {
+        if !scenario.is_empty() {
+            let processed_scenario = replace_template_variables(scenario, character, roleplay_settings);
+            system_content.push_str(&format!("\n\n[Scenario: {}]", processed_scenario));
+        }
+    }
+
+    // Add system additions from presets, world info, persona, etc.
+    system_content.push_str(&system_additions);
+
+    let mut api_messages = vec![Message::new_user(system_content)];
     api_messages[0].role = "system".to_string();
 
     // Insert message examples if enabled
@@ -1838,6 +2376,16 @@ fn build_api_messages(
         api_messages.push(api_msg);
     }
 
+    // Add post-history instructions if they exist (jailbreak, formatting hints, etc.)
+    if let Some(post_hist) = &character.post_history_instructions {
+        if !post_hist.is_empty() {
+            let processed_post = replace_template_variables(post_hist, character, roleplay_settings);
+            let mut post_msg = Message::new_user(processed_post);
+            post_msg.role = "system".to_string();
+            api_messages.push(post_msg);
+        }
+    }
+
     // Insert Author's Note before last N messages if it exists (configurable depth)
     // FIX: If conversation is too short, insert after system message instead of skipping
     if let Some(note) = authors_note {
@@ -1855,6 +2403,243 @@ fn build_api_messages(
     }
 
     api_messages
+}
+
+// Helper function to build API messages for group chats
+// Only injects the responding character's prompt, not all group members
+fn build_api_messages_for_group(
+    responding_character: &Character,
+    all_characters: &HashMap<String, Character>,
+    history: &ChatHistory,
+    roleplay_settings: &RoleplaySettings,
+) -> Vec<Message> {
+    // Load roleplay settings and build context (shared across group)
+    let (system_additions, authors_note, note_depth) = build_roleplay_context(responding_character, &history.messages, roleplay_settings);
+
+    // Build messages with system prompt for responding character only
+    let processed_system_prompt = replace_template_variables(&responding_character.system_prompt, responding_character, roleplay_settings);
+
+    // Build enhanced system prompt with responding character info only
+    let mut system_content = processed_system_prompt;
+
+    // Add responding character description
+    if let Some(desc) = &responding_character.description {
+        if !desc.is_empty() {
+            let processed_desc = replace_template_variables(desc, responding_character, roleplay_settings);
+            system_content.push_str(&format!("\n\n[Character: {}]\n{}", responding_character.name, processed_desc));
+        }
+    }
+
+    // Add personality
+    if let Some(personality) = &responding_character.personality {
+        if !personality.is_empty() {
+            let processed_personality = replace_template_variables(personality, responding_character, roleplay_settings);
+            system_content.push_str(&format!("\n\n[Personality: {}]", processed_personality));
+        }
+    }
+
+    // Add scenario
+    if let Some(scenario) = &responding_character.scenario {
+        if !scenario.is_empty() {
+            let processed_scenario = replace_template_variables(scenario, responding_character, roleplay_settings);
+            system_content.push_str(&format!("\n\n[Scenario: {}]", processed_scenario));
+        }
+    }
+
+    // Add system additions from presets, world info, persona, etc. (shared)
+    system_content.push_str(&system_additions);
+
+    let mut api_messages = vec![Message::new_user(system_content)];
+    api_messages[0].role = "system".to_string();
+
+    // Insert message examples for responding character if enabled
+    if roleplay_settings.examples_enabled {
+        if let Some(ref mes_example) = responding_character.mes_example {
+            if !mes_example.is_empty() {
+                let examples = parse_message_examples(mes_example, responding_character, roleplay_settings);
+
+                match roleplay_settings.examples_position.as_str() {
+                    "after_system" => {
+                        for (i, example) in examples.into_iter().enumerate() {
+                            api_messages.insert(1 + i, example);
+                        }
+                    }
+                    "before_history" | _ => {
+                        api_messages.extend(examples);
+                    }
+                }
+            }
+        }
+    }
+
+    // Add history messages with character names for group context
+    for msg in &history.messages {
+        let content = if msg.role == "assistant" {
+            // For assistant messages in group chat, prefix with character name
+            if let Some(char_id) = &msg.character_id {
+                if let Some(character) = all_characters.get(char_id) {
+                    format!("{}: {}", character.name, msg.get_content())
+                } else {
+                    msg.get_content().to_string()
+                }
+            } else {
+                msg.get_content().to_string()
+            }
+        } else {
+            // User messages stay as-is
+            msg.get_content().to_string()
+        };
+
+        let mut api_msg = Message::new_user(content);
+        api_msg.role = msg.role.clone();
+        api_messages.push(api_msg);
+    }
+
+    // Add post-history instructions for responding character
+    if let Some(post_hist) = &responding_character.post_history_instructions {
+        if !post_hist.is_empty() {
+            let processed_post = replace_template_variables(post_hist, responding_character, roleplay_settings);
+            let mut post_msg = Message::new_user(processed_post);
+            post_msg.role = "system".to_string();
+            api_messages.push(post_msg);
+        }
+    }
+
+    // Insert Author's Note (shared)
+    if let Some(note) = authors_note {
+        let insert_pos = if api_messages.len() > (note_depth + 1) {
+            api_messages.len().saturating_sub(note_depth)
+        } else {
+            1
+        };
+
+        let mut note_msg = Message::new_user(format!("[Author's Note: {}]", note));
+        note_msg.role = "system".to_string();
+        api_messages.insert(insert_pos, note_msg);
+    }
+
+    api_messages
+}
+
+// Auto-select next character to respond in a group chat
+fn select_next_character(
+    group: &GroupChat,
+    all_characters: &HashMap<String, Character>,
+    history: &[Message],
+) -> Result<String, String> {
+    // Get unmuted characters
+    let available_characters: Vec<&String> = group.character_ids.iter()
+        .filter(|char_id| {
+            group.settings.character_talk_settings
+                .get(*char_id)
+                .map(|settings| !settings.muted)
+                .unwrap_or(true) // If no settings, not muted by default
+        })
+        .collect();
+
+    if available_characters.is_empty() {
+        return Err("No unmuted characters available".to_string());
+    }
+
+    // If only one unmuted character, select them
+    if available_characters.len() == 1 {
+        return Ok(available_characters[0].clone());
+    }
+
+    // Get last message for context-based selection
+    let last_message = history.last();
+
+    match group.settings.reply_order_preset.as_str() {
+        "natural" => {
+            // Natural mode: Check for @mentions or questions directed at specific characters
+            if let Some(msg) = last_message {
+                let content = msg.get_content().to_lowercase();
+
+                // Check for @mentions
+                for char_id in &available_characters {
+                    if let Some(character) = all_characters.get(*char_id) {
+                        let mention_patterns = vec![
+                            format!("@{}", character.name.to_lowercase()),
+                            format!("@ {}", character.name.to_lowercase()),
+                            character.name.to_lowercase() + ":",
+                        ];
+
+                        for pattern in mention_patterns {
+                            if content.contains(&pattern) {
+                                return Ok(char_id.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+
+            // No mention found - fall through to weighted random
+            select_weighted_random(group, &available_characters)
+        }
+        "round_robin" => {
+            // Round robin: Find last character who spoke and pick next in list
+            let last_assistant_msg = history.iter()
+                .rev()
+                .find(|msg| msg.role == "assistant" && msg.character_id.is_some());
+
+            if let Some(last_msg) = last_assistant_msg {
+                if let Some(last_char_id) = &last_msg.character_id {
+                    // Find index of last character
+                    if let Some(last_index) = available_characters.iter().position(|id| *id == last_char_id) {
+                        // Return next character (wrap around if at end)
+                        let next_index = (last_index + 1) % available_characters.len();
+                        return Ok(available_characters[next_index].clone());
+                    }
+                }
+            }
+
+            // If no previous messages, start with first character
+            Ok(available_characters[0].clone())
+        }
+        "weighted_random" | _ => {
+            select_weighted_random(group, &available_characters)
+        }
+    }
+}
+
+// Helper function for weighted random selection based on talkativeness
+fn select_weighted_random(group: &GroupChat, available_characters: &[&String]) -> Result<String, String> {
+    use rand::Rng;
+    use rand::seq::SliceRandom;
+
+    let mut rng = rand::thread_rng();
+
+    // Build weights based on talkativeness settings
+    let weights: Vec<u32> = available_characters.iter()
+        .map(|char_id| {
+            group.settings.character_talk_settings
+                .get(*char_id)
+                .map(|settings| settings.talkativeness as u32)
+                .unwrap_or(50) // Default talkativeness
+        })
+        .collect();
+
+    let total_weight: u32 = weights.iter().sum();
+
+    if total_weight == 0 {
+        // All characters have 0 talkativeness - pick randomly
+        return available_characters.choose(&mut rng)
+            .map(|s| s.to_string())
+            .ok_or_else(|| "Failed to select character".to_string());
+    }
+
+    // Weighted random selection
+    let mut roll = rng.gen_range(0..total_weight);
+
+    for (i, weight) in weights.iter().enumerate() {
+        if roll < *weight {
+            return Ok(available_characters[i].clone());
+        }
+        roll -= weight;
+    }
+
+    // Fallback (should not reach here)
+    Ok(available_characters[0].clone())
 }
 
 #[tauri::command]
@@ -2012,6 +2797,19 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
 #[tauri::command]
 fn get_chat_history() -> Result<Vec<Message>, String> {
     let character = get_active_character();
+    let config = load_config().unwrap_or_default();
+
+    // If there's an active chat, load from that chat's history
+    if let Some(chat_id) = config.active_chat_id {
+        let chat_history = load_chat_history(&character.id, &chat_id)?;
+        let messages = chat_history.branch_messages
+            .get(&chat_history.active_branch_id)
+            .cloned()
+            .unwrap_or_default();
+        return Ok(messages);
+    }
+
+    // Otherwise fall back to old flat history for backward compatibility
     Ok(load_history(&character.id).messages)
 }
 
@@ -2868,7 +3666,8 @@ async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character
         mes_example: card_data.mes_example,
         post_history_instructions: card_data.post_history_instructions,
         alternate_greetings: card_data.alternate_greetings,
-        character_book: card_data.character_book,
+        character_book: card_data.character_book
+            .and_then(|v| serde_json::from_value(v).ok()),
         tags: card_data.tags,
         creator: card_data.creator,
         character_version: card_data.character_version,
@@ -4338,9 +5137,21 @@ fn create_chat(character_id: String, name: String) -> Result<Chat, String> {
         character_id: character_id.clone(),
     };
 
-    // Create empty chat history
+    // Create chat history with greeting message if character has one
     let mut branch_messages = HashMap::new();
-    branch_messages.insert("main".to_string(), vec![]);
+    let mut main_messages = vec![];
+
+    // Load character to get greeting
+    if let Some(character) = load_character(&character_id) {
+        if let Some(greeting) = &character.greeting {
+            if !greeting.is_empty() {
+                // Add greeting as first assistant message
+                main_messages.push(Message::new_assistant(greeting.clone()));
+            }
+        }
+    }
+
+    branch_messages.insert("main".to_string(), main_messages);
 
     let chat_history = FullChatHistory {
         chat: chat.clone(),
@@ -4420,6 +5231,356 @@ fn switch_chat(chat_id: String) -> Result<Vec<Message>, String> {
         .unwrap_or_default();
 
     Ok(messages)
+}
+
+// ============================================================================
+// Group Chat Commands
+// ============================================================================
+
+#[tauri::command]
+fn create_group_chat(character_ids: Vec<String>, name: String) -> Result<GroupChat, String> {
+    if character_ids.len() < 2 {
+        return Err("Group chat requires at least 2 characters".to_string());
+    }
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64;
+
+    let group_chat = GroupChat {
+        id: Uuid::new_v4().to_string(),
+        name,
+        created_at: timestamp,
+        last_message_at: None,
+        character_ids,
+        settings: GroupChatSettings::default(),
+        active_chat_id: None,
+    };
+
+    save_group_chat(&group_chat)?;
+    Ok(group_chat)
+}
+
+#[tauri::command]
+fn get_group_chat(group_id: String) -> Result<GroupChat, String> {
+    load_group_chat(&group_id)
+}
+
+#[tauri::command]
+fn list_group_chats() -> Result<Vec<GroupChatInfo>, String> {
+    let groups = load_group_chats_index();
+
+    let group_infos: Vec<GroupChatInfo> = groups.iter().map(|group| {
+        // Count messages in active chat if one exists
+        let message_count = if let Some(chat_id) = &group.active_chat_id {
+            if let Ok(history) = load_group_chat_history_internal(&group.id, chat_id) {
+                history.branch_messages.values().map(|msgs| msgs.len()).sum()
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        GroupChatInfo {
+            id: group.id.clone(),
+            name: group.name.clone(),
+            created_at: group.created_at,
+            last_message_at: group.last_message_at,
+            character_ids: group.character_ids.clone(),
+            character_count: group.character_ids.len(),
+            message_count,
+            is_group: true,
+        }
+    }).collect();
+
+    Ok(group_infos)
+}
+
+#[tauri::command]
+fn delete_group_chat(group_id: String) -> Result<(), String> {
+    delete_group_chat_file(&group_id)
+}
+
+#[tauri::command]
+fn add_character_to_group(group_id: String, character_id: String) -> Result<(), String> {
+    let mut group = load_group_chat(&group_id)?;
+
+    if group.character_ids.contains(&character_id) {
+        return Err("Character already in group".to_string());
+    }
+
+    group.character_ids.push(character_id.clone());
+
+    // Initialize talk settings for new character
+    group.settings.character_talk_settings
+        .entry(character_id)
+        .or_insert(CharacterTalkSettings::default());
+
+    save_group_chat(&group)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_character_from_group(group_id: String, character_id: String) -> Result<(), String> {
+    let mut group = load_group_chat(&group_id)?;
+
+    if !group.character_ids.contains(&character_id) {
+        return Err("Character not in group".to_string());
+    }
+
+    if group.character_ids.len() <= 2 {
+        return Err("Cannot remove character - group must have at least 2 characters".to_string());
+    }
+
+    group.character_ids.retain(|id| id != &character_id);
+    group.settings.character_talk_settings.remove(&character_id);
+
+    save_group_chat(&group)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn update_group_settings(group_id: String, settings: GroupChatSettings) -> Result<(), String> {
+    let mut group = load_group_chat(&group_id)?;
+    group.settings = settings;
+    save_group_chat(&group)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn update_character_talk_settings(
+    group_id: String,
+    character_id: String,
+    settings: CharacterTalkSettings,
+) -> Result<(), String> {
+    let mut group = load_group_chat(&group_id)?;
+
+    if !group.character_ids.contains(&character_id) {
+        return Err("Character not in group".to_string());
+    }
+
+    group.settings.character_talk_settings.insert(character_id, settings);
+    save_group_chat(&group)?;
+    Ok(())
+}
+
+#[tauri::command]
+fn toggle_auto_mode(group_id: String) -> Result<bool, String> {
+    let mut group = load_group_chat(&group_id)?;
+    group.settings.auto_mode = !group.settings.auto_mode;
+    save_group_chat(&group)?;
+    Ok(group.settings.auto_mode)
+}
+
+#[tauri::command]
+fn toggle_character_mute(group_id: String, character_id: String) -> Result<bool, String> {
+    let mut group = load_group_chat(&group_id)?;
+
+    if !group.character_ids.contains(&character_id) {
+        return Err("Character not in group".to_string());
+    }
+
+    let talk_settings = group.settings.character_talk_settings
+        .entry(character_id)
+        .or_insert(CharacterTalkSettings::default());
+
+    talk_settings.muted = !talk_settings.muted;
+    let is_muted = talk_settings.muted;
+
+    save_group_chat(&group)?;
+    Ok(is_muted)
+}
+
+#[tauri::command]
+fn rename_group_chat(group_id: String, new_name: String) -> Result<(), String> {
+    let mut group = load_group_chat(&group_id)?;
+    group.name = new_name;
+    save_group_chat(&group)?;
+    Ok(())
+}
+
+// Group Chat Response Generation
+
+#[tauri::command]
+async fn generate_group_response(
+    group_id: String,
+    character_id: String,
+    user_message: String,
+) -> Result<String, String> {
+    let config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    let mut group = load_group_chat(&group_id)?;
+
+    // Verify character is in group
+    if !group.character_ids.contains(&character_id) {
+        return Err("Character not in group".to_string());
+    }
+
+    // Get or create active chat
+    let chat_id = if let Some(active_id) = &group.active_chat_id {
+        active_id.clone()
+    } else {
+        // Create first chat for this group
+        let new_chat_id = uuid::Uuid::new_v4().to_string();
+        group.active_chat_id = Some(new_chat_id.clone());
+        save_group_chat(&group)?;
+        new_chat_id
+    };
+
+    // Load all characters in group
+    let all_characters_list = list_characters()?;
+    let mut all_characters = HashMap::new();
+    for character in all_characters_list {
+        if group.character_ids.contains(&character.id) {
+            all_characters.insert(character.id.clone(), character);
+        }
+    }
+
+    // Get the responding character
+    let responding_character = all_characters.get(&character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
+
+    // Load or create chat history
+    let mut history = load_group_chat_history_internal(&group_id, &chat_id)
+        .unwrap_or_else(|_| create_group_chat_history(&group_id, &chat_id));
+
+    // Add user message to history
+    let messages = history.branch_messages
+        .get_mut(&history.active_branch_id)
+        .ok_or_else(|| "Active branch not found".to_string())?;
+    messages.push(Message::new_user(user_message.clone()));
+
+    // Build context
+    let roleplay_settings = load_roleplay_settings(&character_id);
+    let api_messages = build_api_messages_for_group(
+        responding_character,
+        &all_characters,
+        &ChatHistory { messages: messages.clone() },
+        &roleplay_settings,
+    );
+
+    // Call API
+    let client = reqwest::Client::new();
+    let base = config.base_url.trim_end_matches('/');
+    let url = if base.ends_with("/v1") {
+        format!("{}/chat/completions", base)
+    } else {
+        format!("{}/v1/chat/completions", base)
+    };
+
+    let request_body = ChatRequest {
+        model: config.model.clone(),
+        max_tokens: 4096,
+        messages: api_messages,
+    };
+
+    let response = client
+        .post(&url)
+        .header("Authorization", format!("Bearer {}", config.api_key))
+        .header("Content-Type", "application/json")
+        .json(&request_body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("API request failed with status {}: {}", status, error_text));
+    }
+
+    let chat_response: ChatResponse = response.json().await.map_err(|e| e.to_string())?;
+    let assistant_message = chat_response
+        .choices
+        .get(0)
+        .ok_or_else(|| "No response from API".to_string())?
+        .message
+        .content
+        .clone();
+
+    // Add assistant message to history with character_id
+    messages.push(Message::new_assistant_with_character(assistant_message.clone(), character_id));
+
+    // Save history
+    save_group_chat_history(&group_id, &history)?;
+
+    Ok(assistant_message)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GroupResponseResult {
+    character_id: String,
+    response: String,
+}
+
+#[tauri::command]
+async fn generate_group_response_auto(
+    group_id: String,
+    user_message: String,
+) -> Result<GroupResponseResult, String> {
+    let mut group = load_group_chat(&group_id)?;
+
+    // Get or create active chat
+    let chat_id = if let Some(active_id) = &group.active_chat_id {
+        active_id.clone()
+    } else {
+        // Create first chat for this group
+        let new_chat_id = uuid::Uuid::new_v4().to_string();
+        group.active_chat_id = Some(new_chat_id.clone());
+        save_group_chat(&group)?;
+        new_chat_id
+    };
+
+    // Load or create chat history
+    let history = load_group_chat_history_internal(&group_id, &chat_id)
+        .unwrap_or_else(|_| create_group_chat_history(&group_id, &chat_id));
+    let messages = history.branch_messages
+        .get(&history.active_branch_id)
+        .ok_or_else(|| "Active branch not found".to_string())?;
+
+    // Load all characters
+    let all_characters_list = list_characters()?;
+    let mut all_characters = HashMap::new();
+    for character in all_characters_list {
+        if group.character_ids.contains(&character.id) {
+            all_characters.insert(character.id.clone(), character);
+        }
+    }
+
+    // Auto-select next character
+    let selected_character_id = select_next_character(&group, &all_characters, messages)?;
+
+    // Generate response from selected character
+    let response = generate_group_response(group_id, selected_character_id.clone(), user_message).await?;
+
+    Ok(GroupResponseResult {
+        character_id: selected_character_id,
+        response,
+    })
+}
+
+#[tauri::command]
+fn get_next_character_auto(group_id: String, chat_id: String) -> Result<String, String> {
+    let group = load_group_chat(&group_id)?;
+
+    // Load chat history
+    let history = load_group_chat_history_internal(&group_id, &chat_id)?;
+    let messages = history.branch_messages
+        .get(&history.active_branch_id)
+        .ok_or_else(|| "Active branch not found".to_string())?;
+
+    // Load all characters
+    let all_characters_list = list_characters()?;
+    let mut all_characters = HashMap::new();
+    for character in all_characters_list {
+        if group.character_ids.contains(&character.id) {
+            all_characters.insert(character.id.clone(), character);
+        }
+    }
+
+    // Auto-select next character
+    select_next_character(&group, &all_characters, messages)
 }
 
 // ============================================================================
@@ -4760,6 +5921,21 @@ pub fn run() {
             rename_chat,
             get_active_chat,
             switch_chat,
+            create_group_chat,
+            get_group_chat,
+            list_group_chats,
+            delete_group_chat,
+            add_character_to_group,
+            remove_character_from_group,
+            update_group_settings,
+            update_character_talk_settings,
+            toggle_auto_mode,
+            toggle_character_mute,
+            rename_group_chat,
+            load_group_chat_history,
+            generate_group_response,
+            generate_group_response_auto,
+            get_next_character_auto,
             install_plugin,
             list_plugins,
             enable_plugin,

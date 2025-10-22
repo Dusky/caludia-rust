@@ -36,4 +36,5 @@ chrono = "0.4"
 tiktoken-rs = "0.5"
 git2 = "0.18"
 dirs = "5.0"
+rand = "0.8"
 
