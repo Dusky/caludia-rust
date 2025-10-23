@@ -5684,7 +5684,7 @@ async function handleCharacterSwitch() {
       characterHeaderName.textContent = `👥 ${groupChat.name}`;
 
       // Show group UI elements
-      showGroupReplyControls(groupChat);
+      await showGroupReplyControls(groupChat);
       showGroupMembersPanel(groupChat);
 
       setStatus('Group chat loaded', 'success');
@@ -9050,16 +9050,41 @@ function handleMentionInput() {
 }
 
 // Group Reply Controls Management
-function showGroupReplyControls(groupChat) {
+async function showGroupReplyControls(groupChat) {
   const controls = document.getElementById('group-reply-controls');
   const characterSelect = document.getElementById('group-reply-character');
   const autoToggle = document.getElementById('group-auto-mode-toggle');
 
   controls.style.display = 'flex';
 
-  // Populate character dropdown with group members
-  characterSelect.innerHTML = '<option value="">Select character...</option>';
+  // Populate character dropdown with user persona first
+  characterSelect.innerHTML = '';
 
+  // Add user persona as first option (default)
+  try {
+    if (currentRoleplaySettings) {
+      const personaName = currentRoleplaySettings.persona_name || 'You';
+      const personaOption = document.createElement('option');
+      personaOption.value = 'user';
+      personaOption.textContent = `👤 ${personaName} (You)`;
+      characterSelect.appendChild(personaOption);
+    } else {
+      // Fallback if no roleplay settings loaded
+      const personaOption = document.createElement('option');
+      personaOption.value = 'user';
+      personaOption.textContent = '👤 You';
+      characterSelect.appendChild(personaOption);
+    }
+  } catch (error) {
+    console.error('Failed to load persona for group reply:', error);
+    // Add fallback user option
+    const personaOption = document.createElement('option');
+    personaOption.value = 'user';
+    personaOption.textContent = '👤 You';
+    characterSelect.appendChild(personaOption);
+  }
+
+  // Add group member characters
   for (const charId of groupChat.character_ids) {
     const character = charactersMap[charId];
     if (character) {
@@ -9069,6 +9094,9 @@ function showGroupReplyControls(groupChat) {
       characterSelect.appendChild(option);
     }
   }
+
+  // Default to user persona
+  characterSelect.value = 'user';
 
   // Set auto-mode toggle state
   autoToggle.checked = groupChat.settings?.auto_mode || false;
