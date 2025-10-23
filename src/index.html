@@ -547,6 +547,59 @@
               </label>
             </div>
 
+            <div class="form-group">
+              <h3 style="margin: 24px 0 12px; font-size: 16px; color: var(--text-primary);">Sampling Parameters (Global Defaults)</h3>
+              <small style="color: var(--text-secondary); display: block; margin-bottom: 16px;">These settings control AI generation behavior. Can be overridden per-character.</small>
+
+              <div class="form-group">
+                <label for="temperature">Temperature (0-2)</label>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <input type="range" id="temperature" min="0" max="2" step="0.1" value="1.0" style="flex: 1;">
+                  <input type="number" id="temperature-value" min="0" max="2" step="0.1" value="1.0" style="width: 80px;">
+                </div>
+                <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Higher = more creative/random, Lower = more focused/deterministic</small>
+              </div>
+
+              <div class="form-group">
+                <label for="top-p">Top-P / Nucleus Sampling (0-1)</label>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <input type="range" id="top-p" min="0" max="1" step="0.05" value="1.0" style="flex: 1;">
+                  <input type="number" id="top-p-value" min="0" max="1" step="0.05" value="1.0" style="width: 80px;">
+                </div>
+                <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Cumulative probability cutoff for token selection</small>
+              </div>
+
+              <div class="form-group">
+                <label for="top-k">Top-K (optional)</label>
+                <input type="number" id="top-k" min="0" max="100" placeholder="Disabled" style="width: 100%;">
+                <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Limit selection to top K tokens (leave empty to disable)</small>
+              </div>
+
+              <div class="form-group">
+                <label for="frequency-penalty">Frequency Penalty (-2 to 2)</label>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <input type="range" id="frequency-penalty" min="-2" max="2" step="0.1" value="0" style="flex: 1;">
+                  <input type="number" id="frequency-penalty-value" min="-2" max="2" step="0.1" value="0" style="width: 80px;">
+                </div>
+                <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Penalize repeated tokens based on frequency</small>
+              </div>
+
+              <div class="form-group">
+                <label for="presence-penalty">Presence Penalty (-2 to 2)</label>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <input type="range" id="presence-penalty" min="-2" max="2" step="0.1" value="0" style="flex: 1;">
+                  <input type="number" id="presence-penalty-value" min="-2" max="2" step="0.1" value="0" style="width: 80px;">
+                </div>
+                <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Penalize repeated tokens regardless of frequency</small>
+              </div>
+
+              <div class="form-group">
+                <label for="max-tokens">Max Tokens per Response</label>
+                <input type="number" id="max-tokens" min="1" max="16384" value="4096" style="width: 100%;">
+                <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Maximum length of AI responses</small>
+              </div>
+            </div>
+
             <div id="validation-message" class="validation-message"></div>
 
             <button type="submit" id="save-settings-btn" class="btn-primary" disabled>
@@ -793,6 +846,71 @@
                   <label>Current Expressions</label>
                   <div id="expressions-gallery" class="expressions-gallery">
                     <!-- Expression items will be dynamically inserted here -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Sampling Settings Section -->
+            <div class="settings-section collapsed" data-section="sampling">
+              <div class="settings-section-header">
+                <div class="settings-section-title">
+                  <svg class="settings-section-icon" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Sampling Parameters (Character Override)
+                </div>
+              </div>
+              <div class="settings-section-content">
+                <div class="form-group">
+                  <label>
+                    <input type="checkbox" id="char-sampling-override-toggle" />
+                    Override global sampling settings for this character
+                  </label>
+                  <small style="color: var(--text-secondary); margin-top: 4px; display: block;">When disabled, uses global defaults from API settings</small>
+                </div>
+
+                <div id="char-sampling-controls" style="display: none;">
+                  <div class="form-group">
+                    <label for="char-temperature">Temperature (0-2)</label>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                      <input type="range" id="char-temperature" min="0" max="2" step="0.1" value="1.0" style="flex: 1;">
+                      <input type="number" id="char-temperature-value" min="0" max="2" step="0.1" value="1.0" style="width: 80px;">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="char-top-p">Top-P (0-1)</label>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                      <input type="range" id="char-top-p" min="0" max="1" step="0.05" value="1.0" style="flex: 1;">
+                      <input type="number" id="char-top-p-value" min="0" max="1" step="0.05" value="1.0" style="width: 80px;">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="char-top-k">Top-K (optional)</label>
+                    <input type="number" id="char-top-k" min="0" max="100" placeholder="Disabled" style="width: 100%;">
+                  </div>
+
+                  <div class="form-group">
+                    <label for="char-frequency-penalty">Frequency Penalty (-2 to 2)</label>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                      <input type="range" id="char-frequency-penalty" min="-2" max="2" step="0.1" value="0" style="flex: 1;">
+                      <input type="number" id="char-frequency-penalty-value" min="-2" max="2" step="0.1" value="0" style="width: 80px;">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="char-presence-penalty">Presence Penalty (-2 to 2)</label>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                      <input type="range" id="char-presence-penalty" min="-2" max="2" step="0.1" value="0" style="flex: 1;">
+                      <input type="number" id="char-presence-penalty-value" min="-2" max="2" step="0.1" value="0" style="width: 80px;">
+                    </div>
+                  </div>
+
+                  <div class="form-group">
+                    <label for="char-max-tokens">Max Tokens per Response</label>
+                    <input type="number" id="char-max-tokens" min="1" max="16384" value="4096" style="width: 100%;">
                   </div>
                 </div>
               </div>
