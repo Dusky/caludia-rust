@@ -6738,12 +6738,7 @@ async function refreshPromptPreview() {
     const systemPrompt = document.getElementById('character-system-prompt').value.trim();
     preview += addSection('SYSTEM PROMPT (Base Character Instructions)', systemPrompt);
 
-    // 2. Preset System Additions (if active)
-    if (currentPreset && currentPreset.system_additions) {
-      preview += addSection('PRESET SYSTEM ADDITIONS', currentPreset.system_additions.trim());
-    }
-
-    // 3. Message Examples (position: after_system)
+    // 2. Message Examples (position: after_system)
     const examplesEnabled = document.getElementById('examples-enabled').checked;
     const examplesPosition = document.getElementById('examples-position').value;
     const mesExample = document.getElementById('character-mes-example').value.trim();
@@ -6752,7 +6747,7 @@ async function refreshPromptPreview() {
       preview += addSection('MESSAGE EXAMPLES (Teaching Character Voice)', mesExample, examplesEnabled);
     }
 
-    // 4. Persona (if enabled)
+    // 3. Persona (if enabled)
     if (currentRoleplaySettings) {
       const personaEnabled = currentRoleplaySettings.persona_enabled;
       const personaName = currentRoleplaySettings.persona_name;
@@ -6763,21 +6758,21 @@ async function refreshPromptPreview() {
       }
     }
 
-    // 5. World Info note
+    // 4. World Info note
     preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. WORLD INFO ENTRIES\n${'─'.repeat(60)}\n`;
     preview += '[Injected dynamically when keywords are found in messages]\n';
 
-    // 6. Chat History
+    // 5. Chat History
     preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. CHAT HISTORY\n${'─'.repeat(60)}\n`;
     preview += '[Your conversation messages appear here]\n';
 
-    // 7. Post-History Instructions
+    // 6. Post-History Instructions
     const postHistory = document.getElementById('character-post-history').value.trim();
     if (postHistory) {
       preview += addSection('POST-HISTORY INSTRUCTIONS', postHistory);
     }
 
-    // 8. Author's Note
+    // 7. Author's Note
     if (currentRoleplaySettings) {
       const authorsNoteEnabled = currentRoleplaySettings.authors_note_enabled;
       const authorsNote = currentRoleplaySettings.authors_note;
@@ -6786,12 +6781,12 @@ async function refreshPromptPreview() {
       }
     }
 
-    // 9. Message Examples (position: before_history) - rare but possible
+    // 8. Message Examples (position: before_history) - rare but possible
     if (examplesPosition === 'before_history' && mesExample) {
       preview += addSection('MESSAGE EXAMPLES (Before History Position)', mesExample, examplesEnabled);
     }
 
-    // 10. Latest Messages
+    // 9. Latest Messages
     preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. LATEST MESSAGES (Recent Context)\n${'─'.repeat(60)}\n`;
     preview += '[Most recent messages for immediate context]\n';
 
