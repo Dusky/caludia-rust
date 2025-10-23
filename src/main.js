@@ -2575,6 +2575,16 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
 
+      // Bookmark button
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.className = 'message-action-btn message-bookmark-btn';
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.addEventListener('click', () => handleToggleBookmark(messageDiv));
+      actionsDiv.appendChild(bookmarkBtn);
+
       // Delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'message-action-btn message-delete-btn';
@@ -2639,6 +2649,16 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
       hideBtn.title = 'Hide message';
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
+
+      // Bookmark button
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.className = 'message-action-btn message-bookmark-btn';
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.addEventListener('click', () => handleToggleBookmark(messageDiv));
+      actionsDiv.appendChild(bookmarkBtn);
 
       // Copy message button
       const copyMsgBtn = document.createElement('button');
@@ -3289,6 +3309,43 @@ async function handleToggleHidden(messageDiv) {
   } catch (error) {
     console.error('Failed to toggle hidden:', error);
     setStatus(`Hide toggle failed: ${error}`, 'error');
+  }
+}
+
+// Handle toggling message bookmark status
+async function handleToggleBookmark(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  try {
+    const isBookmarked = await invoke('toggle_message_bookmark', { messageIndex });
+
+    // Update visual indicator
+    const bookmarkBtn = messageDiv.querySelector('.message-bookmark-btn');
+    if (isBookmarked) {
+      messageDiv.classList.add('bookmarked');
+      bookmarkBtn.classList.add('active');
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z"/>
+      </svg>`;
+      bookmarkBtn.title = 'Remove bookmark';
+      showInfo('Bookmarked', 'Message bookmarked. Click the bookmarks button in the header to view all bookmarks.');
+    } else {
+      messageDiv.classList.remove('bookmarked');
+      bookmarkBtn.classList.remove('active');
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+    }
+  } catch (error) {
+    console.error('Failed to toggle bookmark:', error);
+    setStatus(`Bookmark toggle failed: ${error}`, 'error');
   }
 }
 
