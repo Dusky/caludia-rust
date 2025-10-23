@@ -3704,6 +3704,17 @@ async function handleSaveSettings(e) {
   try {
     await invoke('save_api_config', { baseUrl, apiKey, model, stream, contextLimit });
 
+    // Save sampling settings separately
+    const samplingSettings = {
+      temperature: parseFloat(document.getElementById('temperature').value) || 1.0,
+      top_p: parseFloat(document.getElementById('top-p').value) || 1.0,
+      top_k: document.getElementById('top-k').value ? parseInt(document.getElementById('top-k').value) : null,
+      frequency_penalty: parseFloat(document.getElementById('frequency-penalty').value) || 0.0,
+      presence_penalty: parseFloat(document.getElementById('presence-penalty').value) || 0.0,
+      max_tokens: parseInt(document.getElementById('max-tokens').value) || 4096
+    };
+    await invoke('update_sampling_settings', { settings: samplingSettings });
+
     // Update cached context limit
     cachedContextLimit = contextLimit;
 
@@ -6049,6 +6060,32 @@ async function loadCharacterSettings() {
       pendingAvatarPath = null;
     }
 
+    // Load character sampling settings
+    const charSamplingToggle = document.getElementById('char-sampling-override-toggle');
+    const charSamplingDiv = document.getElementById('char-sampling-controls');
+
+    if (character.sampling_settings) {
+      // Has override - enable and load values
+      charSamplingToggle.checked = true;
+      charSamplingDiv.style.display = 'block';
+
+      const s = character.sampling_settings;
+      document.getElementById('char-temperature').value = s.temperature || 1.0;
+      document.getElementById('char-temperature-value').value = s.temperature || 1.0;
+      document.getElementById('char-top-p').value = s.top_p || 1.0;
+      document.getElementById('char-top-p-value').value = s.top_p || 1.0;
+      document.getElementById('char-top-k').value = s.top_k || '';
+      document.getElementById('char-frequency-penalty').value = s.frequency_penalty || 0.0;
+      document.getElementById('char-frequency-penalty-value').value = s.frequency_penalty || 0.0;
+      document.getElementById('char-presence-penalty').value = s.presence_penalty || 0.0;
+      document.getElementById('char-presence-penalty-value').value = s.presence_penalty || 0.0;
+      document.getElementById('char-max-tokens').value = s.max_tokens || 4096;
+    } else {
+      // No override - use global
+      charSamplingToggle.checked = false;
+      charSamplingDiv.style.display = 'none';
+    }
+
     // Load expressions
     await loadExpressionsGallery(character.id);
   } catch (error) {
@@ -6088,6 +6125,8 @@ async function handleSaveCharacter(e) {
   saveBtn.textContent = 'Saving...';
 
   try {
+    const characterId = document.getElementById('character-settings-select').value;
+
     await invoke('update_character', {
       name,
       systemPrompt,
@@ -6104,6 +6143,23 @@ async function handleSaveCharacter(e) {
       creatorNotes,
       avatarPath: pendingAvatarPath
     });
+
+    // Save character sampling settings if override is enabled
+    const samplingOverride = document.getElementById('char-sampling-override-toggle').checked;
+    if (samplingOverride) {
+      const samplingSettings = {
+        temperature: parseFloat(document.getElementById('char-temperature').value) || 1.0,
+        top_p: parseFloat(document.getElementById('char-top-p').value) || 1.0,
+        top_k: document.getElementById('char-top-k').value ? parseInt(document.getElementById('char-top-k').value) : null,
+        frequency_penalty: parseFloat(document.getElementById('char-frequency-penalty').value) || 0.0,
+        presence_penalty: parseFloat(document.getElementById('char-presence-penalty').value) || 0.0,
+        max_tokens: parseInt(document.getElementById('char-max-tokens').value) || 4096
+      };
+      await invoke('update_character_sampling_settings', { characterId, settings: samplingSettings });
+    } else {
+      // Clear character override (use global)
+      await invoke('update_character_sampling_settings', { characterId, settings: null });
+    }
 
     await loadCharacters();
     showSuccess('Character Saved', `${name} has been saved successfully.`);
@@ -7601,6 +7657,19 @@ async function loadExistingConfig() {
     // Cache context limit to avoid repeated API calls
     cachedContextLimit = config.context_limit || 200000;
 
+    // Load sampling settings
+    const sampling = config.sampling_settings || {};
+    document.getElementById('temperature').value = sampling.temperature || 1.0;
+    document.getElementById('temperature-value').value = sampling.temperature || 1.0;
+    document.getElementById('top-p').value = sampling.top_p || 1.0;
+    document.getElementById('top-p-value').value = sampling.top_p || 1.0;
+    document.getElementById('top-k').value = sampling.top_k || '';
+    document.getElementById('frequency-penalty').value = sampling.frequency_penalty || 0.0;
+    document.getElementById('frequency-penalty-value').value = sampling.frequency_penalty || 0.0;
+    document.getElementById('presence-penalty').value = sampling.presence_penalty || 0.0;
+    document.getElementById('presence-penalty-value').value = sampling.presence_penalty || 0.0;
+    document.getElementById('max-tokens').value = sampling.max_tokens || 4096;
+
     const modelSelect = document.getElementById('model-select');
     modelSelect.innerHTML = ''; // Clear existing options
     const option = document.createElement('option');
@@ -9063,5 +9132,59 @@ document.addEventListener('DOMContentLoaded', () => {
   const autoModeToggle = document.getElementById('group-auto-mode-toggle');
   if (autoModeToggle) {
     autoModeToggle.addEventListener('change', handleGroupAutoModeToggle);
+  }
+
+  // Sampling controls - sync sliders with number inputs (Global)
+  const samplingControls = [
+    { slider: 'temperature', value: 'temperature-value' },
+    { slider: 'top-p', value: 'top-p-value' },
+    { slider: 'frequency-penalty', value: 'frequency-penalty-value' },
+    { slider: 'presence-penalty', value: 'presence-penalty-value' }
+  ];
+
+  samplingControls.forEach(({ slider, value }) => {
+    const sliderEl = document.getElementById(slider);
+    const valueEl = document.getElementById(value);
+
+    if (sliderEl && valueEl) {
+      sliderEl.addEventListener('input', () => {
+        valueEl.value = sliderEl.value;
+      });
+      valueEl.addEventListener('input', () => {
+        sliderEl.value = valueEl.value;
+      });
+    }
+  });
+
+  // Character sampling controls - sync sliders with number inputs
+  const charSamplingControls = [
+    { slider: 'char-temperature', value: 'char-temperature-value' },
+    { slider: 'char-top-p', value: 'char-top-p-value' },
+    { slider: 'char-frequency-penalty', value: 'char-frequency-penalty-value' },
+    { slider: 'char-presence-penalty', value: 'char-presence-penalty-value' }
+  ];
+
+  charSamplingControls.forEach(({ slider, value }) => {
+    const sliderEl = document.getElementById(slider);
+    const valueEl = document.getElementById(value);
+
+    if (sliderEl && valueEl) {
+      sliderEl.addEventListener('input', () => {
+        valueEl.value = sliderEl.value;
+      });
+      valueEl.addEventListener('input', () => {
+        sliderEl.value = valueEl.value;
+      });
+    }
+  });
+
+  // Character sampling override toggle
+  const charSamplingToggle = document.getElementById('char-sampling-override-toggle');
+  const charSamplingDiv = document.getElementById('char-sampling-controls');
+
+  if (charSamplingToggle && charSamplingDiv) {
+    charSamplingToggle.addEventListener('change', () => {
+      charSamplingDiv.style.display = charSamplingToggle.checked ? 'block' : 'none';
+    });
   }
 });
