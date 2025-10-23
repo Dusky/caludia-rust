@@ -282,6 +282,8 @@ struct Message {
     #[serde(default)]
     hidden: bool, // Whether this message is temporarily hidden from view
     #[serde(default)]
+    bookmarked: bool, // Whether this message is bookmarked for quick navigation
+    #[serde(default)]
     expression: Option<String>, // Expression name used for this message
     #[serde(default)]
     character_id: Option<String>, // For group chats: which character sent this message (None = user)
@@ -302,6 +304,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            bookmarked: false,
             expression: None,
             character_id: None,
         }
@@ -321,6 +324,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            bookmarked: false,
             expression: None,
             character_id: None,
         }
@@ -341,6 +345,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            bookmarked: false,
             expression: None,
             character_id: Some(character_id),
         }
@@ -3031,6 +3036,37 @@ fn toggle_message_hidden(message_index: usize) -> Result<bool, String> {
     save_history(&character.id, &history)?;
 
     Ok(new_state)
+}
+
+#[tauri::command]
+fn toggle_message_bookmark(message_index: usize) -> Result<bool, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    history.messages[message_index].bookmarked = !history.messages[message_index].bookmarked;
+    let new_state = history.messages[message_index].bookmarked;
+    save_history(&character.id, &history)?;
+
+    Ok(new_state)
+}
+
+#[tauri::command]
+fn get_bookmarked_messages() -> Result<Vec<(usize, Message)>, String> {
+    let character = get_active_character();
+    let history = load_history(&character.id);
+
+    let bookmarked: Vec<(usize, Message)> = history.messages
+        .iter()
+        .enumerate()
+        .filter(|(_, msg)| msg.bookmarked)
+        .map(|(idx, msg)| (idx, msg.clone()))
+        .collect();
+
+    Ok(bookmarked)
 }
 
 // Undo/Redo support commands
@@ -6013,6 +6049,8 @@ pub fn run() {
             delete_message_at_index,
             toggle_message_pin,
             toggle_message_hidden,
+            toggle_message_bookmark,
+            get_bookmarked_messages,
             get_message_at_index,
             insert_message_at_index,
             replace_messages_from_index,
