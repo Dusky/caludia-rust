@@ -4350,8 +4350,9 @@ body.drag-over {
   display: none;
 }
 
-/* Hide the new character button in collapsed left sidebar */
-.left-sidebar.collapsed #sidebar-new-character-btn {
+/* Hide the new character and import buttons in collapsed left sidebar */
+.left-sidebar.collapsed #sidebar-new-character-btn,
+.left-sidebar.collapsed #sidebar-import-character-btn {
   display: none;
 }
 
