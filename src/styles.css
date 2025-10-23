@@ -2552,8 +2552,9 @@ body.view-comfortable .message-content pre {
 .roleplay-panel {
   position: fixed;
   top: 0;
-  left: -500px;
-  width: 500px;
+  left: -100%;
+  width: 90%;
+  max-width: 480px;
   height: 100vh;
   background: var(--bg-primary);
   border-right: 1px solid var(--border);
@@ -2603,15 +2604,13 @@ body.view-comfortable .message-content pre {
 }
 
 .roleplay-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
   gap: 6px;
   margin-bottom: 24px;
-  flex-wrap: wrap;
 }
 
 .roleplay-tab-btn {
-  flex: 1;
-  min-width: 0; /* Allow flex items to shrink below content size */
   padding: 8px 10px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
@@ -2625,6 +2624,7 @@ body.view-comfortable .message-content pre {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
 }
 
 .roleplay-tab-btn:hover {
@@ -2854,11 +2854,33 @@ body.view-comfortable .message-content pre {
   .settings-panel,
   .roleplay-panel {
     width: 100%;
+    max-width: 100%;
+  }
+
+  .settings-panel {
     right: -100%;
   }
 
   .settings-panel.open {
     right: 0;
+  }
+
+  .roleplay-panel {
+    left: -100%;
+  }
+
+  .roleplay-panel.open {
+    left: 0;
+  }
+
+  /* Stack roleplay tabs vertically on mobile */
+  .roleplay-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .roleplay-tab-btn {
+    font-size: 13px;
+    padding: 10px;
   }
 
   /* Reduce modal padding */
@@ -2894,6 +2916,19 @@ body.view-comfortable .message-content pre {
 
   .shortcuts-body {
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+}
+
+/* Medium tablets and small windows - 600px to 768px */
+@media (min-width: 600px) and (max-width: 768px) {
+  /* Reduce roleplay panel width on tablets */
+  .roleplay-panel {
+    max-width: 400px;
+  }
+
+  /* Make tabs wrap to 2x2 grid */
+  .roleplay-tabs {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -2935,13 +2970,9 @@ body.view-comfortable .message-content pre {
     right: 0;
   }
 
-  .roleplay-panel {
-    width: 100%;
-    left: -100%;
-  }
-
-  .roleplay-panel.open {
-    left: 0;
+  /* Tabs: 2 columns on small screens */
+  .roleplay-tabs {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -4613,6 +4644,9 @@ body.drag-over {
   overflow: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 1;
+  width: 100%;
+  min-width: 240px;
+  max-width: 320px;
 }
 
 .right-sidebar.collapsed {
@@ -4868,32 +4902,107 @@ body.drag-over {
    RESPONSIVE - SPACIOUS MODE
    ========================================== */
 
-@media (max-width: 1200px) {
+/* Large desktops - 1400px and up */
+@media (min-width: 1400px) {
   .layout-spacious .app-container {
-    grid-template-columns: 200px 1fr 280px;
+    grid-template-columns: 280px 1fr 320px;
+  }
+
+  .layout-spacious .app-container.left-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 320px;
+  }
+
+  .layout-spacious .app-container.right-sidebar-collapsed {
+    grid-template-columns: 280px 1fr 48px;
+  }
+
+  .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 48px;
+  }
+}
+
+/* Medium laptops - 1200px to 1399px */
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .layout-spacious .app-container {
+    grid-template-columns: 240px 1fr 280px;
+  }
+
+  .layout-spacious .app-container.left-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 280px;
+  }
+
+  .layout-spacious .app-container.right-sidebar-collapsed {
+    grid-template-columns: 240px 1fr 48px;
+  }
+
+  .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 48px;
+  }
+}
+
+/* Small laptops - 900px to 1199px */
+@media (min-width: 900px) and (max-width: 1199px) {
+  .layout-spacious .app-container {
+    grid-template-columns: 200px 1fr 260px;
+  }
+
+  .layout-spacious .app-container.left-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 260px;
   }
 
   .layout-spacious .app-container.right-sidebar-collapsed {
     grid-template-columns: 200px 1fr 48px;
   }
-}
-
-/* Tablets and smaller laptops - 768px to 1024px */
-@media (min-width: 768px) and (max-width: 1024px) {
-  .layout-spacious .app-container {
-    grid-template-columns: 180px 1fr 260px;
-  }
-
-  .layout-spacious .app-container.left-sidebar-collapsed {
-    grid-template-columns: 0 1fr 260px;
-  }
-
-  .layout-spacious .app-container.right-sidebar-collapsed {
-    grid-template-columns: 180px 1fr 0;
-  }
 
   .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 48px 1fr 48px;
+  }
+}
+
+/* Older breakpoint for backwards compatibility */
+@media (max-width: 1200px) {
+  .layout-spacious .app-container:not(.left-sidebar-collapsed):not(.right-sidebar-collapsed) {
+    grid-template-columns: 200px 1fr 260px;
+  }
+}
+
+/* Tablets - 768px to 899px - Auto-collapse sidebars for better space */
+@media (min-width: 768px) and (max-width: 899px) {
+  /* Force compact layout on tablets */
+  .layout-spacious .left-sidebar,
+  .layout-spacious .right-sidebar {
+    position: fixed;
+    z-index: 1001;
+    height: 100vh;
+    top: 0;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+  }
+
+  .layout-spacious .left-sidebar {
+    left: -280px;
+    transition: left 0.3s ease;
+  }
+
+  .layout-spacious .left-sidebar:not(.collapsed) {
+    left: 0;
+  }
+
+  .layout-spacious .right-sidebar {
+    right: -320px;
+    transition: right 0.3s ease;
+  }
+
+  .layout-spacious .right-sidebar:not(.collapsed) {
+    right: 0;
+  }
+
+  .layout-spacious .app-container {
     grid-template-columns: 1fr;
+  }
+
+  /* Show overlay when sidebars are open */
+  .layout-spacious .sidebar-overlay {
+    display: block;
   }
 }
 
@@ -4979,6 +5088,70 @@ body.drag-over {
 
   .view-visual-novel .messages-list {
     margin-left: 0;
+  }
+
+  /* Hide spacious layout sidebars completely on mobile */
+  .layout-spacious .left-sidebar,
+  .layout-spacious .right-sidebar {
+    display: none;
+  }
+
+  .layout-spacious .app-container {
+    grid-template-columns: 1fr;
+  }
+
+  /* Restore character controls in header on mobile spacious mode */
+  .layout-spacious .character-display,
+  .layout-spacious .character-controls,
+  .layout-spacious .header-left-controls {
+    display: flex;
+  }
+
+  /* Reduce roleplay panel padding on mobile */
+  .roleplay-panel {
+    padding: 16px 12px;
+  }
+
+  .roleplay-header {
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+  }
+
+  .roleplay-header h2 {
+    font-size: 20px;
+  }
+
+  .roleplay-content {
+    gap: 16px;
+  }
+
+  /* Make World Info entries stack better on mobile */
+  .worldinfo-entry {
+    padding: 10px;
+  }
+
+  .worldinfo-entry-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .worldinfo-entry-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .worldinfo-btn {
+    flex: 1;
+    min-width: 70px;
+    padding: 8px 10px;
+  }
+
+  /* Stack form buttons vertically on mobile */
+  .roleplay-content .form-group button,
+  .roleplay-content button.btn-primary,
+  .roleplay-content button.btn-secondary {
+    width: 100%;
   }
 }
 
