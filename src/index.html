@@ -283,6 +283,20 @@
 
         <div id="authorsnote-tab" class="roleplay-tab-content" role="tabpanel" aria-labelledby="authorsnote-tab" hidden>
           <div class="roleplay-content">
+            <!-- Tab Description -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color: var(--accent); flex-shrink: 0;">
+                  <path d="M3 3h10v10H3z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
+                  <path d="M6 6h4M6 9h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <strong style="color: var(--text-primary); font-size: 13px;">Narrative Instructions & Story Direction</strong>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin: 0; line-height: 1.5;">
+                Use Author's Note to guide the story's tone, pacing, and focus. Think of it as directing the narrative from outside the story. Best for: writing style, atmosphere, scene focus.
+              </p>
+            </div>
+
             <div class="form-group">
               <label for="authors-note-text">Author's Note</label>
               <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 8px;">
@@ -317,6 +331,20 @@
 
         <div id="persona-tab" class="roleplay-tab-content" role="tabpanel" aria-labelledby="persona-tab" hidden>
           <div class="roleplay-content">
+            <!-- Tab Description -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color: var(--accent); flex-shrink: 0;">
+                  <path d="M8 2C5.79086 2 4 3.79086 4 6C4 8.20914 5.79086 10 8 10C10.2091 10 12 8.20914 12 6C12 3.79086 10.2091 2 8 2Z" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M3 14C3 11.7909 4.79086 10 7 10H9C11.2091 10 13 11.7909 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <strong style="color: var(--text-primary); font-size: 13px;">Define Who You Are (User Character)</strong>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin: 0; line-height: 1.5;">
+                Create your character in the roleplay. This defines YOU (the user) from inside the story. Best for: your appearance, personality, background, and role in the narrative.
+              </p>
+            </div>
+
             <div class="form-group">
               <label for="persona-name">Persona Name</label>
               <input
@@ -791,6 +819,31 @@
                     <!-- Expression items will be dynamically inserted here -->
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Prompt Stack Preview Section -->
+            <div class="settings-section collapsed" data-section="prompt-preview">
+              <div class="settings-section-header">
+                <div class="settings-section-title">
+                  <svg class="settings-section-icon" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  Prompt Stack Preview
+                </div>
+              </div>
+              <div class="settings-section-content">
+                <p style="color: var(--text-secondary); font-size: 12px; margin-bottom: 12px;">
+                  This shows how your final prompt will be assembled. Different sections are combined in the order shown below.
+                </p>
+
+                <div id="prompt-stack-preview" style="background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 12px; font-family: monospace; white-space: pre-wrap; line-height: 1.6; max-height: 400px; overflow-y: auto;">
+                  <span style="color: var(--text-secondary); font-style: italic;">Click "Refresh Preview" to see your assembled prompt...</span>
+                </div>
+
+                <button type="button" id="refresh-prompt-preview-btn" class="btn-secondary" style="width: 100%; margin-top: 8px;">
+                  Refresh Preview
+                </button>
               </div>
             </div>
 

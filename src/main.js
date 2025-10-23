@@ -4000,6 +4000,9 @@ function setupAppControls() {
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
 
+  // Setup prompt preview button
+  document.getElementById('refresh-prompt-preview-btn').addEventListener('click', refreshPromptPreview);
+
   // Setup recursion depth change handler
   document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
 
@@ -6708,6 +6711,98 @@ async function handleSaveExamples() {
   } catch (error) {
     console.error('Failed to save Message Examples settings:', error);
     showError('Save Failed', `Failed to save message examples settings: ${error}`);
+  }
+}
+
+// Refresh Prompt Stack Preview
+async function refreshPromptPreview() {
+  const previewDiv = document.getElementById('prompt-stack-preview');
+  previewDiv.innerHTML = '<span style="color: var(--text-secondary); font-style: italic;">Loading...</span>';
+
+  try {
+    let preview = '';
+    let sectionNumber = 1;
+
+    // Helper function to add a section
+    const addSection = (title, content, enabled = true) => {
+      if (!content || content.trim() === '') return '';
+      if (!enabled) return `\n${'─'.repeat(60)}\n${sectionNumber++}. ${title} (DISABLED)\n${'─'.repeat(60)}\n\n`;
+      return `\n${'─'.repeat(60)}\n${sectionNumber++}. ${title}\n${'─'.repeat(60)}\n${content}\n`;
+    };
+
+    preview += '═'.repeat(60) + '\n';
+    preview += '  FINAL PROMPT ASSEMBLY ORDER\n';
+    preview += '═'.repeat(60);
+
+    // 1. System Prompt
+    const systemPrompt = document.getElementById('character-system-prompt').value.trim();
+    preview += addSection('SYSTEM PROMPT (Base Character Instructions)', systemPrompt);
+
+    // 2. Preset System Additions (if active)
+    if (currentPreset && currentPreset.system_additions) {
+      preview += addSection('PRESET SYSTEM ADDITIONS', currentPreset.system_additions.trim());
+    }
+
+    // 3. Message Examples (position: after_system)
+    const examplesEnabled = document.getElementById('examples-enabled').checked;
+    const examplesPosition = document.getElementById('examples-position').value;
+    const mesExample = document.getElementById('character-mes-example').value.trim();
+
+    if (examplesPosition === 'after_system' && mesExample) {
+      preview += addSection('MESSAGE EXAMPLES (Teaching Character Voice)', mesExample, examplesEnabled);
+    }
+
+    // 4. Persona (if enabled)
+    if (currentRoleplaySettings) {
+      const personaEnabled = currentRoleplaySettings.persona_enabled;
+      const personaName = currentRoleplaySettings.persona_name;
+      const personaDesc = currentRoleplaySettings.persona_description;
+      if (personaName || personaDesc) {
+        const personaText = `User Character: ${personaName}\n${personaDesc}`;
+        preview += addSection('PERSONA (User Character Definition)', personaText, personaEnabled);
+      }
+    }
+
+    // 5. World Info note
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. WORLD INFO ENTRIES\n${'─'.repeat(60)}\n`;
+    preview += '[Injected dynamically when keywords are found in messages]\n';
+
+    // 6. Chat History
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. CHAT HISTORY\n${'─'.repeat(60)}\n`;
+    preview += '[Your conversation messages appear here]\n';
+
+    // 7. Post-History Instructions
+    const postHistory = document.getElementById('character-post-history').value.trim();
+    if (postHistory) {
+      preview += addSection('POST-HISTORY INSTRUCTIONS', postHistory);
+    }
+
+    // 8. Author's Note
+    if (currentRoleplaySettings) {
+      const authorsNoteEnabled = currentRoleplaySettings.authors_note_enabled;
+      const authorsNote = currentRoleplaySettings.authors_note;
+      if (authorsNote) {
+        preview += addSection("AUTHOR'S NOTE (Narrative Direction)", authorsNote.trim(), authorsNoteEnabled);
+      }
+    }
+
+    // 9. Message Examples (position: before_history) - rare but possible
+    if (examplesPosition === 'before_history' && mesExample) {
+      preview += addSection('MESSAGE EXAMPLES (Before History Position)', mesExample, examplesEnabled);
+    }
+
+    // 10. Latest Messages
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. LATEST MESSAGES (Recent Context)\n${'─'.repeat(60)}\n`;
+    preview += '[Most recent messages for immediate context]\n';
+
+    preview += '\n' + '═'.repeat(60);
+    preview += '\n  END OF PROMPT ASSEMBLY\n';
+    preview += '═'.repeat(60);
+
+    previewDiv.innerHTML = `<pre style="margin: 0; color: var(--text-primary);">${preview}</pre>`;
+  } catch (error) {
+    console.error('Failed to generate prompt preview:', error);
+    previewDiv.innerHTML = `<span style="color: var(--danger);">Error generating preview: ${error}</span>`;
   }
 }
 
