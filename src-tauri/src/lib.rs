@@ -26,6 +26,8 @@ struct ApiConfig {
     stream: bool,
     #[serde(default = "default_context_limit")]
     context_limit: u32,
+    #[serde(default)]
+    sampling_settings: SamplingSettings,
 }
 
 impl Default for ApiConfig {
@@ -38,6 +40,7 @@ impl Default for ApiConfig {
             active_chat_id: None,
             stream: false,
             context_limit: default_context_limit(),
+            sampling_settings: SamplingSettings::default(),
         }
     }
 }
@@ -48,6 +51,61 @@ fn default_context_limit() -> u32 {
 
 fn default_true() -> bool {
     true
+}
+
+// Sampling parameters for generation control
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SamplingSettings {
+    #[serde(default = "default_temperature")]
+    temperature: f32,
+    #[serde(default = "default_top_p")]
+    top_p: f32,
+    #[serde(default)]
+    top_k: Option<u32>,
+    #[serde(default = "default_frequency_penalty")]
+    frequency_penalty: f32,
+    #[serde(default = "default_presence_penalty")]
+    presence_penalty: f32,
+    #[serde(default = "default_max_tokens")]
+    max_tokens: u32,
+}
+
+impl Default for SamplingSettings {
+    fn default() -> Self {
+        Self {
+            temperature: default_temperature(),
+            top_p: default_top_p(),
+            top_k: None,
+            frequency_penalty: default_frequency_penalty(),
+            presence_penalty: default_presence_penalty(),
+            max_tokens: default_max_tokens(),
+        }
+    }
+}
+
+fn default_temperature() -> f32 {
+    1.0
+}
+
+fn default_top_p() -> f32 {
+    1.0
+}
+
+fn default_frequency_penalty() -> f32 {
+    0.0
+}
+
+fn default_presence_penalty() -> f32 {
+    0.0
+}
+
+fn default_max_tokens() -> u32 {
+    4096
+}
+
+// Get effective sampling settings for a character (character override or global)
+fn get_effective_sampling_settings(character: &Character, config: &ApiConfig) -> SamplingSettings {
+    character.sampling_settings.clone().unwrap_or_else(|| config.sampling_settings.clone())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -89,6 +147,10 @@ struct Character {
     expressions: std::collections::HashMap<String, String>, // expression_name -> image_filename
     #[serde(default)]
     default_expression: Option<String>, // default expression to use
+
+    // Sampling settings (per-character override)
+    #[serde(default)]
+    sampling_settings: Option<SamplingSettings>,
 }
 
 // V2/V3 character card specification structs
@@ -786,6 +848,16 @@ struct ChatRequest {
     model: String,
     max_tokens: u32,
     messages: Vec<Message>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -819,6 +891,16 @@ struct StreamChatRequest {
     max_tokens: u32,
     messages: Vec<Message>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1668,6 +1750,7 @@ fn create_default_character() -> Character {
         extensions: serde_json::Value::Object(serde_json::Map::new()),
         expressions: std::collections::HashMap::new(),
         default_expression: None,
+        sampling_settings: None,
     }
 }
 
@@ -1819,11 +1902,11 @@ async fn validate_api(base_url: String, api_key: String) -> Result<Vec<String>, 
 
 #[tauri::command]
 async fn save_api_config(base_url: String, api_key: String, model: String, stream: bool, context_limit: u32) -> Result<(), String> {
-    // Preserve existing active_character_id and active_chat_id if they exist
-    let (active_character_id, active_chat_id) = if let Some(c) = load_config() {
-        (c.active_character_id, c.active_chat_id)
+    // Preserve existing active_character_id, active_chat_id, and sampling_settings if they exist
+    let (active_character_id, active_chat_id, sampling_settings) = if let Some(c) = load_config() {
+        (c.active_character_id, c.active_chat_id, c.sampling_settings)
     } else {
-        (None, None)
+        (None, None, SamplingSettings::default())
     };
 
     let config = ApiConfig {
@@ -1834,6 +1917,7 @@ async fn save_api_config(base_url: String, api_key: String, model: String, strea
         active_chat_id,
         stream,
         context_limit,
+        sampling_settings,
     };
     save_config(&config)
 }
@@ -1841,6 +1925,21 @@ async fn save_api_config(base_url: String, api_key: String, model: String, strea
 #[tauri::command]
 fn get_api_config() -> Result<ApiConfig, String> {
     load_config().ok_or_else(|| "No config found".to_string())
+}
+
+#[tauri::command]
+fn update_sampling_settings(settings: SamplingSettings) -> Result<(), String> {
+    let mut config = load_config().ok_or_else(|| "API not configured".to_string())?;
+    config.sampling_settings = settings;
+    save_config(&config)
+}
+
+#[tauri::command]
+fn update_character_sampling_settings(character_id: String, settings: Option<SamplingSettings>) -> Result<(), String> {
+    let mut character = load_character(&character_id)
+        .ok_or_else(|| format!("Character {} not found", character_id))?;
+    character.sampling_settings = settings;
+    save_character(&character)
 }
 
 // Roleplay Context Injection Logic
@@ -2663,10 +2762,18 @@ async fn chat(message: String) -> Result<String, String> {
     let roleplay_settings = load_roleplay_settings(&character.id);
     let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
+    // Get effective sampling settings (character override or global)
+    let sampling = get_effective_sampling_settings(&character, &config);
+
     let request = ChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
         messages: api_messages,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -2723,11 +2830,19 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
     let roleplay_settings = load_roleplay_settings(&character.id);
     let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
+    // Get effective sampling settings (character override or global)
+    let sampling = get_effective_sampling_settings(&character, &config);
+
     let request = StreamChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
         messages: api_messages,
         stream: true,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -3016,11 +3131,19 @@ async fn continue_message(message_index: usize) -> Result<String, String> {
         }
     }
 
+    // Get effective sampling settings (character override or global)
+    let sampling = get_effective_sampling_settings(&character, &config);
+
     // Convert to API format
     let api_request = ChatRequest {
         model: config.model.clone(),
         messages: api_messages,
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -3110,11 +3233,19 @@ async fn regenerate_at_index(message_index: usize) -> Result<SwipeInfo, String> 
         }
     }
 
+    // Get effective sampling settings (character override or global)
+    let sampling = get_effective_sampling_settings(&character, &config);
+
     // Convert to API format
     let api_request = ChatRequest {
         model: config.model.clone(),
         messages: api_messages,
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -3195,10 +3326,18 @@ async fn generate_response_only() -> Result<String, String> {
         }
     }
 
+    // Get effective sampling settings (character override or global)
+    let sampling = get_effective_sampling_settings(&character, &config);
+
     let request = ChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
         messages: api_messages,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -3269,11 +3408,19 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
         }
     }
 
+    // Get effective sampling settings (character override or global)
+    let sampling = get_effective_sampling_settings(&character, &config);
+
     let request = StreamChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
         messages: api_messages,
         stream: true,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -3456,6 +3603,7 @@ fn create_character(
         extensions: serde_json::Value::Object(serde_json::Map::new()),
         expressions: std::collections::HashMap::new(),
         default_expression: None,
+        sampling_settings: None,
     };
     save_character(&character)?;
     set_active_character(new_id)?;
@@ -3535,6 +3683,7 @@ fn duplicate_character(character_id: String) -> Result<Character, String> {
         extensions: source.extensions.clone(),
         expressions: source.expressions.clone(),
         default_expression: source.default_expression.clone(),
+        sampling_settings: source.sampling_settings.clone(),
     };
 
     // Copy avatar if it exists
@@ -3675,6 +3824,7 @@ async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character
         extensions: card_data.extensions,
         expressions,
         default_expression,
+        sampling_settings: None,
     };
 
     // Save character
@@ -5469,10 +5619,18 @@ async fn generate_group_response(
         format!("{}/v1/chat/completions", base)
     };
 
+    // Get effective sampling settings for the responding character
+    let sampling = get_effective_sampling_settings(responding_character, &config);
+
     let request_body = ChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens,
         messages: api_messages,
+        temperature: Some(sampling.temperature),
+        top_p: Some(sampling.top_p),
+        top_k: sampling.top_k,
+        frequency_penalty: Some(sampling.frequency_penalty),
+        presence_penalty: Some(sampling.presence_penalty),
     };
 
     let response = client
@@ -5845,6 +6003,8 @@ pub fn run() {
             validate_api,
             save_api_config,
             get_api_config,
+            update_sampling_settings,
+            update_character_sampling_settings,
             get_chat_history,
             clear_chat_history,
             truncate_history_from,
