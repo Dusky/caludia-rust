@@ -491,14 +491,139 @@
         </div>
 
         <div class="settings-tabs" role="tablist" aria-label="Settings categories">
-          <button class="tab-btn active" data-tab="api" role="tab" aria-selected="true" aria-controls="api-tab">API</button>
-          <button class="tab-btn" data-tab="character" role="tab" aria-selected="false" aria-controls="character-tab">Character</button>
-          <button class="tab-btn" data-tab="appearance" role="tab" aria-selected="false" aria-controls="appearance-tab">Appearance</button>
-          <button class="tab-btn" data-tab="plugins" role="tab" aria-selected="false" aria-controls="plugins-tab">Plugins</button>
+          <button class="tab-btn active" data-tab="global" role="tab" aria-selected="true" aria-controls="global-tab">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+            Global
+          </button>
+          <button class="tab-btn" data-tab="character" role="tab" aria-selected="false" aria-controls="character-tab">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+              <path d="M8 2C5.79086 2 4 3.79086 4 6C4 8.20914 5.79086 10 8 10C10.2091 10 12 8.20914 12 6C12 3.79086 10.2091 2 8 2Z" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M3 14C3 11.7909 4.79086 10 7 10H9C11.2091 10 13 11.7909 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Character
+          </button>
+          <button class="tab-btn" data-tab="api" role="tab" aria-selected="false" aria-controls="api-tab">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+              <path d="M2 6L8 2L14 6M2 10L8 6L14 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            API
+          </button>
+          <button class="tab-btn" data-tab="plugins" role="tab" aria-selected="false" aria-controls="plugins-tab">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="margin-right: 4px;">
+              <path d="M6 2v4M10 2v4M6 10v4M10 10v4M2 6h4M2 10h4M10 6h4M10 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            Plugins
+          </button>
         </div>
 
-        <div id="api-tab" class="tab-content active" role="tabpanel" aria-labelledby="api-tab">
+        <div id="global-tab" class="tab-content active" role="tabpanel" aria-labelledby="global-tab">
+          <div class="settings-form">
+            <!-- Tab Description Banner -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color: var(--accent); flex-shrink: 0;">
+                  <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.5"/>
+                </svg>
+                <strong style="color: var(--text-primary); font-size: 13px;">Global Application Settings</strong>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin: 0; line-height: 1.5;">
+                These settings apply to the entire application and affect all characters. Changes here will persist across all your conversations.
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label for="theme-select">Theme</label>
+              <select id="theme-select" class="theme-select">
+                <option value="dark">Dark (Default)</option>
+                <option value="darker">Darker</option>
+                <option value="midnight">Midnight Blue</option>
+                <option value="forest">Forest</option>
+                <option value="sunset">Sunset</option>
+                <option value="light">Light</option>
+              </select>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Choose your preferred color scheme</small>
+            </div>
+
+            <div class="form-group">
+              <label for="view-mode-select">View Mode</label>
+              <select id="view-mode-select" class="view-mode-select">
+                <option value="compact">Compact - Tight spacing, smaller text</option>
+                <option value="cozy">Cozy - Balanced spacing (Default)</option>
+                <option value="comfortable">Comfortable - Spacious layout</option>
+                <option value="visual-novel">Visual Novel - Character sprite display</option>
+              </select>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Adjust message density and spacing</small>
+            </div>
+
+            <div class="form-group">
+              <label for="layout-mode-select">Layout Mode</label>
+              <select id="layout-mode-select" class="layout-mode-select">
+                <option value="spacious">Spacious - Split panel with sidebar (Default)</option>
+                <option value="compact">Compact - Classic single-panel layout</option>
+              </select>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Choose your preferred UI layout</small>
+            </div>
+
+            <div class="form-group">
+              <label for="font-size-slider">
+                Font Size: <span id="font-size-value">100%</span>
+              </label>
+              <input
+                type="range"
+                id="font-size-slider"
+                min="80"
+                max="140"
+                value="100"
+                step="10"
+                class="font-size-slider"
+              />
+              <div style="display: flex; justify-content: space-between; margin-top: 4px;">
+                <small style="color: var(--text-secondary);">Small (80%)</small>
+                <small style="color: var(--text-secondary);">Large (140%)</small>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="show-timestamps-toggle" />
+                Show message timestamps
+              </label>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Display time for each message</small>
+            </div>
+
+            <div class="theme-preview-container">
+              <div class="theme-preview-label">Preview</div>
+              <div class="theme-preview">
+                <div class="theme-preview-message user-preview">
+                  <div class="theme-preview-content">User message</div>
+                </div>
+                <div class="theme-preview-message assistant-preview">
+                  <div class="theme-preview-avatar"></div>
+                  <div class="theme-preview-content">Assistant response</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="api-tab" class="tab-content" role="tabpanel" aria-labelledby="api-tab" hidden>
           <form id="settings-form" class="settings-form">
+            <!-- Tab Description Banner -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color: var(--accent); flex-shrink: 0;">
+                  <path d="M2 6L8 2L14 6M2 10L8 6L14 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <strong style="color: var(--text-primary); font-size: 13px;">API Configuration</strong>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin: 0; line-height: 1.5;">
+                Configure your API settings to connect to language model providers. These settings are saved per-application.
+              </p>
+            </div>
             <div class="form-group">
               <label for="api-base-url">Base URL</label>
               <input
@@ -560,6 +685,20 @@
 
         <div id="character-tab" class="tab-content" role="tabpanel" aria-labelledby="character-tab" hidden>
           <form id="character-form" class="settings-form">
+            <!-- Tab Description Banner -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color: var(--accent); flex-shrink: 0;">
+                  <path d="M8 2C5.79086 2 4 3.79086 4 6C4 8.20914 5.79086 10 8 10C10.2091 10 12 8.20914 12 6C12 3.79086 10.2091 2 8 2Z" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M3 14C3 11.7909 4.79086 10 7 10H9C11.2091 10 13 11.7909 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <strong style="color: var(--text-primary); font-size: 13px;">Character-Specific Settings</strong>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin: 0; line-height: 1.5;">
+                These settings are unique to the currently selected character. Each character card has its own personality, system prompt, examples, and configuration.
+              </p>
+            </div>
+
             <div class="form-group">
               <label for="character-settings-select">Select Character</label>
               <select id="character-settings-select"></select>
@@ -869,85 +1008,21 @@
           </form>
         </div>
 
-        <div id="appearance-tab" class="tab-content" role="tabpanel" aria-labelledby="appearance-tab" hidden>
-          <div class="settings-form">
-            <div class="form-group">
-              <label for="theme-select">Theme</label>
-              <select id="theme-select" class="theme-select">
-                <option value="dark">Dark (Default)</option>
-                <option value="darker">Darker</option>
-                <option value="midnight">Midnight Blue</option>
-                <option value="forest">Forest</option>
-                <option value="sunset">Sunset</option>
-                <option value="light">Light</option>
-              </select>
-              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Choose your preferred color scheme</small>
-            </div>
-
-            <div class="form-group">
-              <label for="view-mode-select">View Mode</label>
-              <select id="view-mode-select" class="view-mode-select">
-                <option value="compact">Compact - Tight spacing, smaller text</option>
-                <option value="cozy">Cozy - Balanced spacing (Default)</option>
-                <option value="comfortable">Comfortable - Spacious layout</option>
-                <option value="visual-novel">Visual Novel - Character sprite display</option>
-              </select>
-              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Adjust message density and spacing</small>
-            </div>
-
-            <div class="form-group">
-              <label for="layout-mode-select">Layout Mode</label>
-              <select id="layout-mode-select" class="layout-mode-select">
-                <option value="spacious">Spacious - Split panel with sidebar (Default)</option>
-                <option value="compact">Compact - Classic single-panel layout</option>
-              </select>
-              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Choose your preferred UI layout</small>
-            </div>
-
-            <div class="form-group">
-              <label for="font-size-slider">
-                Font Size: <span id="font-size-value">100%</span>
-              </label>
-              <input
-                type="range"
-                id="font-size-slider"
-                min="80"
-                max="140"
-                value="100"
-                step="10"
-                class="font-size-slider"
-              />
-              <div style="display: flex; justify-content: space-between; margin-top: 4px;">
-                <small style="color: var(--text-secondary);">Small (80%)</small>
-                <small style="color: var(--text-secondary);">Large (140%)</small>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label>
-                <input type="checkbox" id="show-timestamps-toggle" />
-                Show message timestamps
-              </label>
-              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Display time for each message</small>
-            </div>
-
-            <div class="theme-preview-container">
-              <div class="theme-preview-label">Preview</div>
-              <div class="theme-preview">
-                <div class="theme-preview-message user-preview">
-                  <div class="theme-preview-content">User message</div>
-                </div>
-                <div class="theme-preview-message assistant-preview">
-                  <div class="theme-preview-avatar"></div>
-                  <div class="theme-preview-content">Assistant response</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div id="plugins-tab" class="tab-content" role="tabpanel" aria-labelledby="plugins-tab" hidden>
           <div class="settings-form">
+            <!-- Tab Description Banner -->
+            <div style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%); border: 1px solid rgba(99, 102, 241, 0.2); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="color: var(--accent); flex-shrink: 0;">
+                  <path d="M6 2v4M10 2v4M6 10v4M10 10v4M2 6h4M2 10h4M10 6h4M10 10h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                <strong style="color: var(--text-primary); font-size: 13px;">Plugin System</strong>
+              </div>
+              <p style="color: var(--text-secondary); font-size: 12px; margin: 0; line-height: 1.5;">
+                Extend Claude with additional features by installing plugins. Plugins can add new UI components, integrate with external services, and enhance functionality.
+              </p>
+            </div>
+
             <div class="form-group">
               <label>Install Plugin from GitHub</label>
               <div style="display: flex; gap: 8px;">
