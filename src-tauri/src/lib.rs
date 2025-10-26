@@ -409,6 +409,14 @@ struct RoleplaySettings {
     examples_enabled: bool, // Whether to include message examples from character card
     #[serde(default = "default_examples_position")]
     examples_position: String, // Where to insert examples: "after_system" or "before_history"
+    #[serde(default)]
+    context_pruning_enabled: bool, // Enable automatic context pruning
+    #[serde(default = "default_context_reserve_tokens")]
+    context_reserve_tokens: usize, // Tokens to reserve for completion (default 4000)
+    #[serde(default)]
+    context_preserve_pinned: bool, // Always keep pinned messages (default true)
+    #[serde(default = "default_context_min_messages")]
+    context_min_messages: usize, // Minimum messages to keep (default 10)
 }
 
 fn default_authors_note_depth() -> usize {
@@ -427,6 +435,14 @@ fn default_recursion_depth() -> usize {
     3
 }
 
+fn default_context_reserve_tokens() -> usize {
+    4000 // Reserve 4k tokens for completion
+}
+
+fn default_context_min_messages() -> usize {
+    10 // Keep at least 10 messages
+}
+
 impl Default for RoleplaySettings {
     fn default() -> Self {
         Self {
@@ -442,6 +458,10 @@ impl Default for RoleplaySettings {
             active_preset_id: None, // No preset selected by default
             examples_enabled: false, // Message examples disabled by default
             examples_position: default_examples_position(), // After system prompt by default
+            context_pruning_enabled: true, // Enable smart context management by default
+            context_reserve_tokens: default_context_reserve_tokens(),
+            context_preserve_pinned: true, // Always preserve pinned messages
+            context_min_messages: default_context_min_messages(),
         }
     }
 }
@@ -2333,6 +2353,104 @@ fn build_roleplay_context(
     (system_additions, authors_note_content, settings.authors_note_depth)
 }
 
+// Smart context management: prune history to fit within token limit
+fn prune_history_for_context(
+    messages: &[Message],
+    current_context: &[Message],
+    settings: &RoleplaySettings,
+) -> Vec<Message> {
+    let config = get_api_config();
+    let context_limit = config.context_limit;
+    let reserve_tokens = settings.context_reserve_tokens;
+    let min_messages = settings.context_min_messages;
+
+    // Get tokenizer
+    let tokenizer = match tiktoken_rs::cl100k_base() {
+        Ok(t) => t,
+        Err(_) => return messages.to_vec(), // Fallback: return all messages
+    };
+
+    // Calculate tokens used by current context (system, examples, etc.)
+    let mut current_tokens = 0;
+    for msg in current_context {
+        let content = msg.get_content();
+        current_tokens += tokenizer.encode_with_special_tokens(content).len();
+    }
+
+    // Available tokens for history
+    let available_for_history = context_limit
+        .saturating_sub(current_tokens)
+        .saturating_sub(reserve_tokens);
+
+    // If we have plenty of space, return all messages
+    let mut total_history_tokens = 0;
+    for msg in messages {
+        total_history_tokens += tokenizer.encode_with_special_tokens(msg.get_content()).len();
+    }
+
+    if total_history_tokens <= available_for_history {
+        return messages.to_vec();
+    }
+
+    // Need to prune - collect messages with metadata
+    let mut message_info: Vec<(usize, usize, bool)> = Vec::new(); // (index, tokens, is_pinned)
+
+    for (idx, msg) in messages.iter().enumerate() {
+        let tokens = tokenizer.encode_with_special_tokens(msg.get_content()).len();
+        message_info.push((idx, tokens, msg.pinned));
+    }
+
+    // Always keep the most recent messages (last min_messages)
+    let messages_to_keep_count = messages.len().saturating_sub(min_messages);
+
+    let mut pruned_messages = Vec::new();
+    let mut token_count = 0;
+
+    // First pass: Add all pinned messages if preserve_pinned is enabled
+    if settings.context_preserve_pinned {
+        for (idx, tokens, is_pinned) in &message_info {
+            if *is_pinned {
+                if token_count + tokens <= available_for_history {
+                    pruned_messages.push((*idx, *tokens));
+                    token_count += tokens;
+                }
+            }
+        }
+    }
+
+    // Second pass: Add recent messages (working backwards from the end)
+    for i in (0..messages.len()).rev() {
+        // Skip if already added as pinned
+        if pruned_messages.iter().any(|(idx, _)| *idx == i) {
+            continue;
+        }
+
+        let tokens = message_info[i].1;
+
+        // Always try to keep minimum recent messages
+        let is_in_min_range = i >= messages_to_keep_count;
+
+        if is_in_min_range || token_count + tokens <= available_for_history {
+            if token_count + tokens <= available_for_history {
+                pruned_messages.push((i, tokens));
+                token_count += tokens;
+            } else if is_in_min_range {
+                // Force include minimum messages even if over budget
+                pruned_messages.push((i, tokens));
+                token_count += tokens;
+            }
+        }
+    }
+
+    // Sort by original index to maintain chronological order
+    pruned_messages.sort_by_key(|(idx, _)| *idx);
+
+    // Extract the actual messages
+    pruned_messages.iter()
+        .map(|(idx, _)| messages[*idx].clone())
+        .collect()
+}
+
 // Helper function to build API messages array with all context injection
 fn build_api_messages(
     character: &Character,
@@ -2401,8 +2519,19 @@ fn build_api_messages(
         }
     }
 
-    // Add history messages with current swipe content
-    for msg in &history.messages {
+    // Add history messages with smart context management
+    let history_messages = if roleplay_settings.context_pruning_enabled {
+        prune_history_for_context(
+            &history.messages,
+            &api_messages,
+            roleplay_settings,
+        )
+    } else {
+        // No pruning - add all messages
+        history.messages.clone()
+    };
+
+    for msg in &history_messages {
         let mut api_msg = Message::new_user(msg.get_content().to_string());
         api_msg.role = msg.role.clone();
         api_messages.push(api_msg);
@@ -4634,6 +4763,61 @@ fn get_token_count(character_id: Option<String>, current_input: String) -> Resul
     })
 }
 
+#[derive(Debug, Serialize)]
+struct ContextStatus {
+    total_tokens: usize,
+    context_limit: usize,
+    percentage_used: f64,
+    pruning_enabled: bool,
+    messages_pruned: usize,
+    total_messages: usize,
+    warning_level: String, // "none", "warning", "critical"
+}
+
+#[tauri::command]
+fn get_context_status(character_id: Option<String>) -> Result<ContextStatus, String> {
+    let character = if let Some(id) = character_id {
+        load_character(&id).ok_or_else(|| "Character not found".to_string())?
+    } else {
+        get_active_character()
+    };
+
+    let history = load_history(&character.id);
+    let settings = load_roleplay_settings(&character.id);
+    let config = get_api_config();
+
+    // Get token breakdown
+    let breakdown = get_token_count(Some(character.id.clone()), String::new())?;
+
+    let percentage_used = (breakdown.total as f64 / config.context_limit as f64) * 100.0;
+
+    let warning_level = if percentage_used >= 90.0 {
+        "critical".to_string()
+    } else if percentage_used >= 75.0 {
+        "warning".to_string()
+    } else {
+        "none".to_string()
+    };
+
+    // Calculate how many messages would be pruned
+    let messages_pruned = if settings.context_pruning_enabled {
+        let pruned = prune_history_for_context(&history.messages, &[], &settings);
+        history.messages.len().saturating_sub(pruned.len())
+    } else {
+        0
+    };
+
+    Ok(ContextStatus {
+        total_tokens: breakdown.total,
+        context_limit: config.context_limit,
+        percentage_used,
+        pruning_enabled: settings.context_pruning_enabled,
+        messages_pruned,
+        total_messages: history.messages.len(),
+        warning_level,
+    })
+}
+
 // World Info Commands
 
 #[tauri::command]
@@ -6103,6 +6287,7 @@ pub fn run() {
             reorder_quick_replies,
             process_quick_reply_template,
             get_token_count,
+            get_context_status,
             add_world_info_entry,
             update_world_info_entry,
             delete_world_info_entry,

@@ -4460,6 +4460,23 @@ async function updateTokenCount() {
       document.getElementById('token-history').textContent = tokenData.message_history;
       document.getElementById('token-input').textContent = tokenData.current_input;
       document.getElementById('token-total-detail').textContent = tokenData.total;
+
+      // Check context status for warnings
+      try {
+        const contextStatus = await invoke('get_context_status', { characterId: null });
+
+        // Clear any existing warning
+        const existingWarning = document.querySelector('.context-warning-banner');
+        if (existingWarning) existingWarning.remove();
+
+        // Show warning if needed
+        if (contextStatus.warning_level === 'warning' || contextStatus.warning_level === 'critical') {
+          showContextWarning(contextStatus);
+        }
+      } catch (err) {
+        console.error('Failed to check context status:', err);
+      }
+
     } catch (error) {
       console.error('Failed to update token count:', error);
       // Keep counter visible, just show 0
@@ -4467,6 +4484,32 @@ async function updateTokenCount() {
       tokenCountTotal.textContent = '0 / 200k tokens';
     }
   }, 300); // Update after 300ms of no typing
+}
+
+function showContextWarning(status) {
+  // Don't show warning if already exists
+  if (document.querySelector('.context-warning-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.className = `context-warning-banner ${status.warning_level}`;
+
+  const icon = status.warning_level === 'critical' ? '⚠️' : 'ℹ️';
+  const percentage = status.percentage_used.toFixed(1);
+
+  let message = `${icon} Context Usage: ${percentage}% (${status.total_tokens.toLocaleString()} / ${status.context_limit.toLocaleString()} tokens)`;
+
+  if (status.pruning_enabled && status.messages_pruned > 0) {
+    message += ` - ${status.messages_pruned} message${status.messages_pruned > 1 ? 's' : ''} will be pruned`;
+  }
+
+  banner.innerHTML = `
+    <span>${message}</span>
+    <button class="context-warning-close" onclick="this.parentElement.remove()">×</button>
+  `;
+
+  // Insert before messages container
+  const messagesContainer = document.getElementById('messages-container');
+  messagesContainer.parentElement.insertBefore(banner, messagesContainer);
 }
 
 // Toggle token breakdown display
