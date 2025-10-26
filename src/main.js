@@ -654,6 +654,19 @@ const commands = [
     action: () => openQuickRepliesManager(),
     keywords: ['macros', 'templates', 'edit', 'create']
   },
+  {
+    id: 'theme-settings',
+    title: 'Theme Settings',
+    description: 'Customize appearance, colors, and fonts',
+    category: 'Settings',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3a7 7 0 100 14 7 7 0 000-14z" stroke="currentColor" stroke-width="1.5"/><path d="M10 3v14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => {
+      closeCommandPalette();
+      openThemeSettings();
+    },
+    shortcut: ['Ctrl', 'T'],
+    keywords: ['appearance', 'dark', 'light', 'color', 'font', 'style', 'customize']
+  },
   // Character actions
   {
     id: 'new-character',
@@ -8206,6 +8219,13 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + T - Open theme settings
+    if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+      e.preventDefault();
+      openThemeSettings();
+      return;
+    }
+
     // Ctrl/Cmd + / - Toggle roleplay panel
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
@@ -9331,6 +9351,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Quick Replies
   setupQuickReplies();
+
+  // Theme System
+  initializeTheme();
 });
 
 // ============================================================================
@@ -9583,6 +9606,310 @@ function showQuickReplyEditor(reply = null) {
       setStatus(isEdit ? 'Quick reply updated' : 'Quick reply added', 'success');
     } catch (error) {
       setStatus(`Failed to save quick reply: ${error}`, 'error');
+    }
+  });
+}
+
+// ============================================================================
+// Theme System
+// ============================================================================
+
+let currentTheme = null;
+
+async function initializeTheme() {
+  try {
+    const theme = await invoke('get_theme_config');
+    currentTheme = theme;
+    applyTheme(theme);
+  } catch (error) {
+    console.error('Failed to load theme:', error);
+    // Apply default theme
+    applyTheme({
+      mode: 'dark',
+      accent_color: '#6366f1',
+      font_family: 'system-ui',
+      font_size: 14,
+      message_bubble_style: 'default'
+    });
+  }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+
+  // Apply theme mode
+  root.setAttribute('data-theme', theme.mode);
+
+  // Apply accent color
+  if (theme.accent_color) {
+    const hex = theme.accent_color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    root.style.setProperty('--accent', theme.accent_color);
+    root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+
+    // Calculate hover color (slightly darker)
+    const hoverColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`;
+    root.style.setProperty('--accent-hover', hoverColor);
+
+    // Update user message color
+    root.style.setProperty('--user-msg', theme.accent_color);
+  }
+
+  // Apply font family
+  if (theme.font_family && theme.font_family !== 'system-ui') {
+    root.style.setProperty('font-family', theme.font_family);
+  }
+
+  // Apply font size
+  if (theme.font_size) {
+    root.style.setProperty('font-size', `${theme.font_size}px`);
+  }
+
+  // Apply background image if present
+  if (theme.background_image) {
+    document.body.style.backgroundImage = `url('${theme.background_image}')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+
+    if (theme.background_blur) {
+      // Add blur overlay
+      if (!document.querySelector('.bg-blur-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'bg-blur-overlay';
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          pointer-events: none;
+          z-index: -1;
+        `;
+        document.body.appendChild(overlay);
+      }
+    }
+  }
+}
+
+async function toggleThemeMode() {
+  if (!currentTheme) return;
+
+  const newMode = currentTheme.mode === 'dark' ? 'light' : 'dark';
+  currentTheme.mode = newMode;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+    showToast(`Switched to ${newMode} mode`, 'success');
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+async function updateAccentColor(color) {
+  if (!currentTheme) return;
+
+  currentTheme.accent_color = color;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+async function updateFontSettings(fontFamily, fontSize) {
+  if (!currentTheme) return;
+
+  if (fontFamily) currentTheme.font_family = fontFamily;
+  if (fontSize) currentTheme.font_size = fontSize;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+function openThemeSettings() {
+  if (!currentTheme) {
+    showToast('Theme not loaded', 'error');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content" style="max-width: 500px;">
+      <div class="branch-manager-header">
+        <h3>Theme Settings</h3>
+        <button class="icon-btn" id="close-theme-settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Appearance</label>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary theme-mode-btn" data-mode="dark" style="flex: 1;">
+              🌙 Dark
+            </button>
+            <button class="btn-secondary theme-mode-btn" data-mode="light" style="flex: 1;">
+              ☀️ Light
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="accent-color" style="display: block; margin-bottom: 8px; font-weight: 600;">Accent Color</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="color" id="accent-color" value="${currentTheme.accent_color}" style="width: 60px; height: 40px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+            <div style="flex: 1;">
+              <input type="text" id="accent-color-hex" value="${currentTheme.accent_color}" placeholder="#6366f1" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+            ${['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'].map(color => `
+              <button class="preset-color-btn" data-color="${color}" style="width: 32px; height: 32px; border-radius: 6px; background: ${color}; border: 2px solid ${currentTheme.accent_color === color ? 'white' : 'transparent'}; cursor: pointer; transition: all 0.15s;"></button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="font-family" style="display: block; margin-bottom: 8px; font-weight: 600;">Font Family</label>
+          <select id="font-family" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);">
+            <option value="system-ui" ${currentTheme.font_family === 'system-ui' ? 'selected' : ''}>System Default</option>
+            <option value="'Inter', sans-serif" ${currentTheme.font_family.includes('Inter') ? 'selected' : ''}>Inter</option>
+            <option value="'Roboto', sans-serif" ${currentTheme.font_family.includes('Roboto') ? 'selected' : ''}>Roboto</option>
+            <option value="'Open Sans', sans-serif" ${currentTheme.font_family.includes('Open Sans') ? 'selected' : ''}>Open Sans</option>
+            <option value="'Fira Code', monospace" ${currentTheme.font_family.includes('Fira Code') ? 'selected' : ''}>Fira Code (Mono)</option>
+            <option value="'JetBrains Mono', monospace" ${currentTheme.font_family.includes('JetBrains') ? 'selected' : ''}>JetBrains Mono</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="font-size" style="display: block; margin-bottom: 8px; font-weight: 600;">Font Size: <span id="font-size-value">${currentTheme.font_size}px</span></label>
+          <input type="range" id="font-size" min="12" max="18" value="${currentTheme.font_size}" style="width: 100%;">
+        </div>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-secondary" id="reset-theme-btn">Reset to Default</button>
+          <button class="btn-primary" id="apply-theme-btn">Apply</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Update active mode button
+  modal.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    if (btn.dataset.mode === currentTheme.mode) {
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+    }
+  });
+
+  // Event listeners
+  modal.querySelector('#close-theme-settings').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+  // Theme mode buttons
+  modal.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.theme-mode-btn').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-secondary');
+      });
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+      currentTheme.mode = btn.dataset.mode;
+    });
+  });
+
+  // Color picker
+  const colorPicker = modal.querySelector('#accent-color');
+  const colorHex = modal.querySelector('#accent-color-hex');
+
+  colorPicker.addEventListener('input', (e) => {
+    colorHex.value = e.target.value;
+  });
+
+  colorHex.addEventListener('input', (e) => {
+    if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+      colorPicker.value = e.target.value;
+    }
+  });
+
+  // Preset colors
+  modal.querySelectorAll('.preset-color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const color = btn.dataset.color;
+      colorPicker.value = color;
+      colorHex.value = color;
+      modal.querySelectorAll('.preset-color-btn').forEach(b => b.style.borderColor = 'transparent');
+      btn.style.borderColor = 'white';
+    });
+  });
+
+  // Font size slider
+  const fontSizeSlider = modal.querySelector('#font-size');
+  const fontSizeValue = modal.querySelector('#font-size-value');
+  fontSizeSlider.addEventListener('input', (e) => {
+    fontSizeValue.textContent = `${e.target.value}px`;
+  });
+
+  // Reset button
+  modal.querySelector('#reset-theme-btn').addEventListener('click', async () => {
+    const defaultTheme = {
+      mode: 'dark',
+      accent_color: '#6366f1',
+      background_image: null,
+      background_blur: false,
+      font_family: 'system-ui',
+      font_size: 14,
+      message_bubble_style: 'default'
+    };
+
+    try {
+      await invoke('save_theme', defaultTheme);
+      currentTheme = defaultTheme;
+      applyTheme(defaultTheme);
+      modal.remove();
+      showToast('Theme reset to default', 'success');
+    } catch (error) {
+      showToast('Failed to reset theme', 'error');
+    }
+  });
+
+  // Apply button
+  modal.querySelector('#apply-theme-btn').addEventListener('click', async () => {
+    currentTheme.accent_color = colorPicker.value;
+    currentTheme.font_family = modal.querySelector('#font-family').value;
+    currentTheme.font_size = parseInt(fontSizeSlider.value);
+
+    try {
+      await invoke('save_theme', currentTheme);
+      applyTheme(currentTheme);
+      modal.remove();
+      showToast('Theme applied', 'success');
+    } catch (error) {
+      showToast('Failed to save theme', 'error');
     }
   });
 }

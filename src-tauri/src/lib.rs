@@ -50,6 +50,55 @@ fn default_true() -> bool {
     true
 }
 
+// Theme Configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ThemeConfig {
+    #[serde(default = "default_theme_mode")]
+    mode: String, // "dark" or "light"
+    #[serde(default = "default_accent_color")]
+    accent_color: String, // Hex color like "#6366f1"
+    #[serde(default)]
+    background_image: Option<String>, // Path to background image
+    #[serde(default)]
+    background_blur: bool, // Enable blur on background
+    #[serde(default = "default_font_family")]
+    font_family: String, // Font family name
+    #[serde(default = "default_font_size")]
+    font_size: u8, // Font size in px
+    #[serde(default)]
+    message_bubble_style: String, // "default", "rounded", "minimal"
+}
+
+fn default_theme_mode() -> String {
+    "dark".to_string()
+}
+
+fn default_accent_color() -> String {
+    "#6366f1".to_string() // Indigo
+}
+
+fn default_font_family() -> String {
+    "system-ui".to_string()
+}
+
+fn default_font_size() -> u8 {
+    14
+}
+
+impl Default for ThemeConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_theme_mode(),
+            accent_color: default_accent_color(),
+            background_image: None,
+            background_blur: false,
+            font_family: default_font_family(),
+            font_size: default_font_size(),
+            message_bubble_style: "default".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Character {
     id: String,
@@ -934,6 +983,38 @@ fn get_avatar_path(filename: &str) -> PathBuf {
 fn get_roleplay_settings_path(character_id: &str) -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home).join(format!(".config/claudia/roleplay_{}.json", character_id))
+}
+
+fn get_theme_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/theme.json")
+}
+
+fn load_theme_config() -> ThemeConfig {
+    let path = get_theme_path();
+    if let Ok(contents) = fs::read_to_string(path) {
+        serde_json::from_str(&contents).unwrap_or_default()
+    } else {
+        ThemeConfig::default()
+    }
+}
+
+fn save_theme_config(config: &ThemeConfig) -> Result<(), String> {
+    let path = get_theme_path();
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Failed to serialize theme config: {}", e))?;
+
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write theme config: {}", e))?;
+
+    Ok(())
 }
 
 fn load_roleplay_settings(character_id: &str) -> RoleplaySettings {
@@ -1893,6 +1974,16 @@ async fn save_api_config(base_url: String, api_key: String, model: String, strea
 #[tauri::command]
 fn get_api_config() -> Result<ApiConfig, String> {
     load_config().ok_or_else(|| "No config found".to_string())
+}
+
+#[tauri::command]
+fn get_theme_config() -> ThemeConfig {
+    load_theme_config()
+}
+
+#[tauri::command]
+fn save_theme(config: ThemeConfig) -> Result<(), String> {
+    save_theme_config(&config)
 }
 
 // Roleplay Context Injection Logic
@@ -6222,6 +6313,8 @@ pub fn run() {
             validate_api,
             save_api_config,
             get_api_config,
+            get_theme_config,
+            save_theme,
             get_chat_history,
             clear_chat_history,
             truncate_history_from,
