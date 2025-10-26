@@ -1231,11 +1231,24 @@ body.show-timestamps .message-timestamp {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 10px 12px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+  border: 1px solid rgba(99, 102, 241, 0.3);
   border-radius: 8px;
   margin-bottom: 8px;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .group-reply-mode {
@@ -1250,43 +1263,54 @@ body.show-timestamps .message-timestamp {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: var(--text-secondary);
-  font-weight: 500;
+  color: var(--text-primary);
+  font-weight: 600;
   white-space: nowrap;
 }
 
 .group-reply-label svg {
-  opacity: 0.7;
+  opacity: 0.9;
+  color: var(--accent);
 }
 
 .group-reply-select {
   flex: 1;
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   color: var(--text-primary);
   font-size: 13px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s ease;
-  max-width: 250px;
+  min-width: 150px;
+  max-width: 280px;
 }
 
 .group-reply-select:hover {
   border-color: var(--accent);
+  background: var(--bg-tertiary);
 }
 
 .group-reply-select:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.1);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background: var(--bg-tertiary);
 }
 
 .group-reply-select:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   background: var(--bg-secondary);
+}
+
+.group-reply-select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 8px;
 }
 
 .group-reply-auto {
@@ -1910,11 +1934,25 @@ body.show-timestamps .message-timestamp {
   cursor: pointer;
   transition: all 0.2s ease;
   font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.tab-btn svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
 }
 
 .tab-btn:hover {
   background: var(--border);
   color: var(--text-primary);
+}
+
+.tab-btn:hover svg {
+  opacity: 1;
 }
 
 .tab-btn.active {
@@ -2628,7 +2666,6 @@ body.view-comfortable .message-content pre {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
   flex-wrap: wrap;
 }
 
@@ -2639,11 +2676,27 @@ body.view-comfortable .message-content pre {
   flex-shrink: 0;
 }
 
-.worldinfo-keys {
+.worldinfo-info-section {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.worldinfo-keys {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+}
+
+.worldinfo-content-preview {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .worldinfo-priority {
@@ -4291,8 +4344,9 @@ body.drag-over {
   display: none;
 }
 
-/* Hide the new character button in collapsed left sidebar */
-.left-sidebar.collapsed #sidebar-new-character-btn {
+/* Hide the new character and import buttons in collapsed left sidebar */
+.left-sidebar.collapsed #sidebar-new-character-btn,
+.left-sidebar.collapsed #sidebar-import-character-btn {
   display: none;
 }
 

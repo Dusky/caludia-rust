@@ -4129,7 +4129,9 @@ function setupAppControls() {
 
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
-  document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
+
+  // Setup prompt preview button
+  document.getElementById('refresh-prompt-preview-btn').addEventListener('click', refreshPromptPreview);
 
   // Setup recursion depth change handler
   document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
@@ -5925,7 +5927,7 @@ async function handleCharacterSwitch() {
       characterHeaderName.textContent = `👥 ${groupChat.name}`;
 
       // Show group UI elements
-      showGroupReplyControls(groupChat);
+      await showGroupReplyControls(groupChat);
       showGroupMembersPanel(groupChat);
 
       setStatus('Group chat loaded', 'success');
@@ -6346,6 +6348,18 @@ async function loadCharacterSettings() {
 
     // Load expressions
     await loadExpressionsGallery(character.id);
+
+    // Load message examples settings
+    try {
+      const settings = await invoke('get_roleplay_settings', { characterId: character.id });
+      document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
+      document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+    } catch (error) {
+      console.error('Failed to load examples settings:', error);
+      // Set defaults if loading fails
+      document.getElementById('examples-enabled').checked = false;
+      document.getElementById('examples-position').value = 'after_system';
+    }
   } catch (error) {
     console.error('Failed to load character:', error);
   }
@@ -6400,7 +6414,25 @@ async function handleSaveCharacter(e) {
       avatarPath: pendingAvatarPath
     });
 
+    // Also save message examples settings
+    const characterId = document.getElementById('character-settings-select').value;
+    const examplesEnabled = document.getElementById('examples-enabled').checked;
+    const examplesPosition = document.getElementById('examples-position').value;
+
+    await invoke('update_examples_settings', {
+      characterId,
+      enabled: examplesEnabled,
+      position: examplesPosition
+    });
+
+    // Update currentRoleplaySettings if available
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.examples_enabled = examplesEnabled;
+      currentRoleplaySettings.examples_position = examplesPosition;
+    }
+
     await loadCharacters();
+    updateFeatureBadges();
     showSuccess('Character Saved', `${name} has been saved successfully.`);
   } catch (error) {
     showError('Save Failed', `Failed to save character: ${error}`);
@@ -6438,9 +6470,7 @@ async function loadRoleplaySettings() {
     document.getElementById('persona-description').value = settings.persona_description || '';
     document.getElementById('persona-enabled').checked = settings.persona_enabled || false;
 
-    // Load Message Examples
-    document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
-    document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+    // Message Examples settings now loaded in Character Tab (loadCharacterSettings)
 
     // Load Presets
     await loadPresets();
@@ -6571,9 +6601,24 @@ function renderWorldInfoList(entries) {
     enableCheckbox.checked = entry.enabled;
     enableCheckbox.addEventListener('change', () => handleToggleWorldInfoEntry(entry.id, enableCheckbox.checked));
 
-    const keysText = document.createElement('span');
+    const infoSection = document.createElement('div');
+    infoSection.className = 'worldinfo-info-section';
+
+    const keysText = document.createElement('div');
     keysText.className = 'worldinfo-keys';
     keysText.textContent = entry.keys.join(', ');
+
+    // Add content preview
+    const contentPreview = document.createElement('div');
+    contentPreview.className = 'worldinfo-content-preview';
+    const maxLength = 100;
+    const previewText = entry.content.length > maxLength
+      ? entry.content.substring(0, maxLength) + '...'
+      : entry.content;
+    contentPreview.textContent = previewText;
+
+    infoSection.appendChild(keysText);
+    infoSection.appendChild(contentPreview);
 
     const priority = document.createElement('span');
     priority.className = 'worldinfo-priority';
@@ -6596,16 +6641,11 @@ function renderWorldInfoList(entries) {
     actionsDiv.appendChild(deleteBtn);
 
     header.appendChild(enableCheckbox);
-    header.appendChild(keysText);
+    header.appendChild(infoSection);
     header.appendChild(priority);
     header.appendChild(actionsDiv);
 
-    const content = document.createElement('div');
-    content.className = 'worldinfo-entry-content';
-    content.textContent = entry.content;
-
     entryDiv.appendChild(header);
-    entryDiv.appendChild(content);
     listContainer.appendChild(entryDiv);
   });
 }
@@ -6966,6 +7006,93 @@ async function handleSaveExamples() {
   } catch (error) {
     console.error('Failed to save Message Examples settings:', error);
     showError('Save Failed', `Failed to save message examples settings: ${error}`);
+  }
+}
+
+// Refresh Prompt Stack Preview
+async function refreshPromptPreview() {
+  const previewDiv = document.getElementById('prompt-stack-preview');
+  previewDiv.innerHTML = '<span style="color: var(--text-secondary); font-style: italic;">Loading...</span>';
+
+  try {
+    let preview = '';
+    let sectionNumber = 1;
+
+    // Helper function to add a section
+    const addSection = (title, content, enabled = true) => {
+      if (!content || content.trim() === '') return '';
+      if (!enabled) return `\n${'─'.repeat(60)}\n${sectionNumber++}. ${title} (DISABLED)\n${'─'.repeat(60)}\n\n`;
+      return `\n${'─'.repeat(60)}\n${sectionNumber++}. ${title}\n${'─'.repeat(60)}\n${content}\n`;
+    };
+
+    preview += '═'.repeat(60) + '\n';
+    preview += '  FINAL PROMPT ASSEMBLY ORDER\n';
+    preview += '═'.repeat(60);
+
+    // 1. System Prompt
+    const systemPrompt = document.getElementById('character-system-prompt').value.trim();
+    preview += addSection('SYSTEM PROMPT (Base Character Instructions)', systemPrompt);
+
+    // 2. Message Examples (position: after_system)
+    const examplesEnabled = document.getElementById('examples-enabled').checked;
+    const examplesPosition = document.getElementById('examples-position').value;
+    const mesExample = document.getElementById('character-mes-example').value.trim();
+
+    if (examplesPosition === 'after_system' && mesExample) {
+      preview += addSection('MESSAGE EXAMPLES (Teaching Character Voice)', mesExample, examplesEnabled);
+    }
+
+    // 3. Persona (if enabled)
+    if (currentRoleplaySettings) {
+      const personaEnabled = currentRoleplaySettings.persona_enabled;
+      const personaName = currentRoleplaySettings.persona_name;
+      const personaDesc = currentRoleplaySettings.persona_description;
+      if (personaName || personaDesc) {
+        const personaText = `User Character: ${personaName}\n${personaDesc}`;
+        preview += addSection('PERSONA (User Character Definition)', personaText, personaEnabled);
+      }
+    }
+
+    // 4. World Info note
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. WORLD INFO ENTRIES\n${'─'.repeat(60)}\n`;
+    preview += '[Injected dynamically when keywords are found in messages]\n';
+
+    // 5. Chat History
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. CHAT HISTORY\n${'─'.repeat(60)}\n`;
+    preview += '[Your conversation messages appear here]\n';
+
+    // 6. Post-History Instructions
+    const postHistory = document.getElementById('character-post-history').value.trim();
+    if (postHistory) {
+      preview += addSection('POST-HISTORY INSTRUCTIONS', postHistory);
+    }
+
+    // 7. Author's Note
+    if (currentRoleplaySettings) {
+      const authorsNoteEnabled = currentRoleplaySettings.authors_note_enabled;
+      const authorsNote = currentRoleplaySettings.authors_note;
+      if (authorsNote) {
+        preview += addSection("AUTHOR'S NOTE (Narrative Direction)", authorsNote.trim(), authorsNoteEnabled);
+      }
+    }
+
+    // 8. Message Examples (position: before_history) - rare but possible
+    if (examplesPosition === 'before_history' && mesExample) {
+      preview += addSection('MESSAGE EXAMPLES (Before History Position)', mesExample, examplesEnabled);
+    }
+
+    // 9. Latest Messages
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. LATEST MESSAGES (Recent Context)\n${'─'.repeat(60)}\n`;
+    preview += '[Most recent messages for immediate context]\n';
+
+    preview += '\n' + '═'.repeat(60);
+    preview += '\n  END OF PROMPT ASSEMBLY\n';
+    preview += '═'.repeat(60);
+
+    previewDiv.innerHTML = `<pre style="margin: 0; color: var(--text-primary);">${preview}</pre>`;
+  } catch (error) {
+    console.error('Failed to generate prompt preview:', error);
+    previewDiv.innerHTML = `<span style="color: var(--danger);">Error generating preview: ${error}</span>`;
   }
 }
 
@@ -9250,16 +9377,41 @@ function handleMentionInput() {
 }
 
 // Group Reply Controls Management
-function showGroupReplyControls(groupChat) {
+async function showGroupReplyControls(groupChat) {
   const controls = document.getElementById('group-reply-controls');
   const characterSelect = document.getElementById('group-reply-character');
   const autoToggle = document.getElementById('group-auto-mode-toggle');
 
   controls.style.display = 'flex';
 
-  // Populate character dropdown with group members
-  characterSelect.innerHTML = '<option value="">Select character...</option>';
+  // Populate character dropdown with user persona first
+  characterSelect.innerHTML = '';
 
+  // Add user persona as first option (default)
+  try {
+    if (currentRoleplaySettings) {
+      const personaName = currentRoleplaySettings.persona_name || 'You';
+      const personaOption = document.createElement('option');
+      personaOption.value = 'user';
+      personaOption.textContent = `👤 ${personaName} (You)`;
+      characterSelect.appendChild(personaOption);
+    } else {
+      // Fallback if no roleplay settings loaded
+      const personaOption = document.createElement('option');
+      personaOption.value = 'user';
+      personaOption.textContent = '👤 You';
+      characterSelect.appendChild(personaOption);
+    }
+  } catch (error) {
+    console.error('Failed to load persona for group reply:', error);
+    // Add fallback user option
+    const personaOption = document.createElement('option');
+    personaOption.value = 'user';
+    personaOption.textContent = '👤 You';
+    characterSelect.appendChild(personaOption);
+  }
+
+  // Add group member characters
   for (const charId of groupChat.character_ids) {
     const character = charactersMap[charId];
     if (character) {
@@ -9269,6 +9421,9 @@ function showGroupReplyControls(groupChat) {
       characterSelect.appendChild(option);
     }
   }
+
+  // Default to user persona
+  characterSelect.value = 'user';
 
   // Set auto-mode toggle state
   autoToggle.checked = groupChat.settings?.auto_mode || false;
