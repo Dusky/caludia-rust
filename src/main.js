@@ -635,6 +635,25 @@ const commands = [
     shortcut: ['Ctrl', 'B'],
     keywords: ['saved', 'marked', 'favorites', 'starred']
   },
+  {
+    id: 'quick-replies',
+    title: 'Toggle Quick Replies',
+    description: 'Show/hide quick reply buttons',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    action: () => toggleQuickRepliesBar(),
+    shortcut: ['Ctrl', 'Q'],
+    keywords: ['macros', 'templates', 'shortcuts', 'replies']
+  },
+  {
+    id: 'manage-quick-replies',
+    title: 'Manage Quick Replies',
+    description: 'Add, edit, or delete quick replies',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="14" r="3" fill="currentColor"/></svg>`,
+    action: () => openQuickRepliesManager(),
+    keywords: ['macros', 'templates', 'edit', 'create']
+  },
   // Character actions
   {
     id: 'new-character',
@@ -8137,6 +8156,13 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + Q - Toggle quick replies bar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+      e.preventDefault();
+      toggleQuickRepliesBar();
+      return;
+    }
+
     // Ctrl/Cmd + / - Toggle roleplay panel
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
@@ -9257,4 +9283,263 @@ document.addEventListener('DOMContentLoaded', () => {
   if (autoModeToggle) {
     autoModeToggle.addEventListener('change', handleGroupAutoModeToggle);
   }
+
+// Quick Replies code to be appended to main.js
+
+  // Quick Replies
+  setupQuickReplies();
 });
+
+// ============================================================================
+// Quick Replies System
+// ============================================================================
+
+async function setupQuickReplies() {
+  const quickRepliesBar = document.getElementById('quick-replies-bar');
+  const quickRepliesList = document.getElementById('quick-replies-list');
+  const closeBtn = document.getElementById('close-quick-replies-btn');
+  const manageBtn = document.getElementById('manage-quick-replies-btn');
+
+  if (!quickRepliesBar || !quickRepliesList) return;
+
+  closeBtn.addEventListener('click', () => {
+    quickRepliesBar.style.display = 'none';
+  });
+
+  manageBtn.addEventListener('click', openQuickRepliesManager);
+
+  // Load and render quick replies
+  await loadQuickRepliesBar();
+}
+
+async function loadQuickRepliesBar() {
+  const quickRepliesList = document.getElementById('quick-replies-list');
+  if (!quickRepliesList) return;
+
+  try {
+    const replies = await invoke('get_quick_replies');
+
+    quickRepliesList.innerHTML = '';
+
+    if (replies.length === 0) {
+      quickRepliesList.innerHTML = `
+        <div class="quick-replies-empty">
+          No quick replies yet. <a href="#" id="create-first-quick-reply">Create one</a>
+        </div>
+      `;
+      const createLink = quickRepliesList.querySelector('#create-first-quick-reply');
+      if (createLink) {
+        createLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          openQuickRepliesManager();
+        });
+      }
+      return;
+    }
+
+    // Group by category
+    const categorized = {};
+    for (const reply of replies) {
+      const cat = reply.category || 'General';
+      if (!categorized[cat]) categorized[cat] = [];
+      categorized[cat].push(reply);
+    }
+
+    // Render by category
+    for (const [category, catReplies] of Object.entries(categorized)) {
+      if (Object.keys(categorized).length > 1) {
+        const categoryLabel = document.createElement('div');
+        categoryLabel.className = 'quick-replies-category';
+        categoryLabel.textContent = category;
+        categoryLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin: 8px 0 4px 0; font-weight: 600;';
+        quickRepliesList.appendChild(categoryLabel);
+      }
+
+      for (const reply of catReplies) {
+        const btn = document.createElement('button');
+        btn.className = 'quick-reply-btn';
+        btn.textContent = reply.name;
+        btn.title = reply.content;
+        btn.addEventListener('click', () => insertQuickReply(reply));
+        quickRepliesList.appendChild(btn);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load quick replies:', error);
+  }
+}
+
+async function insertQuickReply(reply) {
+  try {
+    const processed = await invoke('process_quick_reply_template', { template: reply.content });
+    const messageInput = document.getElementById('message-input');
+
+    if (messageInput.value.trim()) {
+      messageInput.value += '\n' + processed;
+    } else {
+      messageInput.value = processed;
+    }
+
+    // Auto-resize textarea
+    messageInput.style.height = 'auto';
+    messageInput.style.height = messageInput.scrollHeight + 'px';
+
+    messageInput.focus();
+  } catch (error) {
+    console.error('Failed to process quick reply:', error);
+    setStatus(`Failed to process quick reply: ${error}`, 'error');
+  }
+}
+
+function toggleQuickRepliesBar() {
+  const quickRepliesBar = document.getElementById('quick-replies-bar');
+  if (quickRepliesBar) {
+    quickRepliesBar.style.display = quickRepliesBar.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+async function openQuickRepliesManager() {
+  const replies = await invoke('get_quick_replies');
+
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content">
+      <div class="branch-manager-header">
+        <h3>Manage Quick Replies</h3>
+        <button class="icon-btn" id="close-qr-manager">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-primary" id="add-quick-reply-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Add Quick Reply
+        </button>
+      </div>
+      <div class="branch-list" id="quick-replies-manager-list">
+        ${replies.length === 0 ? `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>No quick replies yet</p>
+            <p style="font-size: 0.875rem; margin-top: 0.5rem;">Click "Add Quick Reply" to create your first one</p>
+          </div>
+        ` : replies.map(reply => `
+          <div class="branch-item" data-reply-id="${reply.id}">
+            <div class="branch-info">
+              <div class="branch-name">${reply.name}${reply.category ? ` <span style="color: var(--text-secondary); font-size: 0.875rem;">(${reply.category})</span>` : ''}</div>
+              <div class="branch-meta">${reply.content.substring(0, 100)}${reply.content.length > 100 ? '...' : ''}</div>
+            </div>
+            <div class="branch-actions">
+              <button class="btn-secondary qr-edit-btn" data-reply-id="${reply.id}">Edit</button>
+              <button class="btn-danger qr-delete-btn" data-reply-id="${reply.id}">Delete</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-qr-manager').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+  modal.querySelector('#add-quick-reply-btn').addEventListener('click', () => showQuickReplyEditor());
+
+  modal.querySelectorAll('.qr-edit-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const reply = replies.find(r => r.id === e.target.dataset.replyId);
+      showQuickReplyEditor(reply);
+    });
+  });
+
+  modal.querySelectorAll('.qr-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const replyId = e.target.dataset.replyId;
+      try {
+        await invoke('delete_quick_reply', { id: replyId });
+        modal.remove();
+        await loadQuickRepliesBar();
+        openQuickRepliesManager();
+      } catch (error) {
+        setStatus(`Failed to delete quick reply: ${error}`, 'error');
+      }
+    });
+  });
+}
+
+function showQuickReplyEditor(reply = null) {
+  const isEdit = !!reply;
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content" style="max-width: 500px;">
+      <div class="branch-manager-header">
+        <h3>${isEdit ? 'Edit' : 'Add'} Quick Reply</h3>
+        <button class="icon-btn" id="close-editor">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Name</label>
+          <input type="text" id="qr-name" value="${reply?.name || ''}" placeholder="e.g., Greeting" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Category (optional)</label>
+          <input type="text" id="qr-category" value="${reply?.category || ''}" placeholder="e.g., Greetings, Actions" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Content (supports {{char}}, {{user}}, {{date}}, {{time}})</label>
+          <textarea id="qr-content" rows="4" placeholder="Hello {{char}}! How are you today?" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); resize: vertical;">${reply?.content || ''}</textarea>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-secondary" id="cancel-qr-btn">Cancel</button>
+          <button class="btn-primary" id="save-qr-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-editor').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+  modal.querySelector('#cancel-qr-btn').addEventListener('click', () => modal.remove());
+
+  modal.querySelector('#save-qr-btn').addEventListener('click', async () => {
+    const name = modal.querySelector('#qr-name').value.trim();
+    const category = modal.querySelector('#qr-category').value.trim();
+    const content = modal.querySelector('#qr-content').value.trim();
+
+    if (!name || !content) {
+      setStatus('Name and content are required', 'error');
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await invoke('update_quick_reply', { id: reply.id, name, content, category });
+      } else {
+        await invoke('add_quick_reply', { name, content, category });
+      }
+
+      modal.remove();
+      await loadQuickRepliesBar();
+      // Reopen manager to show updated list
+      setTimeout(() => openQuickRepliesManager(), 100);
+      setStatus(isEdit ? 'Quick reply updated' : 'Quick reply added', 'success');
+    } catch (error) {
+      setStatus(`Failed to save quick reply: ${error}`, 'error');
+    }
+  });
+}
