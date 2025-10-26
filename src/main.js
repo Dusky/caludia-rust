@@ -625,6 +625,48 @@ const commands = [
     shortcut: ['Ctrl', 'Shift', 'Z'],
     keywords: ['forward', 'repeat']
   },
+  {
+    id: 'bookmarks',
+    title: 'View Bookmarks',
+    description: 'View and manage bookmarked messages',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 3c0-0.55228 0.44772-1 1-1h8c0.5523 0 1 0.44772 1 1v16l-5-3.5-5 3.5V3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    action: () => openBookmarkManager(),
+    shortcut: ['Ctrl', 'B'],
+    keywords: ['saved', 'marked', 'favorites', 'starred']
+  },
+  {
+    id: 'quick-replies',
+    title: 'Toggle Quick Replies',
+    description: 'Show/hide quick reply buttons',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    action: () => toggleQuickRepliesBar(),
+    shortcut: ['Ctrl', 'Q'],
+    keywords: ['macros', 'templates', 'shortcuts', 'replies']
+  },
+  {
+    id: 'manage-quick-replies',
+    title: 'Manage Quick Replies',
+    description: 'Add, edit, or delete quick replies',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="14" r="3" fill="currentColor"/></svg>`,
+    action: () => openQuickRepliesManager(),
+    keywords: ['macros', 'templates', 'edit', 'create']
+  },
+  {
+    id: 'theme-settings',
+    title: 'Theme Settings',
+    description: 'Customize appearance, colors, and fonts',
+    category: 'Settings',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3a7 7 0 100 14 7 7 0 000-14z" stroke="currentColor" stroke-width="1.5"/><path d="M10 3v14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => {
+      closeCommandPalette();
+      openThemeSettings();
+    },
+    shortcut: ['Ctrl', 'T'],
+    keywords: ['appearance', 'dark', 'light', 'color', 'font', 'style', 'customize']
+  },
   // Character actions
   {
     id: 'new-character',
@@ -2360,6 +2402,12 @@ function renderAssistantContent(contentDiv, messageText) {
     addCopyButtonToCode(block);
   });
 
+  // Make images clickable for fullscreen view
+  messageContent.querySelectorAll('img').forEach(img => {
+    img.style.cursor = 'pointer';
+    img.addEventListener('click', () => openImageFullscreen(img.src, img.alt));
+  });
+
   return messageContent;
 }
 
@@ -2404,10 +2452,32 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
   contentDiv.className = 'message-content';
 
   if (isUser) {
-    // User messages: plain text
-    const p = document.createElement('p');
-    p.textContent = content;
-    contentDiv.appendChild(p);
+    // User messages: support markdown including images
+    const messageContent = document.createElement('div');
+
+    // Check if content contains markdown image syntax or URLs
+    if (content.includes('![') || /https?:\/\/.*\.(jpg|jpeg|png|gif|webp)/i.test(content)) {
+      messageContent.innerHTML = marked.parse(content);
+
+      // Apply syntax highlighting to code blocks if any
+      messageContent.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+        addCopyButtonToCode(block);
+      });
+
+      // Make images clickable for fullscreen view
+      messageContent.querySelectorAll('img').forEach(img => {
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => openImageFullscreen(img.src, img.alt));
+      });
+    } else {
+      // Plain text for messages without markdown
+      const p = document.createElement('p');
+      p.textContent = content;
+      messageContent.appendChild(p);
+    }
+
+    contentDiv.appendChild(messageContent);
 
     // Add timestamp if provided
     if (timestamp) {
@@ -2575,6 +2645,16 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
 
+      // Bookmark button
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.className = 'message-action-btn message-bookmark-btn';
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.addEventListener('click', () => handleToggleBookmark(messageDiv));
+      actionsDiv.appendChild(bookmarkBtn);
+
       // Delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'message-action-btn message-delete-btn';
@@ -2639,6 +2719,16 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
       hideBtn.title = 'Hide message';
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
+
+      // Bookmark button
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.className = 'message-action-btn message-bookmark-btn';
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.addEventListener('click', () => handleToggleBookmark(messageDiv));
+      actionsDiv.appendChild(bookmarkBtn);
 
       // Copy message button
       const copyMsgBtn = document.createElement('button');
@@ -2784,6 +2874,19 @@ async function handleEditMessage(messageDiv, originalContent) {
   // Hide action buttons during edit
   actionsDiv.style.display = 'none';
 
+  // Add visual feedback for edit mode
+  messageDiv.classList.add('editing');
+  messageDiv.style.border = '2px solid var(--accent)';
+  messageDiv.style.background = 'var(--bg-tertiary)';
+  messageDiv.style.boxShadow = '0 0 0 4px rgba(99, 102, 241, 0.1)';
+
+  // Store original styles to restore later
+  const originalStyles = {
+    border: messageDiv.style.border,
+    background: messageDiv.style.background,
+    boxShadow: messageDiv.style.boxShadow
+  };
+
   // Create edit form
   const editForm = document.createElement('form');
   editForm.className = 'message-edit-form';
@@ -2823,10 +2926,19 @@ async function handleEditMessage(messageDiv, originalContent) {
   textarea.focus();
   textarea.setSelectionRange(textarea.value.length, textarea.value.length);
 
+  // Helper to exit edit mode and restore styles
+  const exitEditMode = () => {
+    messageDiv.classList.remove('editing');
+    messageDiv.style.border = originalStyles.border;
+    messageDiv.style.background = originalStyles.background;
+    messageDiv.style.boxShadow = originalStyles.boxShadow;
+  };
+
   // Handle cancel
   cancelBtn.addEventListener('click', () => {
     contentDiv.innerHTML = originalHTML;
     actionsDiv.style.display = 'flex';
+    exitEditMode();
   });
 
   // Handle save
@@ -2837,6 +2949,7 @@ async function handleEditMessage(messageDiv, originalContent) {
     if (!newContent || newContent === originalContent) {
       contentDiv.innerHTML = originalHTML;
       actionsDiv.style.display = 'flex';
+      exitEditMode();
       return;
     }
 
@@ -2873,10 +2986,13 @@ async function handleEditMessage(messageDiv, originalContent) {
         originalMessages: messagesToRestore,
         newContent
       });
+
+      // Edit complete - messageDiv will be removed, no need to exitEditMode
     } catch (error) {
       console.error('Failed to edit message:', error);
       contentDiv.innerHTML = originalHTML;
       actionsDiv.style.display = 'flex';
+      exitEditMode();
       addMessage(`Error editing message: ${error}`, false);
     }
   });
@@ -3263,6 +3379,44 @@ async function handleToggleHidden(messageDiv) {
   } catch (error) {
     console.error('Failed to toggle hidden:', error);
     setStatus(`Hide toggle failed: ${error}`, 'error');
+  }
+}
+
+// Handle toggling message bookmark status
+async function handleToggleBookmark(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  try {
+    const isBookmarked = await invoke('toggle_message_bookmark', { messageIndex });
+
+    // Update visual indicator
+    const bookmarkBtn = messageDiv.querySelector('.message-bookmark-btn');
+    if (isBookmarked) {
+      messageDiv.classList.add('bookmarked');
+      bookmarkBtn.classList.add('active');
+      bookmarkBtn.title = 'Remove bookmark';
+      // Update icon to filled bookmark
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    } else {
+      messageDiv.classList.remove('bookmarked');
+      bookmarkBtn.classList.remove('active');
+      bookmarkBtn.title = 'Bookmark message';
+      // Update icon back to outlined bookmark
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    }
+  } catch (error) {
+    console.error('Failed to toggle bookmark:', error);
+    setStatus(`Bookmark toggle failed: ${error}`, 'error');
   }
 }
 
@@ -3737,6 +3891,54 @@ async function handleAvatarUpload() {
       characterMsg.className = 'validation-message error';
     }
   }
+}
+
+// Make avatar circle clickable for uploading
+function makeAvatarUploadable(avatarCircle, uploadHandler) {
+  if (!avatarCircle) return;
+
+  // Make clickable
+  avatarCircle.style.cursor = 'pointer';
+  avatarCircle.title = 'Click to upload avatar or drag & drop an image';
+
+  avatarCircle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Only trigger upload if no avatar is set (empty background)
+    const hasAvatar = avatarCircle.style.backgroundImage && avatarCircle.style.backgroundImage !== '';
+    if (!hasAvatar) {
+      uploadHandler();
+    } else {
+      // If avatar exists, show the full-size view (existing behavior)
+      // This will be handled by makeAvatarClickable which is called separately
+    }
+  });
+
+  // Add drag-drop support
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    avatarCircle.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    });
+  });
+
+  avatarCircle.addEventListener('dragenter', () => {
+    avatarCircle.style.transform = 'scale(1.05)';
+    avatarCircle.style.boxShadow = '0 4px 20px rgba(99, 102, 241, 0.5)';
+  });
+
+  avatarCircle.addEventListener('dragleave', () => {
+    avatarCircle.style.transform = '';
+    avatarCircle.style.boxShadow = '';
+  });
+
+  avatarCircle.addEventListener('drop', async (e) => {
+    avatarCircle.style.transform = '';
+    avatarCircle.style.boxShadow = '';
+
+    // For Tauri apps, trigger the file dialog instead of direct file access
+    // Direct file path access from drag-drop is restricted for security
+    uploadHandler();
+  });
 }
 
 function handleAvatarRemove() {
@@ -4301,6 +4503,23 @@ async function updateTokenCount() {
       document.getElementById('token-history').textContent = tokenData.message_history;
       document.getElementById('token-input').textContent = tokenData.current_input;
       document.getElementById('token-total-detail').textContent = tokenData.total;
+
+      // Check context status for warnings
+      try {
+        const contextStatus = await invoke('get_context_status', { characterId: null });
+
+        // Clear any existing warning
+        const existingWarning = document.querySelector('.context-warning-banner');
+        if (existingWarning) existingWarning.remove();
+
+        // Show warning if needed
+        if (contextStatus.warning_level === 'warning' || contextStatus.warning_level === 'critical') {
+          showContextWarning(contextStatus);
+        }
+      } catch (err) {
+        console.error('Failed to check context status:', err);
+      }
+
     } catch (error) {
       console.error('Failed to update token count:', error);
       // Keep counter visible, just show 0
@@ -4311,6 +4530,48 @@ async function updateTokenCount() {
 }
 
 // Token breakdown is now always visible - no toggle needed
+function showContextWarning(status) {
+  // Don't show warning if already exists
+  if (document.querySelector('.context-warning-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.className = `context-warning-banner ${status.warning_level}`;
+
+  const icon = status.warning_level === 'critical' ? '⚠️' : 'ℹ️';
+  const percentage = status.percentage_used.toFixed(1);
+
+  let message = `${icon} Context Usage: ${percentage}% (${status.total_tokens.toLocaleString()} / ${status.context_limit.toLocaleString()} tokens)`;
+
+  if (status.pruning_enabled && status.messages_pruned > 0) {
+    message += ` - ${status.messages_pruned} message${status.messages_pruned > 1 ? 's' : ''} will be pruned`;
+  }
+
+  banner.innerHTML = `
+    <span>${message}</span>
+    <button class="context-warning-close" onclick="this.parentElement.remove()">×</button>
+  `;
+
+  // Insert before messages container
+  const messagesContainer = document.getElementById('messages-container');
+  messagesContainer.parentElement.insertBefore(banner, messagesContainer);
+}
+
+// Toggle token breakdown display
+document.getElementById('token-details-btn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const breakdown = document.getElementById('token-breakdown');
+  breakdown.style.display = breakdown.style.display === 'none' ? 'block' : 'none';
+});
+
+// Close breakdown when clicking outside
+document.addEventListener('click', (e) => {
+  const breakdown = document.getElementById('token-breakdown');
+  const detailsBtn = document.getElementById('token-details-btn');
+
+  if (!breakdown.contains(e.target) && !detailsBtn.contains(e.target)) {
+    breakdown.style.display = 'none';
+  }
+});
 
 // Update branch indicator in header
 async function updateBranchIndicator() {
@@ -4445,6 +4706,111 @@ async function openBranchManager() {
   } catch (error) {
     console.error('Failed to open branch manager:', error);
     setStatus(`Failed to open branch manager: ${error}`, 'error');
+  }
+}
+
+// Open bookmark manager modal
+async function openBookmarkManager() {
+  try {
+    const history = await invoke('get_chat_history');
+    const bookmarkedMessages = history
+      .map((msg, index) => ({ ...msg, index }))
+      .filter(msg => msg.bookmarked);
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'branch-manager-modal'; // Reuse branch manager styles
+    modal.innerHTML = `
+      <div class="branch-manager-overlay"></div>
+      <div class="branch-manager-content">
+        <div class="branch-manager-header">
+          <h3>Bookmarked Messages</h3>
+          <button class="icon-btn" id="close-bookmark-manager">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="branch-list">
+          ${bookmarkedMessages.length === 0 ? `
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+              <svg width="48" height="48" viewBox="0 0 14 14" fill="none" style="opacity: 0.3; margin-bottom: 1rem;">
+                <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <p>No bookmarked messages yet</p>
+              <p style="font-size: 0.875rem; margin-top: 0.5rem;">Click the bookmark icon on any message to save it here</p>
+            </div>
+          ` : bookmarkedMessages.map(msg => {
+            const content = msg.swipes && msg.swipes.length > 0
+              ? msg.swipes[msg.current_swipe || 0]
+              : msg.content;
+            const preview = content.length > 120 ? content.substring(0, 120) + '...' : content;
+            const role = msg.role === 'user' ? 'You' : 'Assistant';
+            const timestamp = new Date(msg.timestamp).toLocaleString();
+
+            return `
+              <div class="branch-item bookmark-item" data-message-index="${msg.index}">
+                <div class="branch-info">
+                  <div class="branch-name">${role} - ${preview}</div>
+                  <div class="branch-meta">${timestamp}</div>
+                </div>
+                <div class="branch-actions">
+                  <button class="btn-secondary bookmark-jump-btn" data-message-index="${msg.index}">Jump to Message</button>
+                  <button class="btn-secondary bookmark-remove-btn" data-message-index="${msg.index}">Remove</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('#close-bookmark-manager').addEventListener('click', () => modal.remove());
+    modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+    // Jump to message
+    modal.querySelectorAll('.bookmark-jump-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const messageIndex = parseInt(e.target.dataset.messageIndex);
+        const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+        const messageDiv = allMessages[messageIndex];
+
+        if (messageDiv) {
+          messageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Flash highlight
+          messageDiv.style.transition = 'background 0.3s';
+          messageDiv.style.background = 'rgba(var(--accent-rgb, 99, 102, 241), 0.2)';
+          setTimeout(() => {
+            messageDiv.style.background = '';
+          }, 1000);
+        }
+
+        modal.remove();
+      });
+    });
+
+    // Remove bookmark
+    modal.querySelectorAll('.bookmark-remove-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const messageIndex = parseInt(e.target.dataset.messageIndex);
+        try {
+          await invoke('toggle_message_bookmark', { messageIndex });
+          modal.remove();
+          // Refresh messages to update UI
+          await refreshChatDisplay();
+          setStatus('Bookmark removed', 'success');
+        } catch (error) {
+          setStatus(`Failed to remove bookmark: ${error}`, 'error');
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Failed to open bookmark manager:', error);
+    setStatus(`Failed to open bookmark manager: ${error}`, 'error');
   }
 }
 
@@ -4777,6 +5143,29 @@ async function handleEditCharacterFromSidebar(character) {
   // Load avatar preview
   const avatarCircle = document.getElementById('edit-avatar-circle');
   const removeBtn = document.getElementById('edit-remove-avatar-btn');
+
+  // Make avatar circle uploadable for edit modal
+  const handleEditAvatarUpload = async () => {
+    try {
+      const characterId = document.getElementById('edit-character-id').value;
+      const avatarFilename = await invoke('select_and_upload_avatar', {
+        characterId: characterId
+      });
+
+      // Update preview
+      const avatarUrl = await getAvatarUrl(avatarFilename);
+      if (avatarUrl) {
+        avatarCircle.style.backgroundImage = `url('${avatarUrl}')`;
+        removeBtn.style.display = 'inline-block';
+      }
+    } catch (error) {
+      console.error('Avatar upload error:', error);
+      if (error && !error.toString().includes('No file selected')) {
+        setStatus('Failed to upload avatar', 'error');
+      }
+    }
+  };
+  makeAvatarUploadable(avatarCircle, handleEditAvatarUpload);
 
   if (character.avatar_path) {
     const avatarUrl = await getAvatarUrl(character.avatar_path);
@@ -5631,6 +6020,9 @@ async function handleNewCharacter() {
     newRemoveAvatarBtn.style.display = 'none';
   };
 
+  // Make avatar circle uploadable for new character
+  makeAvatarUploadable(newAvatarCircle, handleNewAvatarUpload);
+
   newUploadAvatarBtn.addEventListener('click', handleNewAvatarUpload);
   newRemoveAvatarBtn.addEventListener('click', handleNewAvatarRemove);
 
@@ -5842,6 +6234,19 @@ async function loadChatHistory() {
           }
         }
 
+        // Apply bookmarked state
+        if (msg.bookmarked && messageDiv) {
+          messageDiv.classList.add('bookmarked');
+          const bookmarkBtn = messageDiv.querySelector('.message-bookmark-btn');
+          if (bookmarkBtn) {
+            bookmarkBtn.classList.add('active');
+            bookmarkBtn.title = 'Remove bookmark';
+            bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>`;
+          }
+        }
+
         // Update swipe controls for assistant messages with swipe info
         if (msg.role === 'assistant' && messageDiv && msg.swipes && msg.swipes.length > 0) {
           updateSwipeControls(messageDiv, msg.current_swipe || 0, msg.swipes.length);
@@ -5920,6 +6325,10 @@ async function loadCharacterSettings() {
     // Load avatar preview
     const avatarPreview = document.querySelector('.avatar-circle-large');
     const removeAvatarBtn = document.getElementById('remove-avatar-btn');
+
+    // Make avatar circle uploadable (clickable + drag-drop)
+    makeAvatarUploadable(avatarPreview, handleAvatarUpload);
+
     if (character.avatar_path) {
       getAvatarUrl(character.avatar_path).then(url => {
         if (url) {
@@ -7844,6 +8253,27 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + B - Open bookmarks manager
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      e.preventDefault();
+      openBookmarkManager();
+      return;
+    }
+
+    // Ctrl/Cmd + Q - Toggle quick replies bar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+      e.preventDefault();
+      toggleQuickRepliesBar();
+      return;
+    }
+
+    // Ctrl/Cmd + T - Open theme settings
+    if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+      e.preventDefault();
+      openThemeSettings();
+      return;
+    }
+
     // Ctrl/Cmd + / - Toggle roleplay panel
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
@@ -8962,4 +9392,618 @@ document.addEventListener('DOMContentLoaded', () => {
   if (autoModeToggle) {
     autoModeToggle.addEventListener('change', handleGroupAutoModeToggle);
   }
+
+// Quick Replies code to be appended to main.js
+
+  // Quick Replies
+  setupQuickReplies();
+
+  // Theme System
+  initializeTheme();
 });
+
+// ============================================================================
+// Quick Replies System
+// ============================================================================
+
+async function setupQuickReplies() {
+  const quickRepliesBar = document.getElementById('quick-replies-bar');
+  const quickRepliesList = document.getElementById('quick-replies-list');
+  const closeBtn = document.getElementById('close-quick-replies-btn');
+  const manageBtn = document.getElementById('manage-quick-replies-btn');
+
+  if (!quickRepliesBar || !quickRepliesList) return;
+
+  closeBtn.addEventListener('click', () => {
+    quickRepliesBar.style.display = 'none';
+  });
+
+  manageBtn.addEventListener('click', openQuickRepliesManager);
+
+  // Load and render quick replies
+  await loadQuickRepliesBar();
+}
+
+async function loadQuickRepliesBar() {
+  const quickRepliesList = document.getElementById('quick-replies-list');
+  if (!quickRepliesList) return;
+
+  try {
+    const replies = await invoke('get_quick_replies');
+
+    quickRepliesList.innerHTML = '';
+
+    if (replies.length === 0) {
+      quickRepliesList.innerHTML = `
+        <div class="quick-replies-empty">
+          No quick replies yet. <a href="#" id="create-first-quick-reply">Create one</a>
+        </div>
+      `;
+      const createLink = quickRepliesList.querySelector('#create-first-quick-reply');
+      if (createLink) {
+        createLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          openQuickRepliesManager();
+        });
+      }
+      return;
+    }
+
+    // Group by category
+    const categorized = {};
+    for (const reply of replies) {
+      const cat = reply.category || 'General';
+      if (!categorized[cat]) categorized[cat] = [];
+      categorized[cat].push(reply);
+    }
+
+    // Render by category
+    for (const [category, catReplies] of Object.entries(categorized)) {
+      if (Object.keys(categorized).length > 1) {
+        const categoryLabel = document.createElement('div');
+        categoryLabel.className = 'quick-replies-category';
+        categoryLabel.textContent = category;
+        categoryLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin: 8px 0 4px 0; font-weight: 600;';
+        quickRepliesList.appendChild(categoryLabel);
+      }
+
+      for (const reply of catReplies) {
+        const btn = document.createElement('button');
+        btn.className = 'quick-reply-btn';
+        btn.textContent = reply.name;
+        btn.title = reply.content;
+        btn.addEventListener('click', () => insertQuickReply(reply));
+        quickRepliesList.appendChild(btn);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load quick replies:', error);
+  }
+}
+
+async function insertQuickReply(reply) {
+  try {
+    const processed = await invoke('process_quick_reply_template', { template: reply.content });
+    const messageInput = document.getElementById('message-input');
+
+    if (messageInput.value.trim()) {
+      messageInput.value += '\n' + processed;
+    } else {
+      messageInput.value = processed;
+    }
+
+    // Auto-resize textarea
+    messageInput.style.height = 'auto';
+    messageInput.style.height = messageInput.scrollHeight + 'px';
+
+    messageInput.focus();
+  } catch (error) {
+    console.error('Failed to process quick reply:', error);
+    setStatus(`Failed to process quick reply: ${error}`, 'error');
+  }
+}
+
+function toggleQuickRepliesBar() {
+  const quickRepliesBar = document.getElementById('quick-replies-bar');
+  if (quickRepliesBar) {
+    quickRepliesBar.style.display = quickRepliesBar.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+async function openQuickRepliesManager() {
+  const replies = await invoke('get_quick_replies');
+
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content">
+      <div class="branch-manager-header">
+        <h3>Manage Quick Replies</h3>
+        <button class="icon-btn" id="close-qr-manager">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-primary" id="add-quick-reply-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Add Quick Reply
+        </button>
+      </div>
+      <div class="branch-list" id="quick-replies-manager-list">
+        ${replies.length === 0 ? `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>No quick replies yet</p>
+            <p style="font-size: 0.875rem; margin-top: 0.5rem;">Click "Add Quick Reply" to create your first one</p>
+          </div>
+        ` : replies.map(reply => `
+          <div class="branch-item" data-reply-id="${reply.id}">
+            <div class="branch-info">
+              <div class="branch-name">${reply.name}${reply.category ? ` <span style="color: var(--text-secondary); font-size: 0.875rem;">(${reply.category})</span>` : ''}</div>
+              <div class="branch-meta">${reply.content.substring(0, 100)}${reply.content.length > 100 ? '...' : ''}</div>
+            </div>
+            <div class="branch-actions">
+              <button class="btn-secondary qr-edit-btn" data-reply-id="${reply.id}">Edit</button>
+              <button class="btn-danger qr-delete-btn" data-reply-id="${reply.id}">Delete</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-qr-manager').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+  modal.querySelector('#add-quick-reply-btn').addEventListener('click', () => showQuickReplyEditor());
+
+  modal.querySelectorAll('.qr-edit-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const reply = replies.find(r => r.id === e.target.dataset.replyId);
+      showQuickReplyEditor(reply);
+    });
+  });
+
+  modal.querySelectorAll('.qr-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const replyId = e.target.dataset.replyId;
+      try {
+        await invoke('delete_quick_reply', { id: replyId });
+        modal.remove();
+        await loadQuickRepliesBar();
+        openQuickRepliesManager();
+      } catch (error) {
+        setStatus(`Failed to delete quick reply: ${error}`, 'error');
+      }
+    });
+  });
+}
+
+function showQuickReplyEditor(reply = null) {
+  const isEdit = !!reply;
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content" style="max-width: 500px;">
+      <div class="branch-manager-header">
+        <h3>${isEdit ? 'Edit' : 'Add'} Quick Reply</h3>
+        <button class="icon-btn" id="close-editor">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Name</label>
+          <input type="text" id="qr-name" value="${reply?.name || ''}" placeholder="e.g., Greeting" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Category (optional)</label>
+          <input type="text" id="qr-category" value="${reply?.category || ''}" placeholder="e.g., Greetings, Actions" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Content (supports {{char}}, {{user}}, {{date}}, {{time}})</label>
+          <textarea id="qr-content" rows="4" placeholder="Hello {{char}}! How are you today?" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); resize: vertical;">${reply?.content || ''}</textarea>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-secondary" id="cancel-qr-btn">Cancel</button>
+          <button class="btn-primary" id="save-qr-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-editor').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+  modal.querySelector('#cancel-qr-btn').addEventListener('click', () => modal.remove());
+
+  modal.querySelector('#save-qr-btn').addEventListener('click', async () => {
+    const name = modal.querySelector('#qr-name').value.trim();
+    const category = modal.querySelector('#qr-category').value.trim();
+    const content = modal.querySelector('#qr-content').value.trim();
+
+    if (!name || !content) {
+      setStatus('Name and content are required', 'error');
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await invoke('update_quick_reply', { id: reply.id, name, content, category });
+      } else {
+        await invoke('add_quick_reply', { name, content, category });
+      }
+
+      modal.remove();
+      await loadQuickRepliesBar();
+      // Reopen manager to show updated list
+      setTimeout(() => openQuickRepliesManager(), 100);
+      setStatus(isEdit ? 'Quick reply updated' : 'Quick reply added', 'success');
+    } catch (error) {
+      setStatus(`Failed to save quick reply: ${error}`, 'error');
+    }
+  });
+}
+
+// ============================================================================
+// Theme System
+// ============================================================================
+
+let currentTheme = null;
+
+async function initializeTheme() {
+  try {
+    const theme = await invoke('get_theme_config');
+    currentTheme = theme;
+    applyTheme(theme);
+  } catch (error) {
+    console.error('Failed to load theme:', error);
+    // Apply default theme
+    applyTheme({
+      mode: 'dark',
+      accent_color: '#6366f1',
+      font_family: 'system-ui',
+      font_size: 14,
+      message_bubble_style: 'default'
+    });
+  }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+
+  // Apply theme mode
+  root.setAttribute('data-theme', theme.mode);
+
+  // Apply accent color
+  if (theme.accent_color) {
+    const hex = theme.accent_color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    root.style.setProperty('--accent', theme.accent_color);
+    root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+
+    // Calculate hover color (slightly darker)
+    const hoverColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`;
+    root.style.setProperty('--accent-hover', hoverColor);
+
+    // Update user message color
+    root.style.setProperty('--user-msg', theme.accent_color);
+  }
+
+  // Apply font family
+  if (theme.font_family && theme.font_family !== 'system-ui') {
+    root.style.setProperty('font-family', theme.font_family);
+  }
+
+  // Apply font size
+  if (theme.font_size) {
+    root.style.setProperty('font-size', `${theme.font_size}px`);
+  }
+
+  // Apply background image if present
+  if (theme.background_image) {
+    document.body.style.backgroundImage = `url('${theme.background_image}')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+
+    if (theme.background_blur) {
+      // Add blur overlay
+      if (!document.querySelector('.bg-blur-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'bg-blur-overlay';
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          pointer-events: none;
+          z-index: -1;
+        `;
+        document.body.appendChild(overlay);
+      }
+    }
+  }
+}
+
+async function toggleThemeMode() {
+  if (!currentTheme) return;
+
+  const newMode = currentTheme.mode === 'dark' ? 'light' : 'dark';
+  currentTheme.mode = newMode;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+    showToast(`Switched to ${newMode} mode`, 'success');
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+async function updateAccentColor(color) {
+  if (!currentTheme) return;
+
+  currentTheme.accent_color = color;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+async function updateFontSettings(fontFamily, fontSize) {
+  if (!currentTheme) return;
+
+  if (fontFamily) currentTheme.font_family = fontFamily;
+  if (fontSize) currentTheme.font_size = fontSize;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+function openThemeSettings() {
+  if (!currentTheme) {
+    showToast('Theme not loaded', 'error');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content" style="max-width: 500px;">
+      <div class="branch-manager-header">
+        <h3>Theme Settings</h3>
+        <button class="icon-btn" id="close-theme-settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Appearance</label>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary theme-mode-btn" data-mode="dark" style="flex: 1;">
+              🌙 Dark
+            </button>
+            <button class="btn-secondary theme-mode-btn" data-mode="light" style="flex: 1;">
+              ☀️ Light
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="accent-color" style="display: block; margin-bottom: 8px; font-weight: 600;">Accent Color</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="color" id="accent-color" value="${currentTheme.accent_color}" style="width: 60px; height: 40px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+            <div style="flex: 1;">
+              <input type="text" id="accent-color-hex" value="${currentTheme.accent_color}" placeholder="#6366f1" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+            ${['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'].map(color => `
+              <button class="preset-color-btn" data-color="${color}" style="width: 32px; height: 32px; border-radius: 6px; background: ${color}; border: 2px solid ${currentTheme.accent_color === color ? 'white' : 'transparent'}; cursor: pointer; transition: all 0.15s;"></button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="font-family" style="display: block; margin-bottom: 8px; font-weight: 600;">Font Family</label>
+          <select id="font-family" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);">
+            <option value="system-ui" ${currentTheme.font_family === 'system-ui' ? 'selected' : ''}>System Default</option>
+            <option value="'Inter', sans-serif" ${currentTheme.font_family.includes('Inter') ? 'selected' : ''}>Inter</option>
+            <option value="'Roboto', sans-serif" ${currentTheme.font_family.includes('Roboto') ? 'selected' : ''}>Roboto</option>
+            <option value="'Open Sans', sans-serif" ${currentTheme.font_family.includes('Open Sans') ? 'selected' : ''}>Open Sans</option>
+            <option value="'Fira Code', monospace" ${currentTheme.font_family.includes('Fira Code') ? 'selected' : ''}>Fira Code (Mono)</option>
+            <option value="'JetBrains Mono', monospace" ${currentTheme.font_family.includes('JetBrains') ? 'selected' : ''}>JetBrains Mono</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="font-size" style="display: block; margin-bottom: 8px; font-weight: 600;">Font Size: <span id="font-size-value">${currentTheme.font_size}px</span></label>
+          <input type="range" id="font-size" min="12" max="18" value="${currentTheme.font_size}" style="width: 100%;">
+        </div>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-secondary" id="reset-theme-btn">Reset to Default</button>
+          <button class="btn-primary" id="apply-theme-btn">Apply</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Update active mode button
+  modal.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    if (btn.dataset.mode === currentTheme.mode) {
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+    }
+  });
+
+  // Event listeners
+  modal.querySelector('#close-theme-settings').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+  // Theme mode buttons
+  modal.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.theme-mode-btn').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-secondary');
+      });
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+      currentTheme.mode = btn.dataset.mode;
+    });
+  });
+
+  // Color picker
+  const colorPicker = modal.querySelector('#accent-color');
+  const colorHex = modal.querySelector('#accent-color-hex');
+
+  colorPicker.addEventListener('input', (e) => {
+    colorHex.value = e.target.value;
+  });
+
+  colorHex.addEventListener('input', (e) => {
+    if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+      colorPicker.value = e.target.value;
+    }
+  });
+
+  // Preset colors
+  modal.querySelectorAll('.preset-color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const color = btn.dataset.color;
+      colorPicker.value = color;
+      colorHex.value = color;
+      modal.querySelectorAll('.preset-color-btn').forEach(b => b.style.borderColor = 'transparent');
+      btn.style.borderColor = 'white';
+    });
+  });
+
+  // Font size slider
+  const fontSizeSlider = modal.querySelector('#font-size');
+  const fontSizeValue = modal.querySelector('#font-size-value');
+  fontSizeSlider.addEventListener('input', (e) => {
+    fontSizeValue.textContent = `${e.target.value}px`;
+  });
+
+  // Reset button
+  modal.querySelector('#reset-theme-btn').addEventListener('click', async () => {
+    const defaultTheme = {
+      mode: 'dark',
+      accent_color: '#6366f1',
+      background_image: null,
+      background_blur: false,
+      font_family: 'system-ui',
+      font_size: 14,
+      message_bubble_style: 'default'
+    };
+
+    try {
+      await invoke('save_theme', defaultTheme);
+      currentTheme = defaultTheme;
+      applyTheme(defaultTheme);
+      modal.remove();
+      showToast('Theme reset to default', 'success');
+    } catch (error) {
+      showToast('Failed to reset theme', 'error');
+    }
+  });
+
+  // Apply button
+  modal.querySelector('#apply-theme-btn').addEventListener('click', async () => {
+    currentTheme.accent_color = colorPicker.value;
+    currentTheme.font_family = modal.querySelector('#font-family').value;
+    currentTheme.font_size = parseInt(fontSizeSlider.value);
+
+    try {
+      await invoke('save_theme', currentTheme);
+      applyTheme(currentTheme);
+      modal.remove();
+      showToast('Theme applied', 'success');
+    } catch (error) {
+      showToast('Failed to save theme', 'error');
+    }
+  });
+}
+
+// ============================================================================
+// Rich Media - Image Viewer
+// ============================================================================
+
+function openImageFullscreen(src, alt = '') {
+  const modal = document.createElement('div');
+  modal.className = 'image-fullscreen-modal';
+  modal.innerHTML = `
+    <div class="image-fullscreen-overlay"></div>
+    <div class="image-fullscreen-content">
+      <button class="image-fullscreen-close" title="Close (Esc)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <img src="${src}" alt="${alt || ''}" class="image-fullscreen-img">
+      ${alt ? `<div class="image-fullscreen-caption">${alt}</div>` : ''}
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Close handlers
+  const closeModal = () => modal.remove();
+  modal.querySelector('.image-fullscreen-close').addEventListener('click', closeModal);
+  modal.querySelector('.image-fullscreen-overlay').addEventListener('click', closeModal);
+
+  // Escape key to close
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+
+  // Cleanup on modal removal
+  modal.addEventListener('DOMNodeRemoved', () => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Animate in
+  requestAnimationFrame(() => {
+    modal.style.opacity = '1';
+  });
+}

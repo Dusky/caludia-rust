@@ -895,6 +895,29 @@
         </div>
       </div>
 
+      <!-- Quick Replies Bar -->
+      <div id="quick-replies-bar" class="quick-replies-bar" style="display: none;">
+        <div class="quick-replies-header">
+          <span class="quick-replies-title">Quick Replies</span>
+          <button id="manage-quick-replies-btn" class="icon-btn" title="Manage Quick Replies">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="3" r="1.5" fill="currentColor"/>
+              <circle cx="8" cy="8" r="1.5" fill="currentColor"/>
+              <circle cx="8" cy="13" r="1.5" fill="currentColor"/>
+            </svg>
+          </button>
+          <button id="close-quick-replies-btn" class="icon-btn" title="Close">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div id="quick-replies-list" class="quick-replies-list">
+          <!-- Quick reply buttons will be populated here -->
+        </div>
+      </div>
+
       <footer class="input-container" role="contentinfo">
         <form id="chat-form" class="chat-form">
           <textarea
@@ -1231,7 +1254,7 @@
             <textarea
               id="edit-character-system-prompt"
               placeholder="You are a helpful AI assistant..."
-              rows="4"
+              rows="3"
               required
             ></textarea>
           </div>
@@ -1245,42 +1268,45 @@
             ></textarea>
           </div>
 
-          <!-- Roleplay Details -->
-          <div class="form-group">
-            <label for="edit-character-personality">Personality (Optional)</label>
-            <input
-              type="text"
-              id="edit-character-personality"
-              placeholder="helpful, friendly, knowledgeable"
-            />
-          </div>
+          <!-- Roleplay Details (Collapsible) -->
+          <details class="form-details">
+            <summary>Roleplay Details</summary>
+            <div class="form-group">
+              <label for="edit-character-personality">Personality (Optional)</label>
+              <input
+                type="text"
+                id="edit-character-personality"
+                placeholder="helpful, friendly, knowledgeable"
+              />
+            </div>
 
-          <div class="form-group">
-            <label for="edit-character-description">Description (Optional)</label>
-            <textarea
-              id="edit-character-description"
-              placeholder="Detailed character description..."
-              rows="3"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label for="edit-character-description">Description (Optional)</label>
+              <textarea
+                id="edit-character-description"
+                placeholder="Detailed character description..."
+                rows="2"
+              ></textarea>
+            </div>
 
-          <div class="form-group">
-            <label for="edit-character-scenario">Scenario (Optional)</label>
-            <textarea
-              id="edit-character-scenario"
-              placeholder="The setting or situation where interactions take place..."
-              rows="3"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label for="edit-character-scenario">Scenario (Optional)</label>
+              <textarea
+                id="edit-character-scenario"
+                placeholder="The setting or situation where interactions take place..."
+                rows="2"
+              ></textarea>
+            </div>
 
-          <div class="form-group">
-            <label for="edit-character-mes-example">Example Messages (Optional)</label>
-            <textarea
-              id="edit-character-mes-example"
-              placeholder="Example dialogue demonstrating the character's speaking style..."
-              rows="3"
-            ></textarea>
-          </div>
+            <div class="form-group">
+              <label for="edit-character-mes-example">Example Messages (Optional)</label>
+              <textarea
+                id="edit-character-mes-example"
+                placeholder="Example dialogue demonstrating the character's speaking style..."
+                rows="2"
+              ></textarea>
+            </div>
+          </details>
 
           <!-- Advanced Settings (Collapsible) -->
           <details class="form-details">
