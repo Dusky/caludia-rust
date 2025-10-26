@@ -2452,7 +2452,7 @@ fn prune_history_for_context(
     current_context: &[Message],
     settings: &RoleplaySettings,
 ) -> Vec<Message> {
-    let config = get_api_config();
+    let config = get_api_config().unwrap_or_default();
     let context_limit = config.context_limit;
     let reserve_tokens = settings.context_reserve_tokens;
     let min_messages = settings.context_min_messages;
@@ -4675,14 +4675,20 @@ fn process_quick_reply_template(template: String) -> Result<String, String> {
     result = result.replace("{{time}}", &now.format("%H:%M:%S").to_string());
 
     // Character info
-    if !character.description.is_empty() {
-        result = result.replace("{{description}}", &character.description);
+    if let Some(desc) = &character.description {
+        if !desc.is_empty() {
+            result = result.replace("{{description}}", desc);
+        }
     }
-    if !character.personality.is_empty() {
-        result = result.replace("{{personality}}", &character.personality);
+    if let Some(pers) = &character.personality {
+        if !pers.is_empty() {
+            result = result.replace("{{personality}}", pers);
+        }
     }
-    if !character.scenario.is_empty() {
-        result = result.replace("{{scenario}}", &character.scenario);
+    if let Some(scen) = &character.scenario {
+        if !scen.is_empty() {
+            result = result.replace("{{scenario}}", scen);
+        }
     }
 
     Ok(result)
@@ -4877,7 +4883,7 @@ fn get_context_status(character_id: Option<String>) -> Result<ContextStatus, Str
 
     let history = load_history(&character.id);
     let settings = load_roleplay_settings(&character.id);
-    let config = get_api_config();
+    let config = get_api_config().unwrap_or_default();
 
     // Get token breakdown
     let breakdown = get_token_count(Some(character.id.clone()), String::new())?;
