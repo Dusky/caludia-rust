@@ -2402,6 +2402,12 @@ function renderAssistantContent(contentDiv, messageText) {
     addCopyButtonToCode(block);
   });
 
+  // Make images clickable for fullscreen view
+  messageContent.querySelectorAll('img').forEach(img => {
+    img.style.cursor = 'pointer';
+    img.addEventListener('click', () => openImageFullscreen(img.src, img.alt));
+  });
+
   return messageContent;
 }
 
@@ -2446,10 +2452,32 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
   contentDiv.className = 'message-content';
 
   if (isUser) {
-    // User messages: plain text
-    const p = document.createElement('p');
-    p.textContent = content;
-    contentDiv.appendChild(p);
+    // User messages: support markdown including images
+    const messageContent = document.createElement('div');
+
+    // Check if content contains markdown image syntax or URLs
+    if (content.includes('![') || /https?:\/\/.*\.(jpg|jpeg|png|gif|webp)/i.test(content)) {
+      messageContent.innerHTML = marked.parse(content);
+
+      // Apply syntax highlighting to code blocks if any
+      messageContent.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+        addCopyButtonToCode(block);
+      });
+
+      // Make images clickable for fullscreen view
+      messageContent.querySelectorAll('img').forEach(img => {
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => openImageFullscreen(img.src, img.alt));
+      });
+    } else {
+      // Plain text for messages without markdown
+      const p = document.createElement('p');
+      p.textContent = content;
+      messageContent.appendChild(p);
+    }
+
+    contentDiv.appendChild(messageContent);
 
     // Add timestamp if provided
     if (timestamp) {
@@ -9911,5 +9939,53 @@ function openThemeSettings() {
     } catch (error) {
       showToast('Failed to save theme', 'error');
     }
+  });
+}
+
+// ============================================================================
+// Rich Media - Image Viewer
+// ============================================================================
+
+function openImageFullscreen(src, alt = '') {
+  const modal = document.createElement('div');
+  modal.className = 'image-fullscreen-modal';
+  modal.innerHTML = `
+    <div class="image-fullscreen-overlay"></div>
+    <div class="image-fullscreen-content">
+      <button class="image-fullscreen-close" title="Close (Esc)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <img src="${src}" alt="${alt || ''}" class="image-fullscreen-img">
+      ${alt ? `<div class="image-fullscreen-caption">${alt}</div>` : ''}
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Close handlers
+  const closeModal = () => modal.remove();
+  modal.querySelector('.image-fullscreen-close').addEventListener('click', closeModal);
+  modal.querySelector('.image-fullscreen-overlay').addEventListener('click', closeModal);
+
+  // Escape key to close
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+
+  // Cleanup on modal removal
+  modal.addEventListener('DOMNodeRemoved', () => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Animate in
+  requestAnimationFrame(() => {
+    modal.style.opacity = '1';
   });
 }
