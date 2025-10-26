@@ -858,13 +858,15 @@ body.show-timestamps .message-timestamp {
 }
 
 .message-pin-btn.active,
-.message-hide-btn.active {
+.message-hide-btn.active,
+.message-bookmark-btn.active {
   background: var(--accent);
   color: white;
 }
 
 .message-pin-btn.active:hover,
-.message-hide-btn.active:hover {
+.message-hide-btn.active:hover,
+.message-bookmark-btn.active:hover {
   background: var(--accent-hover);
 }
 
@@ -899,6 +901,25 @@ body.show-timestamps .message-timestamp {
 
 .message.hidden-message .message-actions {
   opacity: 1 !important;
+}
+
+/* Bookmarked message styling */
+.message.bookmarked {
+  position: relative;
+}
+
+.message.bookmarked::after {
+  content: '🔖';
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  font-size: 16px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.message.bookmarked .message-content {
+  background: rgba(var(--accent-rgb, 99, 102, 241), 0.05);
 }
 
 /* Swipe navigation */

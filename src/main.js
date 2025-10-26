@@ -625,6 +625,16 @@ const commands = [
     shortcut: ['Ctrl', 'Shift', 'Z'],
     keywords: ['forward', 'repeat']
   },
+  {
+    id: 'bookmarks',
+    title: 'View Bookmarks',
+    description: 'View and manage bookmarked messages',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 3c0-0.55228 0.44772-1 1-1h8c0.5523 0 1 0.44772 1 1v16l-5-3.5-5 3.5V3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    action: () => openBookmarkManager(),
+    shortcut: ['Ctrl', 'B'],
+    keywords: ['saved', 'marked', 'favorites', 'starred']
+  },
   // Character actions
   {
     id: 'new-character',
@@ -2575,6 +2585,16 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
 
+      // Bookmark button
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.className = 'message-action-btn message-bookmark-btn';
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.addEventListener('click', () => handleToggleBookmark(messageDiv));
+      actionsDiv.appendChild(bookmarkBtn);
+
       // Delete button
       const deleteBtn = document.createElement('button');
       deleteBtn.className = 'message-action-btn message-delete-btn';
@@ -2639,6 +2659,16 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
       hideBtn.title = 'Hide message';
       hideBtn.addEventListener('click', () => handleToggleHidden(messageDiv));
       actionsDiv.appendChild(hideBtn);
+
+      // Bookmark button
+      const bookmarkBtn = document.createElement('button');
+      bookmarkBtn.className = 'message-action-btn message-bookmark-btn';
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+      bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.addEventListener('click', () => handleToggleBookmark(messageDiv));
+      actionsDiv.appendChild(bookmarkBtn);
 
       // Copy message button
       const copyMsgBtn = document.createElement('button');
@@ -3289,6 +3319,44 @@ async function handleToggleHidden(messageDiv) {
   } catch (error) {
     console.error('Failed to toggle hidden:', error);
     setStatus(`Hide toggle failed: ${error}`, 'error');
+  }
+}
+
+// Handle toggling message bookmark status
+async function handleToggleBookmark(messageDiv) {
+  const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+  const messageIndex = allMessages.indexOf(messageDiv);
+
+  if (messageIndex === -1) {
+    console.error('Message not found in list');
+    return;
+  }
+
+  try {
+    const isBookmarked = await invoke('toggle_message_bookmark', { messageIndex });
+
+    // Update visual indicator
+    const bookmarkBtn = messageDiv.querySelector('.message-bookmark-btn');
+    if (isBookmarked) {
+      messageDiv.classList.add('bookmarked');
+      bookmarkBtn.classList.add('active');
+      bookmarkBtn.title = 'Remove bookmark';
+      // Update icon to filled bookmark
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    } else {
+      messageDiv.classList.remove('bookmarked');
+      bookmarkBtn.classList.remove('active');
+      bookmarkBtn.title = 'Bookmark message';
+      // Update icon back to outlined bookmark
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    }
+  } catch (error) {
+    console.error('Failed to toggle bookmark:', error);
+    setStatus(`Bookmark toggle failed: ${error}`, 'error');
   }
 }
 
@@ -4532,6 +4600,111 @@ async function openBranchManager() {
   } catch (error) {
     console.error('Failed to open branch manager:', error);
     setStatus(`Failed to open branch manager: ${error}`, 'error');
+  }
+}
+
+// Open bookmark manager modal
+async function openBookmarkManager() {
+  try {
+    const history = await invoke('get_chat_history');
+    const bookmarkedMessages = history
+      .map((msg, index) => ({ ...msg, index }))
+      .filter(msg => msg.bookmarked);
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'branch-manager-modal'; // Reuse branch manager styles
+    modal.innerHTML = `
+      <div class="branch-manager-overlay"></div>
+      <div class="branch-manager-content">
+        <div class="branch-manager-header">
+          <h3>Bookmarked Messages</h3>
+          <button class="icon-btn" id="close-bookmark-manager">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="branch-list">
+          ${bookmarkedMessages.length === 0 ? `
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+              <svg width="48" height="48" viewBox="0 0 14 14" fill="none" style="opacity: 0.3; margin-bottom: 1rem;">
+                <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <p>No bookmarked messages yet</p>
+              <p style="font-size: 0.875rem; margin-top: 0.5rem;">Click the bookmark icon on any message to save it here</p>
+            </div>
+          ` : bookmarkedMessages.map(msg => {
+            const content = msg.swipes && msg.swipes.length > 0
+              ? msg.swipes[msg.current_swipe || 0]
+              : msg.content;
+            const preview = content.length > 120 ? content.substring(0, 120) + '...' : content;
+            const role = msg.role === 'user' ? 'You' : 'Assistant';
+            const timestamp = new Date(msg.timestamp).toLocaleString();
+
+            return `
+              <div class="branch-item bookmark-item" data-message-index="${msg.index}">
+                <div class="branch-info">
+                  <div class="branch-name">${role} - ${preview}</div>
+                  <div class="branch-meta">${timestamp}</div>
+                </div>
+                <div class="branch-actions">
+                  <button class="btn-secondary bookmark-jump-btn" data-message-index="${msg.index}">Jump to Message</button>
+                  <button class="btn-secondary bookmark-remove-btn" data-message-index="${msg.index}">Remove</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('#close-bookmark-manager').addEventListener('click', () => modal.remove());
+    modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+    // Jump to message
+    modal.querySelectorAll('.bookmark-jump-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const messageIndex = parseInt(e.target.dataset.messageIndex);
+        const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+        const messageDiv = allMessages[messageIndex];
+
+        if (messageDiv) {
+          messageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Flash highlight
+          messageDiv.style.transition = 'background 0.3s';
+          messageDiv.style.background = 'rgba(var(--accent-rgb, 99, 102, 241), 0.2)';
+          setTimeout(() => {
+            messageDiv.style.background = '';
+          }, 1000);
+        }
+
+        modal.remove();
+      });
+    });
+
+    // Remove bookmark
+    modal.querySelectorAll('.bookmark-remove-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const messageIndex = parseInt(e.target.dataset.messageIndex);
+        try {
+          await invoke('toggle_message_bookmark', { messageIndex });
+          modal.remove();
+          // Refresh messages to update UI
+          await refreshChatDisplay();
+          setStatus('Bookmark removed', 'success');
+        } catch (error) {
+          setStatus(`Failed to remove bookmark: ${error}`, 'error');
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Failed to open bookmark manager:', error);
+    setStatus(`Failed to open bookmark manager: ${error}`, 'error');
   }
 }
 
@@ -5948,6 +6121,19 @@ async function loadChatHistory() {
             hideBtn.title = 'Unhide message';
             hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M10 5L11.5 3.5M3.5 10.5L5 9M1 13L13 1M5.5 6C5.19 6.31 5 6.74 5 7.22C5 8.2 5.8 9 6.78 9C7.26 9 7.69 8.81 8 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>`;
+          }
+        }
+
+        // Apply bookmarked state
+        if (msg.bookmarked && messageDiv) {
+          messageDiv.classList.add('bookmarked');
+          const bookmarkBtn = messageDiv.querySelector('.message-bookmark-btn');
+          if (bookmarkBtn) {
+            bookmarkBtn.classList.add('active');
+            bookmarkBtn.title = 'Remove bookmark';
+            bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>`;
           }
         }
@@ -7941,6 +8127,13 @@ window.addEventListener('DOMContentLoaded', () => {
     if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
       e.preventDefault();
       openChatSearch();
+      return;
+    }
+
+    // Ctrl/Cmd + B - Open bookmarks manager
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      e.preventDefault();
+      openBookmarkManager();
       return;
     }
 

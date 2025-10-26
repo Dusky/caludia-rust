@@ -220,6 +220,8 @@ struct Message {
     #[serde(default)]
     hidden: bool, // Whether this message is temporarily hidden from view
     #[serde(default)]
+    bookmarked: bool, // Whether this message is bookmarked for quick access
+    #[serde(default)]
     expression: Option<String>, // Expression name used for this message
     #[serde(default)]
     character_id: Option<String>, // For group chats: which character sent this message (None = user)
@@ -240,6 +242,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            bookmarked: false,
             expression: None,
             character_id: None,
         }
@@ -259,6 +262,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            bookmarked: false,
             expression: None,
             character_id: None,
         }
@@ -279,6 +283,7 @@ impl Message {
             timestamp,
             pinned: false,
             hidden: false,
+            bookmarked: false,
             expression: None,
             character_id: Some(character_id),
         }
@@ -437,6 +442,33 @@ impl Default for RoleplaySettings {
             active_preset_id: None, // No preset selected by default
             examples_enabled: false, // Message examples disabled by default
             examples_position: default_examples_position(), // After system prompt by default
+        }
+    }
+}
+
+// Quick Replies System
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct QuickReply {
+    id: String,
+    name: String,
+    content: String,
+    #[serde(default)]
+    category: String, // Optional category for organization (e.g., "Greetings", "Actions")
+    #[serde(default)]
+    order: i32, // Display order
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct QuickRepliesData {
+    #[serde(default)]
+    replies: Vec<QuickReply>,
+}
+
+impl Default for QuickRepliesData {
+    fn default() -> Self {
+        Self {
+            replies: Vec::new(),
         }
     }
 }
@@ -2918,6 +2950,22 @@ fn toggle_message_hidden(message_index: usize) -> Result<bool, String> {
     Ok(new_state)
 }
 
+#[tauri::command]
+fn toggle_message_bookmark(message_index: usize) -> Result<bool, String> {
+    let character = get_active_character();
+    let mut history = load_history(&character.id);
+
+    if message_index >= history.messages.len() {
+        return Err(format!("Message index {} out of bounds", message_index));
+    }
+
+    history.messages[message_index].bookmarked = !history.messages[message_index].bookmarked;
+    let new_state = history.messages[message_index].bookmarked;
+    save_history(&character.id, &history)?;
+
+    Ok(new_state)
+}
+
 // Undo/Redo support commands
 #[tauri::command]
 fn get_message_at_index(message_index: usize) -> Result<Message, String> {
@@ -4271,6 +4319,151 @@ fn is_builtin_preset_modified(preset_id: String) -> bool {
     // Check if a custom override exists
     let path = get_preset_path(&preset_id);
     path.exists()
+}
+
+// Quick Replies Commands
+
+fn get_quick_replies_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/quick_replies.json")
+}
+
+fn load_quick_replies() -> QuickRepliesData {
+    let path = get_quick_replies_path();
+    match fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => QuickRepliesData::default(),
+    }
+}
+
+fn save_quick_replies(data: &QuickRepliesData) -> Result<(), String> {
+    let path = get_quick_replies_path();
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(data)
+        .map_err(|e| format!("Failed to serialize quick replies: {}", e))?;
+
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write quick replies: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_quick_replies() -> Result<Vec<QuickReply>, String> {
+    Ok(load_quick_replies().replies)
+}
+
+#[tauri::command]
+fn add_quick_reply(name: String, content: String, category: String) -> Result<QuickReply, String> {
+    let mut data = load_quick_replies();
+
+    // Generate unique ID
+    let id = uuid::Uuid::new_v4().to_string();
+
+    // Determine order (append to end)
+    let order = data.replies.iter().map(|r| r.order).max().unwrap_or(0) + 1;
+
+    let quick_reply = QuickReply {
+        id: id.clone(),
+        name,
+        content,
+        category,
+        order,
+    };
+
+    data.replies.push(quick_reply.clone());
+    save_quick_replies(&data)?;
+
+    Ok(quick_reply)
+}
+
+#[tauri::command]
+fn update_quick_reply(
+    id: String,
+    name: String,
+    content: String,
+    category: String,
+) -> Result<(), String> {
+    let mut data = load_quick_replies();
+
+    let reply = data
+        .replies
+        .iter_mut()
+        .find(|r| r.id == id)
+        .ok_or_else(|| "Quick reply not found".to_string())?;
+
+    reply.name = name;
+    reply.content = content;
+    reply.category = category;
+
+    save_quick_replies(&data)
+}
+
+#[tauri::command]
+fn delete_quick_reply(id: String) -> Result<(), String> {
+    let mut data = load_quick_replies();
+    data.replies.retain(|r| r.id != id);
+    save_quick_replies(&data)
+}
+
+#[tauri::command]
+fn reorder_quick_replies(reply_ids: Vec<String>) -> Result<(), String> {
+    let mut data = load_quick_replies();
+
+    // Update order based on position in array
+    for (index, id) in reply_ids.iter().enumerate() {
+        if let Some(reply) = data.replies.iter_mut().find(|r| r.id == *id) {
+            reply.order = index as i32;
+        }
+    }
+
+    // Sort by new order
+    data.replies.sort_by_key(|r| r.order);
+
+    save_quick_replies(&data)
+}
+
+#[tauri::command]
+fn process_quick_reply_template(template: String) -> Result<String, String> {
+    // Process template variables like {{char}}, {{user}}, etc.
+    let character = get_active_character();
+    let roleplay = load_roleplay_settings(&character.id);
+
+    let mut result = template;
+
+    // Replace character name
+    result = result.replace("{{char}}", &character.name);
+
+    // Replace user name
+    if let Some(persona_name) = &roleplay.persona_name {
+        result = result.replace("{{user}}", persona_name);
+    } else {
+        result = result.replace("{{user}}", "User");
+    }
+
+    // Replace date/time
+    let now = chrono::Local::now();
+    result = result.replace("{{date}}", &now.format("%Y-%m-%d").to_string());
+    result = result.replace("{{time}}", &now.format("%H:%M:%S").to_string());
+
+    // Character info
+    if !character.description.is_empty() {
+        result = result.replace("{{description}}", &character.description);
+    }
+    if !character.personality.is_empty() {
+        result = result.replace("{{personality}}", &character.personality);
+    }
+    if !character.scenario.is_empty() {
+        result = result.replace("{{scenario}}", &character.scenario);
+    }
+
+    Ok(result)
 }
 
 #[tauri::command]
@@ -5853,6 +6046,7 @@ pub fn run() {
             delete_message_at_index,
             toggle_message_pin,
             toggle_message_hidden,
+            toggle_message_bookmark,
             get_message_at_index,
             insert_message_at_index,
             replace_messages_from_index,
@@ -5902,6 +6096,12 @@ pub fn run() {
             duplicate_preset,
             is_builtin_preset_modified,
             restore_builtin_preset,
+            get_quick_replies,
+            add_quick_reply,
+            update_quick_reply,
+            delete_quick_reply,
+            reorder_quick_replies,
+            process_quick_reply_template,
             get_token_count,
             add_world_info_entry,
             update_world_info_entry,
