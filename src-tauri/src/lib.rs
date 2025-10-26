@@ -1832,6 +1832,7 @@ fn get_character() -> Result<Character, String> {
 
 #[tauri::command]
 fn update_character(
+    character_id: String,
     name: String,
     system_prompt: String,
     greeting: Option<String>,
@@ -1847,7 +1848,8 @@ fn update_character(
     creator_notes: Option<String>,
     avatar_path: Option<String>,
 ) -> Result<(), String> {
-    let mut character = get_active_character();
+    let mut character = load_character(&character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
     character.name = name;
     character.system_prompt = system_prompt;
     character.greeting = greeting;
