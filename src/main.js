@@ -625,6 +625,48 @@ const commands = [
     shortcut: ['Ctrl', 'Shift', 'Z'],
     keywords: ['forward', 'repeat']
   },
+  {
+    id: 'bookmarks',
+    title: 'View Bookmarks',
+    description: 'View and manage bookmarked messages',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 3c0-0.55228 0.44772-1 1-1h8c0.5523 0 1 0.44772 1 1v16l-5-3.5-5 3.5V3Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    action: () => openBookmarkManager(),
+    shortcut: ['Ctrl', 'B'],
+    keywords: ['saved', 'marked', 'favorites', 'starred']
+  },
+  {
+    id: 'quick-replies',
+    title: 'Toggle Quick Replies',
+    description: 'Show/hide quick reply buttons',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`,
+    action: () => toggleQuickRepliesBar(),
+    shortcut: ['Ctrl', 'Q'],
+    keywords: ['macros', 'templates', 'shortcuts', 'replies']
+  },
+  {
+    id: 'manage-quick-replies',
+    title: 'Manage Quick Replies',
+    description: 'Add, edit, or delete quick replies',
+    category: 'Chat',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 6h14M3 10h14M3 14h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="16" cy="14" r="3" fill="currentColor"/></svg>`,
+    action: () => openQuickRepliesManager(),
+    keywords: ['macros', 'templates', 'edit', 'create']
+  },
+  {
+    id: 'theme-settings',
+    title: 'Theme Settings',
+    description: 'Customize appearance, colors, and fonts',
+    category: 'Settings',
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 3a7 7 0 100 14 7 7 0 000-14z" stroke="currentColor" stroke-width="1.5"/><path d="M10 3v14" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    action: () => {
+      closeCommandPalette();
+      openThemeSettings();
+    },
+    shortcut: ['Ctrl', 'T'],
+    keywords: ['appearance', 'dark', 'light', 'color', 'font', 'style', 'customize']
+  },
   // Character actions
   {
     id: 'new-character',
@@ -2360,6 +2402,12 @@ function renderAssistantContent(contentDiv, messageText) {
     addCopyButtonToCode(block);
   });
 
+  // Make images clickable for fullscreen view
+  messageContent.querySelectorAll('img').forEach(img => {
+    img.style.cursor = 'pointer';
+    img.addEventListener('click', () => openImageFullscreen(img.src, img.alt));
+  });
+
   return messageContent;
 }
 
@@ -2404,10 +2452,32 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
   contentDiv.className = 'message-content';
 
   if (isUser) {
-    // User messages: plain text
-    const p = document.createElement('p');
-    p.textContent = content;
-    contentDiv.appendChild(p);
+    // User messages: support markdown including images
+    const messageContent = document.createElement('div');
+
+    // Check if content contains markdown image syntax or URLs
+    if (content.includes('![') || /https?:\/\/.*\.(jpg|jpeg|png|gif|webp)/i.test(content)) {
+      messageContent.innerHTML = marked.parse(content);
+
+      // Apply syntax highlighting to code blocks if any
+      messageContent.querySelectorAll('pre code').forEach((block) => {
+        hljs.highlightElement(block);
+        addCopyButtonToCode(block);
+      });
+
+      // Make images clickable for fullscreen view
+      messageContent.querySelectorAll('img').forEach(img => {
+        img.style.cursor = 'pointer';
+        img.addEventListener('click', () => openImageFullscreen(img.src, img.alt));
+      });
+    } else {
+      // Plain text for messages without markdown
+      const p = document.createElement('p');
+      p.textContent = content;
+      messageContent.appendChild(p);
+    }
+
+    contentDiv.appendChild(messageContent);
 
     // Add timestamp if provided
     if (timestamp) {
@@ -3342,6 +3412,19 @@ async function handleToggleBookmark(messageDiv) {
         <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>`;
       bookmarkBtn.title = 'Bookmark message';
+      bookmarkBtn.title = 'Remove bookmark';
+      // Update icon to filled bookmark
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
+    } else {
+      messageDiv.classList.remove('bookmarked');
+      bookmarkBtn.classList.remove('active');
+      bookmarkBtn.title = 'Bookmark message';
+      // Update icon back to outlined bookmark
+      bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>`;
     }
   } catch (error) {
     console.error('Failed to toggle bookmark:', error);
@@ -3502,7 +3585,8 @@ async function sendMessage(message, isRegenerate = false) {
         setTimeout(showSettings, 1000);
       } else {
         addMessage(`Error: ${error}`, false);
-        setStatus(`Error: ${error.substring(0, 50)}...`, 'error');
+        const errorMsg = error.toString();
+        setStatus(`Error: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`, 'error');
       }
       sendBtn.disabled = false;
       messageInput.disabled = false;
@@ -3530,7 +3614,8 @@ async function sendMessage(message, isRegenerate = false) {
         setTimeout(showSettings, 1000);
       } else {
         addMessage(`Error: ${error}`, false);
-        setStatus(`Error: ${error.substring(0, 50)}...`, 'error');
+        const errorMsg = error.toString();
+        setStatus(`Error: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`, 'error');
       }
     } finally {
       sendBtn.disabled = false;
@@ -4067,7 +4152,9 @@ function setupAppControls() {
 
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
-  document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
+
+  // Setup prompt preview button
+  document.getElementById('refresh-prompt-preview-btn').addEventListener('click', refreshPromptPreview);
 
   // Setup recursion depth change handler
   document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
@@ -4441,6 +4528,23 @@ async function updateTokenCount() {
       document.getElementById('token-history').textContent = tokenData.message_history;
       document.getElementById('token-input').textContent = tokenData.current_input;
       document.getElementById('token-total-detail').textContent = tokenData.total;
+
+      // Check context status for warnings
+      try {
+        const contextStatus = await invoke('get_context_status', { characterId: null });
+
+        // Clear any existing warning
+        const existingWarning = document.querySelector('.context-warning-banner');
+        if (existingWarning) existingWarning.remove();
+
+        // Show warning if needed
+        if (contextStatus.warning_level === 'warning' || contextStatus.warning_level === 'critical') {
+          showContextWarning(contextStatus);
+        }
+      } catch (err) {
+        console.error('Failed to check context status:', err);
+      }
+
     } catch (error) {
       console.error('Failed to update token count:', error);
       // Keep counter visible, just show 0
@@ -4448,6 +4552,33 @@ async function updateTokenCount() {
       tokenCountTotal.textContent = '0 / 200k tokens';
     }
   }, 300); // Update after 300ms of no typing
+}
+
+// Token breakdown is now always visible - no toggle needed
+function showContextWarning(status) {
+  // Don't show warning if already exists
+  if (document.querySelector('.context-warning-banner')) return;
+
+  const banner = document.createElement('div');
+  banner.className = `context-warning-banner ${status.warning_level}`;
+
+  const icon = status.warning_level === 'critical' ? '⚠️' : 'ℹ️';
+  const percentage = status.percentage_used.toFixed(1);
+
+  let message = `${icon} Context Usage: ${percentage}% (${status.total_tokens.toLocaleString()} / ${status.context_limit.toLocaleString()} tokens)`;
+
+  if (status.pruning_enabled && status.messages_pruned > 0) {
+    message += ` - ${status.messages_pruned} message${status.messages_pruned > 1 ? 's' : ''} will be pruned`;
+  }
+
+  banner.innerHTML = `
+    <span>${message}</span>
+    <button class="context-warning-close" onclick="this.parentElement.remove()">×</button>
+  `;
+
+  // Insert before messages container
+  const messagesContainer = document.getElementById('messages-container');
+  messagesContainer.parentElement.insertBefore(banner, messagesContainer);
 }
 
 // Toggle token breakdown display
@@ -4600,6 +4731,111 @@ async function openBranchManager() {
   } catch (error) {
     console.error('Failed to open branch manager:', error);
     setStatus(`Failed to open branch manager: ${error}`, 'error');
+  }
+}
+
+// Open bookmark manager modal
+async function openBookmarkManager() {
+  try {
+    const history = await invoke('get_chat_history');
+    const bookmarkedMessages = history
+      .map((msg, index) => ({ ...msg, index }))
+      .filter(msg => msg.bookmarked);
+
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'branch-manager-modal'; // Reuse branch manager styles
+    modal.innerHTML = `
+      <div class="branch-manager-overlay"></div>
+      <div class="branch-manager-content">
+        <div class="branch-manager-header">
+          <h3>Bookmarked Messages</h3>
+          <button class="icon-btn" id="close-bookmark-manager">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="branch-list">
+          ${bookmarkedMessages.length === 0 ? `
+            <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+              <svg width="48" height="48" viewBox="0 0 14 14" fill="none" style="opacity: 0.3; margin-bottom: 1rem;">
+                <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <p>No bookmarked messages yet</p>
+              <p style="font-size: 0.875rem; margin-top: 0.5rem;">Click the bookmark icon on any message to save it here</p>
+            </div>
+          ` : bookmarkedMessages.map(msg => {
+            const content = msg.swipes && msg.swipes.length > 0
+              ? msg.swipes[msg.current_swipe || 0]
+              : msg.content;
+            const preview = content.length > 120 ? content.substring(0, 120) + '...' : content;
+            const role = msg.role === 'user' ? 'You' : 'Assistant';
+            const timestamp = new Date(msg.timestamp).toLocaleString();
+
+            return `
+              <div class="branch-item bookmark-item" data-message-index="${msg.index}">
+                <div class="branch-info">
+                  <div class="branch-name">${role} - ${preview}</div>
+                  <div class="branch-meta">${timestamp}</div>
+                </div>
+                <div class="branch-actions">
+                  <button class="btn-secondary bookmark-jump-btn" data-message-index="${msg.index}">Jump to Message</button>
+                  <button class="btn-secondary bookmark-remove-btn" data-message-index="${msg.index}">Remove</button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Add event listeners
+    modal.querySelector('#close-bookmark-manager').addEventListener('click', () => modal.remove());
+    modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+    // Jump to message
+    modal.querySelectorAll('.bookmark-jump-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const messageIndex = parseInt(e.target.dataset.messageIndex);
+        const allMessages = Array.from(messagesContainer.querySelectorAll('.message'));
+        const messageDiv = allMessages[messageIndex];
+
+        if (messageDiv) {
+          messageDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Flash highlight
+          messageDiv.style.transition = 'background 0.3s';
+          messageDiv.style.background = 'rgba(var(--accent-rgb, 99, 102, 241), 0.2)';
+          setTimeout(() => {
+            messageDiv.style.background = '';
+          }, 1000);
+        }
+
+        modal.remove();
+      });
+    });
+
+    // Remove bookmark
+    modal.querySelectorAll('.bookmark-remove-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const messageIndex = parseInt(e.target.dataset.messageIndex);
+        try {
+          await invoke('toggle_message_bookmark', { messageIndex });
+          modal.remove();
+          // Refresh messages to update UI
+          await refreshChatDisplay();
+          setStatus('Bookmark removed', 'success');
+        } catch (error) {
+          setStatus(`Failed to remove bookmark: ${error}`, 'error');
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Failed to open bookmark manager:', error);
+    setStatus(`Failed to open bookmark manager: ${error}`, 'error');
   }
 }
 
@@ -5585,44 +5821,6 @@ async function loadBranch(characterId, branchId) {
   }
 }
 
-// Setup character filter panel
-function setupCharacterFilter() {
-  const filterBtn = document.getElementById('character-filter-btn');
-  const filterPanel = document.getElementById('character-filter-panel');
-  const filterInput = document.getElementById('character-filter-input');
-  const sortSelect = document.getElementById('character-sort-select');
-
-  if (!filterBtn || !filterPanel || !filterInput || !sortSelect) return;
-
-  // Toggle filter panel
-  filterBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const isVisible = filterPanel.style.display !== 'none';
-    filterPanel.style.display = isVisible ? 'none' : 'block';
-    if (!isVisible) {
-      filterInput.focus();
-    }
-  });
-
-  // Close panel when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!filterPanel.contains(e.target) && e.target !== filterBtn) {
-      filterPanel.style.display = 'none';
-    }
-  });
-
-  // Filter input
-  filterInput.addEventListener('input', (e) => {
-    characterFilterText = e.target.value;
-    populateCharacterDropdown(allCharacters, allGroupChats);
-  });
-
-  // Sort select
-  sortSelect.addEventListener('change', (e) => {
-    characterSortOrder = e.target.value;
-    populateCharacterDropdown(allCharacters, allGroupChats);
-  });
-}
 
 // Load characters and populate dropdown
 async function loadCharacters() {
@@ -5662,11 +5860,13 @@ async function loadCharacters() {
     characterHeaderName.textContent = activeCharacter.name;
     currentCharacter = activeCharacter;
 
-    // Update header avatar
+    // Update header avatar with race condition protection
     const headerAvatar = document.querySelector('.avatar-circle');
     if (headerAvatar && activeCharacter.avatar_path) {
+      const expectedCharacterId = activeCharacter.id;
       getAvatarUrl(activeCharacter.avatar_path).then(url => {
-        if (url) {
+        // Only update if this is still the active character (prevent race condition)
+        if (url && currentCharacter && currentCharacter.id === expectedCharacterId) {
           headerAvatar.style.backgroundImage = `url('${url}')`;
           makeAvatarClickable(headerAvatar, url);
         }
@@ -5750,7 +5950,7 @@ async function handleCharacterSwitch() {
       characterHeaderName.textContent = `👥 ${groupChat.name}`;
 
       // Show group UI elements
-      showGroupReplyControls(groupChat);
+      await showGroupReplyControls(groupChat);
       showGroupMembersPanel(groupChat);
 
       setStatus('Group chat loaded', 'success');
@@ -5776,6 +5976,9 @@ async function handleCharacterSwitch() {
 }
 
 // Handle new character creation
+// Store references to event handlers to prevent memory leaks
+let newCharacterHandlers = null;
+
 async function handleNewCharacter() {
   const modal = document.getElementById('new-character-modal');
   const overlay = modal.querySelector('.new-character-overlay');
@@ -5784,6 +5987,16 @@ async function handleNewCharacter() {
   const systemPromptInput = document.getElementById('new-character-system-prompt');
   const closeBtn = document.getElementById('close-new-character-btn');
   const cancelBtn = document.getElementById('cancel-new-character-btn');
+
+  // Remove any existing event listeners to prevent memory leak
+  if (newCharacterHandlers) {
+    form.removeEventListener('submit', newCharacterHandlers.handleSubmit);
+    overlay.removeEventListener('click', newCharacterHandlers.handleClose);
+    closeBtn.removeEventListener('click', newCharacterHandlers.handleClose);
+    cancelBtn.removeEventListener('click', newCharacterHandlers.handleClose);
+    document.getElementById('new-upload-avatar-btn').removeEventListener('click', newCharacterHandlers.handleNewAvatarUpload);
+    document.getElementById('new-remove-avatar-btn').removeEventListener('click', newCharacterHandlers.handleNewAvatarRemove);
+  }
 
   // Reset form
   form.reset();
@@ -5850,7 +6063,16 @@ async function handleNewCharacter() {
     const greeting = document.getElementById('new-character-greeting').value.trim() || null;
     const mesExample = document.getElementById('new-character-mes-example').value.trim() || null;
 
-    if (!name || !systemPrompt) return;
+    if (!name || !systemPrompt) {
+      showWarning('Missing Required Fields', 'Character name and system prompt are required');
+      return;
+    }
+
+    // Disable submit button to prevent duplicate submissions
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Creating...';
 
     try {
       const newCharacter = await invoke('create_character', {
@@ -5879,6 +6101,9 @@ async function handleNewCharacter() {
       await loadCharacters();
       characterSelect.value = newCharacter.id;
 
+      // Show success feedback
+      showSuccess('Character Created', `${name} has been created successfully`);
+
       // Hide modal
       modal.style.display = 'none';
 
@@ -5891,7 +6116,11 @@ async function handleNewCharacter() {
       newRemoveAvatarBtn.removeEventListener('click', handleNewAvatarRemove);
     } catch (error) {
       console.error('Failed to create character:', error);
-      addMessage(`Failed to create character: ${error}`, false);
+      showError('Creation Failed', error.toString());
+
+      // Re-enable submit button on error
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
     }
   };
 
@@ -5904,6 +6133,14 @@ async function handleNewCharacter() {
     cancelBtn.removeEventListener('click', handleClose);
     newUploadAvatarBtn.removeEventListener('click', handleNewAvatarUpload);
     newRemoveAvatarBtn.removeEventListener('click', handleNewAvatarRemove);
+  };
+
+  // Store handlers for cleanup
+  newCharacterHandlers = {
+    handleSubmit,
+    handleClose,
+    handleNewAvatarUpload,
+    handleNewAvatarRemove
   };
 
   // Attach event listeners
@@ -5975,11 +6212,13 @@ async function handleExportCharacter() {
 // Load chat history
 async function loadChatHistory() {
   try {
+    // Clear container first to prevent flickering
+    messagesContainer.innerHTML = '';
+
     // Show skeleton loader while loading
     showMessageSkeleton(3);
 
     const history = await invoke('get_chat_history');
-    messagesContainer.innerHTML = '';
 
     if (history.length === 0) {
       if (currentCharacter && currentCharacter.greeting) {
@@ -6016,6 +6255,19 @@ async function loadChatHistory() {
             hideBtn.title = 'Unhide message';
             hideBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M10 5L11.5 3.5M3.5 10.5L5 9M1 13L13 1M5.5 6C5.19 6.31 5 6.74 5 7.22C5 8.2 5.8 9 6.78 9C7.26 9 7.69 8.81 8 8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>`;
+          }
+        }
+
+        // Apply bookmarked state
+        if (msg.bookmarked && messageDiv) {
+          messageDiv.classList.add('bookmarked');
+          const bookmarkBtn = messageDiv.querySelector('.message-bookmark-btn');
+          if (bookmarkBtn) {
+            bookmarkBtn.classList.add('active');
+            bookmarkBtn.title = 'Remove bookmark';
+            bookmarkBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+              <path d="M3 2C3 1.44772 3.44772 1 4 1H10C10.5523 1 11 1.44772 11 2V13L7 10L3 13V2Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>`;
           }
         }
@@ -6145,6 +6397,18 @@ async function loadCharacterSettings() {
 
     // Load expressions
     await loadExpressionsGallery(character.id);
+
+    // Load message examples settings
+    try {
+      const settings = await invoke('get_roleplay_settings', { characterId: character.id });
+      document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
+      document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+    } catch (error) {
+      console.error('Failed to load examples settings:', error);
+      // Set defaults if loading fails
+      document.getElementById('examples-enabled').checked = false;
+      document.getElementById('examples-position').value = 'after_system';
+    }
   } catch (error) {
     console.error('Failed to load character:', error);
   }
@@ -6216,9 +6480,25 @@ async function handleSaveCharacter(e) {
     } else {
       // Clear character override (use global)
       await invoke('update_character_sampling_settings', { characterId, settings: null });
+    // Also save message examples settings
+    const characterId = document.getElementById('character-settings-select').value;
+    const examplesEnabled = document.getElementById('examples-enabled').checked;
+    const examplesPosition = document.getElementById('examples-position').value;
+
+    await invoke('update_examples_settings', {
+      characterId,
+      enabled: examplesEnabled,
+      position: examplesPosition
+    });
+
+    // Update currentRoleplaySettings if available
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.examples_enabled = examplesEnabled;
+      currentRoleplaySettings.examples_position = examplesPosition;
     }
 
     await loadCharacters();
+    updateFeatureBadges();
     showSuccess('Character Saved', `${name} has been saved successfully.`);
   } catch (error) {
     showError('Save Failed', `Failed to save character: ${error}`);
@@ -6256,9 +6536,7 @@ async function loadRoleplaySettings() {
     document.getElementById('persona-description').value = settings.persona_description || '';
     document.getElementById('persona-enabled').checked = settings.persona_enabled || false;
 
-    // Load Message Examples
-    document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
-    document.getElementById('examples-position').value = settings.examples_position || 'after_system';
+    // Message Examples settings now loaded in Character Tab (loadCharacterSettings)
 
     // Load Presets
     await loadPresets();
@@ -6389,9 +6667,24 @@ function renderWorldInfoList(entries) {
     enableCheckbox.checked = entry.enabled;
     enableCheckbox.addEventListener('change', () => handleToggleWorldInfoEntry(entry.id, enableCheckbox.checked));
 
-    const keysText = document.createElement('span');
+    const infoSection = document.createElement('div');
+    infoSection.className = 'worldinfo-info-section';
+
+    const keysText = document.createElement('div');
     keysText.className = 'worldinfo-keys';
     keysText.textContent = entry.keys.join(', ');
+
+    // Add content preview
+    const contentPreview = document.createElement('div');
+    contentPreview.className = 'worldinfo-content-preview';
+    const maxLength = 100;
+    const previewText = entry.content.length > maxLength
+      ? entry.content.substring(0, maxLength) + '...'
+      : entry.content;
+    contentPreview.textContent = previewText;
+
+    infoSection.appendChild(keysText);
+    infoSection.appendChild(contentPreview);
 
     const priority = document.createElement('span');
     priority.className = 'worldinfo-priority';
@@ -6414,16 +6707,11 @@ function renderWorldInfoList(entries) {
     actionsDiv.appendChild(deleteBtn);
 
     header.appendChild(enableCheckbox);
-    header.appendChild(keysText);
+    header.appendChild(infoSection);
     header.appendChild(priority);
     header.appendChild(actionsDiv);
 
-    const content = document.createElement('div');
-    content.className = 'worldinfo-entry-content';
-    content.textContent = entry.content;
-
     entryDiv.appendChild(header);
-    entryDiv.appendChild(content);
     listContainer.appendChild(entryDiv);
   });
 }
@@ -6479,7 +6767,7 @@ async function handleAddWorldInfoEntry() {
     const priority = parseInt(document.getElementById('wi-add-priority').value) || 0;
 
     if (!keys || !content) {
-      alert('Keywords and content are required');
+      showWarning('Missing Fields', 'Keywords and content are required');
       return;
     }
 
@@ -6497,7 +6785,7 @@ async function handleAddWorldInfoEntry() {
       await loadRoleplaySettings();
     } catch (error) {
       console.error('Failed to add World Info entry:', error);
-      alert(`Failed to add entry: ${error}`);
+      showError('Failed to Add Entry', error.toString());
     }
   });
 }
@@ -6560,7 +6848,7 @@ async function handleEditWorldInfoEntry(entry) {
     const priority = parseInt(editForm.querySelector('.wi-edit-priority').value) || 0;
 
     if (!keys || !contentText) {
-      alert('Keywords and content are required');
+      showWarning('Missing Fields', 'Keywords and content are required');
       return;
     }
 
@@ -6579,7 +6867,7 @@ async function handleEditWorldInfoEntry(entry) {
       await loadRoleplaySettings();
     } catch (error) {
       console.error('Failed to update World Info entry:', error);
-      alert(`Failed to update entry: ${error}`);
+      showError('Failed to Update Entry', error.toString());
     }
   });
 }
@@ -6609,7 +6897,7 @@ async function handleToggleWorldInfoEntry(entryId, enabled) {
     updateFeatureBadges();
   } catch (error) {
     console.error('Failed to toggle World Info entry:', error);
-    alert(`Failed to toggle entry: ${error}`);
+    showError('Failed to Toggle Entry', error.toString());
   }
 }
 
@@ -6627,7 +6915,7 @@ async function handleDeleteWorldInfoEntry(entryId) {
     await loadRoleplaySettings();
   } catch (error) {
     console.error('Failed to delete World Info entry:', error);
-    alert(`Failed to delete entry: ${error}`);
+    showError('Failed to Delete Entry', error.toString());
   }
 }
 
@@ -6784,6 +7072,93 @@ async function handleSaveExamples() {
   } catch (error) {
     console.error('Failed to save Message Examples settings:', error);
     showError('Save Failed', `Failed to save message examples settings: ${error}`);
+  }
+}
+
+// Refresh Prompt Stack Preview
+async function refreshPromptPreview() {
+  const previewDiv = document.getElementById('prompt-stack-preview');
+  previewDiv.innerHTML = '<span style="color: var(--text-secondary); font-style: italic;">Loading...</span>';
+
+  try {
+    let preview = '';
+    let sectionNumber = 1;
+
+    // Helper function to add a section
+    const addSection = (title, content, enabled = true) => {
+      if (!content || content.trim() === '') return '';
+      if (!enabled) return `\n${'─'.repeat(60)}\n${sectionNumber++}. ${title} (DISABLED)\n${'─'.repeat(60)}\n\n`;
+      return `\n${'─'.repeat(60)}\n${sectionNumber++}. ${title}\n${'─'.repeat(60)}\n${content}\n`;
+    };
+
+    preview += '═'.repeat(60) + '\n';
+    preview += '  FINAL PROMPT ASSEMBLY ORDER\n';
+    preview += '═'.repeat(60);
+
+    // 1. System Prompt
+    const systemPrompt = document.getElementById('character-system-prompt').value.trim();
+    preview += addSection('SYSTEM PROMPT (Base Character Instructions)', systemPrompt);
+
+    // 2. Message Examples (position: after_system)
+    const examplesEnabled = document.getElementById('examples-enabled').checked;
+    const examplesPosition = document.getElementById('examples-position').value;
+    const mesExample = document.getElementById('character-mes-example').value.trim();
+
+    if (examplesPosition === 'after_system' && mesExample) {
+      preview += addSection('MESSAGE EXAMPLES (Teaching Character Voice)', mesExample, examplesEnabled);
+    }
+
+    // 3. Persona (if enabled)
+    if (currentRoleplaySettings) {
+      const personaEnabled = currentRoleplaySettings.persona_enabled;
+      const personaName = currentRoleplaySettings.persona_name;
+      const personaDesc = currentRoleplaySettings.persona_description;
+      if (personaName || personaDesc) {
+        const personaText = `User Character: ${personaName}\n${personaDesc}`;
+        preview += addSection('PERSONA (User Character Definition)', personaText, personaEnabled);
+      }
+    }
+
+    // 4. World Info note
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. WORLD INFO ENTRIES\n${'─'.repeat(60)}\n`;
+    preview += '[Injected dynamically when keywords are found in messages]\n';
+
+    // 5. Chat History
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. CHAT HISTORY\n${'─'.repeat(60)}\n`;
+    preview += '[Your conversation messages appear here]\n';
+
+    // 6. Post-History Instructions
+    const postHistory = document.getElementById('character-post-history').value.trim();
+    if (postHistory) {
+      preview += addSection('POST-HISTORY INSTRUCTIONS', postHistory);
+    }
+
+    // 7. Author's Note
+    if (currentRoleplaySettings) {
+      const authorsNoteEnabled = currentRoleplaySettings.authors_note_enabled;
+      const authorsNote = currentRoleplaySettings.authors_note;
+      if (authorsNote) {
+        preview += addSection("AUTHOR'S NOTE (Narrative Direction)", authorsNote.trim(), authorsNoteEnabled);
+      }
+    }
+
+    // 8. Message Examples (position: before_history) - rare but possible
+    if (examplesPosition === 'before_history' && mesExample) {
+      preview += addSection('MESSAGE EXAMPLES (Before History Position)', mesExample, examplesEnabled);
+    }
+
+    // 9. Latest Messages
+    preview += `\n${'─'.repeat(60)}\n${sectionNumber++}. LATEST MESSAGES (Recent Context)\n${'─'.repeat(60)}\n`;
+    preview += '[Most recent messages for immediate context]\n';
+
+    preview += '\n' + '═'.repeat(60);
+    preview += '\n  END OF PROMPT ASSEMBLY\n';
+    preview += '═'.repeat(60);
+
+    previewDiv.innerHTML = `<pre style="margin: 0; color: var(--text-primary);">${preview}</pre>`;
+  } catch (error) {
+    console.error('Failed to generate prompt preview:', error);
+    previewDiv.innerHTML = `<span style="color: var(--danger);">Error generating preview: ${error}</span>`;
   }
 }
 
@@ -7034,7 +7409,7 @@ async function handleCreatePreset() {
     const authorsNoteDefault = document.getElementById('preset-create-note').value.trim();
 
     if (!name || !description) {
-      alert('Name and description are required');
+      showWarning('Missing Fields', 'Name and description are required');
       return;
     }
 
@@ -7070,7 +7445,7 @@ async function handleCreatePreset() {
       await handlePresetSelect(id);
     } catch (error) {
       console.error('Failed to create preset:', error);
-      alert(`Failed to create preset: ${error}`);
+      showError('Failed to Create Preset', error.toString());
       setStatus('Failed to create preset', 'error');
       setTimeout(() => setStatus('Ready'), 2000);
     }
@@ -7399,7 +7774,7 @@ function addInstructionBlock() {
     const content = document.getElementById('inst-add-content').value.trim();
 
     if (!name || !content) {
-      alert('Name and content are required');
+      showWarning('Missing Fields', 'Name and content are required');
       return;
     }
 
@@ -7484,7 +7859,7 @@ function editInstruction(instruction) {
     const newContent = editForm.querySelector('.inst-edit-content').value.trim();
 
     if (!newName || !newContent) {
-      alert('Name and content are required');
+      showWarning('Missing Fields', 'Name and content are required');
       return;
     }
 
@@ -7560,7 +7935,7 @@ async function savePresetChanges() {
     await handlePresetSelect(currentEditingPreset.id);
   } catch (error) {
     console.error('Failed to save preset changes:', error);
-    alert(`Failed to save changes: ${error}`);
+    showError('Failed to Save Changes', error.toString());
     setStatus('Failed to save preset', 'error');
     setTimeout(() => setStatus('Ready'), 2000);
   }
@@ -7585,7 +7960,7 @@ async function deletePreset() {
     await loadPresets();
   } catch (error) {
     console.error('Failed to delete preset:', error);
-    alert(`Failed to delete preset: ${error}`);
+    showError('Failed to Delete Preset', error.toString());
     setStatus('Failed to delete preset', 'error');
     setTimeout(() => setStatus('Ready'), 2000);
   }
@@ -7634,7 +8009,7 @@ async function duplicatePreset() {
   document.getElementById('preset-duplicate-save').addEventListener('click', async () => {
     const newName = document.getElementById('preset-duplicate-name').value.trim();
     if (!newName) {
-      alert('Please enter a preset name');
+      showWarning('Missing Field', 'Please enter a preset name');
       return;
     }
 
@@ -7658,7 +8033,7 @@ async function duplicatePreset() {
       await handlePresetSelect(duplicatedPreset.id);
     } catch (error) {
       console.error('Failed to duplicate preset:', error);
-      alert(`Failed to duplicate preset: ${error}`);
+      showError('Failed to Duplicate Preset', error.toString());
       setStatus('Failed to duplicate preset', 'error');
       setTimeout(() => setStatus('Ready'), 2000);
     }
@@ -7671,7 +8046,7 @@ async function restoreBuiltinPreset() {
 
   const builtInIds = ['default', 'roleplay', 'creative-writing', 'assistant'];
   if (!builtInIds.includes(currentEditingPreset.id)) {
-    alert('Can only restore built-in presets');
+    showWarning('Invalid Action', 'Can only restore built-in presets');
     return;
   }
 
@@ -7694,7 +8069,7 @@ async function restoreBuiltinPreset() {
     await handlePresetSelect(restoredPreset.id);
   } catch (error) {
     console.error('Failed to restore preset:', error);
-    alert(`Failed to restore preset: ${error}`);
+    showError('Failed to Restore Preset', error.toString());
     setStatus('Failed to restore preset', 'error');
     setTimeout(() => setStatus('Ready'), 2000);
   }
@@ -7820,6 +8195,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const scenario = document.getElementById('edit-character-scenario').value.trim() || null;
     const mesExample = document.getElementById('edit-character-mes-example').value.trim() || null;
 
+    // Validate required fields
+    if (!name || !systemPrompt) {
+      showWarning('Missing Required Fields', 'Character name and system prompt are required');
+      return;
+    }
+
     // Extract advanced fields
     const postHistory = document.getElementById('edit-character-post-history').value.trim() || null;
 
@@ -7837,6 +8218,12 @@ window.addEventListener('DOMContentLoaded', () => {
     const creator = document.getElementById('edit-character-creator').value.trim() || null;
     const characterVersion = document.getElementById('edit-character-version').value.trim() || null;
     const creatorNotes = document.getElementById('edit-character-creator-notes').value.trim() || null;
+
+    // Disable submit button to prevent duplicate submissions
+    const submitBtn = editCharacterForm.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Saving...';
 
     try {
       setStatus('Updating character...', 'default');
@@ -7860,14 +8247,16 @@ window.addEventListener('DOMContentLoaded', () => {
       editCharacterModal.style.display = 'none';
       await loadCharacters();
       setStatus('Character updated', 'success');
+      showSuccess('Character Updated', `${name} has been updated successfully`);
       setTimeout(() => setStatus('Ready'), 2000);
     } catch (error) {
       console.error('Failed to update character:', error);
       setStatus('Failed to update character', 'error');
-      await window.__TAURI__.dialog.message(`Failed to update character: ${error}`, {
-        title: 'Error',
-        kind: 'error'
-      });
+      showError('Update Failed', error.toString());
+
+      // Re-enable submit button on error
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalText;
     }
   });
 
@@ -8070,6 +8459,27 @@ window.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    // Ctrl/Cmd + B - Open bookmarks manager
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      e.preventDefault();
+      openBookmarkManager();
+      return;
+    }
+
+    // Ctrl/Cmd + Q - Toggle quick replies bar
+    if ((e.ctrlKey || e.metaKey) && e.key === 'q') {
+      e.preventDefault();
+      toggleQuickRepliesBar();
+      return;
+    }
+
+    // Ctrl/Cmd + T - Open theme settings
+    if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+      e.preventDefault();
+      openThemeSettings();
+      return;
+    }
+
     // Ctrl/Cmd + / - Toggle roleplay panel
     if ((e.ctrlKey || e.metaKey) && e.key === '/') {
       e.preventDefault();
@@ -8130,9 +8540,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Setup settings search
   setupSettingsSearch();
-
-  // Setup character filter and sort
-  setupCharacterFilter();
 
   // Setup keyboard shortcuts modal
   setupShortcutsModal();
@@ -8358,13 +8765,13 @@ async function handleUploadExpression() {
   const expressionName = nameInput.value.trim();
 
   if (!expressionName) {
-    alert('Please enter an expression name first');
+    showWarning('Missing Field', 'Please enter an expression name first');
     return;
   }
 
   // Validate expression name (alphanumeric, hyphens, underscores only)
   if (!/^[a-zA-Z0-9_-]+$/.test(expressionName)) {
-    alert('Expression name can only contain letters, numbers, hyphens, and underscores');
+    showWarning('Invalid Name', 'Expression name can only contain letters, numbers, hyphens, and underscores');
     return;
   }
 
@@ -8380,7 +8787,7 @@ async function handleUploadExpression() {
     await loadExpressionsGallery(characterId);
   } catch (error) {
     console.error('Failed to upload expression:', error);
-    alert(`Failed to upload expression: ${error}`);
+    showError('Failed to Upload Expression', error.toString());
   }
 }
 
@@ -8394,7 +8801,7 @@ async function handleDeleteExpression(characterId, expressionName) {
     await loadExpressionsGallery(characterId);
   } catch (error) {
     console.error('Failed to delete expression:', error);
-    alert(`Failed to delete expression: ${error}`);
+    showError('Failed to Delete Expression', error.toString());
   }
 }
 
@@ -8407,7 +8814,7 @@ async function handleDefaultExpressionChange() {
     await invoke('set_default_expression', { characterId, expressionName });
   } catch (error) {
     console.error('Failed to set default expression:', error);
-    alert(`Failed to set default expression: ${error}`);
+    showError('Failed to Set Default Expression', error.toString());
   }
 }
 
@@ -9049,16 +9456,41 @@ function handleMentionInput() {
 }
 
 // Group Reply Controls Management
-function showGroupReplyControls(groupChat) {
+async function showGroupReplyControls(groupChat) {
   const controls = document.getElementById('group-reply-controls');
   const characterSelect = document.getElementById('group-reply-character');
   const autoToggle = document.getElementById('group-auto-mode-toggle');
 
   controls.style.display = 'flex';
 
-  // Populate character dropdown with group members
-  characterSelect.innerHTML = '<option value="">Select character...</option>';
+  // Populate character dropdown with user persona first
+  characterSelect.innerHTML = '';
 
+  // Add user persona as first option (default)
+  try {
+    if (currentRoleplaySettings) {
+      const personaName = currentRoleplaySettings.persona_name || 'You';
+      const personaOption = document.createElement('option');
+      personaOption.value = 'user';
+      personaOption.textContent = `👤 ${personaName} (You)`;
+      characterSelect.appendChild(personaOption);
+    } else {
+      // Fallback if no roleplay settings loaded
+      const personaOption = document.createElement('option');
+      personaOption.value = 'user';
+      personaOption.textContent = '👤 You';
+      characterSelect.appendChild(personaOption);
+    }
+  } catch (error) {
+    console.error('Failed to load persona for group reply:', error);
+    // Add fallback user option
+    const personaOption = document.createElement('option');
+    personaOption.value = 'user';
+    personaOption.textContent = '👤 You';
+    characterSelect.appendChild(personaOption);
+  }
+
+  // Add group member characters
   for (const charId of groupChat.character_ids) {
     const character = charactersMap[charId];
     if (character) {
@@ -9068,6 +9500,9 @@ function showGroupReplyControls(groupChat) {
       characterSelect.appendChild(option);
     }
   }
+
+  // Default to user persona
+  characterSelect.value = 'user';
 
   // Set auto-mode toggle state
   autoToggle.checked = groupChat.settings?.auto_mode || false;
@@ -9155,7 +9590,8 @@ async function sendGroupMessage(message, isRegenerate = false) {
   } catch (error) {
     console.error('Failed to generate group response:', error);
     addMessage(`Error: ${error}`, false);
-    setStatus(`Error: ${error.toString().substring(0, 50)}...`, 'error');
+    const errorMsg = error.toString();
+    setStatus(`Error: ${errorMsg.length > 100 ? errorMsg.substring(0, 100) + '...' : errorMsg}`, 'error');
   } finally {
     sendBtn.disabled = false;
     messageInput.disabled = false;
@@ -9244,4 +9680,617 @@ document.addEventListener('DOMContentLoaded', () => {
       charSamplingDiv.style.display = charSamplingToggle.checked ? 'block' : 'none';
     });
   }
+// Quick Replies code to be appended to main.js
+
+  // Quick Replies
+  setupQuickReplies();
+
+  // Theme System
+  initializeTheme();
 });
+
+// ============================================================================
+// Quick Replies System
+// ============================================================================
+
+async function setupQuickReplies() {
+  const quickRepliesBar = document.getElementById('quick-replies-bar');
+  const quickRepliesList = document.getElementById('quick-replies-list');
+  const closeBtn = document.getElementById('close-quick-replies-btn');
+  const manageBtn = document.getElementById('manage-quick-replies-btn');
+
+  if (!quickRepliesBar || !quickRepliesList) return;
+
+  closeBtn.addEventListener('click', () => {
+    quickRepliesBar.style.display = 'none';
+  });
+
+  manageBtn.addEventListener('click', openQuickRepliesManager);
+
+  // Load and render quick replies
+  await loadQuickRepliesBar();
+}
+
+async function loadQuickRepliesBar() {
+  const quickRepliesList = document.getElementById('quick-replies-list');
+  if (!quickRepliesList) return;
+
+  try {
+    const replies = await invoke('get_quick_replies');
+
+    quickRepliesList.innerHTML = '';
+
+    if (replies.length === 0) {
+      quickRepliesList.innerHTML = `
+        <div class="quick-replies-empty">
+          No quick replies yet. <a href="#" id="create-first-quick-reply">Create one</a>
+        </div>
+      `;
+      const createLink = quickRepliesList.querySelector('#create-first-quick-reply');
+      if (createLink) {
+        createLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          openQuickRepliesManager();
+        });
+      }
+      return;
+    }
+
+    // Group by category
+    const categorized = {};
+    for (const reply of replies) {
+      const cat = reply.category || 'General';
+      if (!categorized[cat]) categorized[cat] = [];
+      categorized[cat].push(reply);
+    }
+
+    // Render by category
+    for (const [category, catReplies] of Object.entries(categorized)) {
+      if (Object.keys(categorized).length > 1) {
+        const categoryLabel = document.createElement('div');
+        categoryLabel.className = 'quick-replies-category';
+        categoryLabel.textContent = category;
+        categoryLabel.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin: 8px 0 4px 0; font-weight: 600;';
+        quickRepliesList.appendChild(categoryLabel);
+      }
+
+      for (const reply of catReplies) {
+        const btn = document.createElement('button');
+        btn.className = 'quick-reply-btn';
+        btn.textContent = reply.name;
+        btn.title = reply.content;
+        btn.addEventListener('click', () => insertQuickReply(reply));
+        quickRepliesList.appendChild(btn);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load quick replies:', error);
+  }
+}
+
+async function insertQuickReply(reply) {
+  try {
+    const processed = await invoke('process_quick_reply_template', { template: reply.content });
+    const messageInput = document.getElementById('message-input');
+
+    if (messageInput.value.trim()) {
+      messageInput.value += '\n' + processed;
+    } else {
+      messageInput.value = processed;
+    }
+
+    // Auto-resize textarea
+    messageInput.style.height = 'auto';
+    messageInput.style.height = messageInput.scrollHeight + 'px';
+
+    messageInput.focus();
+  } catch (error) {
+    console.error('Failed to process quick reply:', error);
+    setStatus(`Failed to process quick reply: ${error}`, 'error');
+  }
+}
+
+function toggleQuickRepliesBar() {
+  const quickRepliesBar = document.getElementById('quick-replies-bar');
+  if (quickRepliesBar) {
+    quickRepliesBar.style.display = quickRepliesBar.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+async function openQuickRepliesManager() {
+  const replies = await invoke('get_quick_replies');
+
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content">
+      <div class="branch-manager-header">
+        <h3>Manage Quick Replies</h3>
+        <button class="icon-btn" id="close-qr-manager">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-primary" id="add-quick-reply-btn">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-right: 6px;">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Add Quick Reply
+        </button>
+      </div>
+      <div class="branch-list" id="quick-replies-manager-list">
+        ${replies.length === 0 ? `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <p>No quick replies yet</p>
+            <p style="font-size: 0.875rem; margin-top: 0.5rem;">Click "Add Quick Reply" to create your first one</p>
+          </div>
+        ` : replies.map(reply => `
+          <div class="branch-item" data-reply-id="${reply.id}">
+            <div class="branch-info">
+              <div class="branch-name">${reply.name}${reply.category ? ` <span style="color: var(--text-secondary); font-size: 0.875rem;">(${reply.category})</span>` : ''}</div>
+              <div class="branch-meta">${reply.content.substring(0, 100)}${reply.content.length > 100 ? '...' : ''}</div>
+            </div>
+            <div class="branch-actions">
+              <button class="btn-secondary qr-edit-btn" data-reply-id="${reply.id}">Edit</button>
+              <button class="btn-danger qr-delete-btn" data-reply-id="${reply.id}">Delete</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-qr-manager').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+  modal.querySelector('#add-quick-reply-btn').addEventListener('click', () => showQuickReplyEditor());
+
+  modal.querySelectorAll('.qr-edit-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const reply = replies.find(r => r.id === e.target.dataset.replyId);
+      showQuickReplyEditor(reply);
+    });
+  });
+
+  modal.querySelectorAll('.qr-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const replyId = e.target.dataset.replyId;
+      try {
+        await invoke('delete_quick_reply', { id: replyId });
+        modal.remove();
+        await loadQuickRepliesBar();
+        openQuickRepliesManager();
+      } catch (error) {
+        setStatus(`Failed to delete quick reply: ${error}`, 'error');
+      }
+    });
+  });
+}
+
+function showQuickReplyEditor(reply = null) {
+  const isEdit = !!reply;
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content" style="max-width: 500px;">
+      <div class="branch-manager-header">
+        <h3>${isEdit ? 'Edit' : 'Add'} Quick Reply</h3>
+        <button class="icon-btn" id="close-editor">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Name</label>
+          <input type="text" id="qr-name" value="${reply?.name || ''}" placeholder="e.g., Greeting" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Category (optional)</label>
+          <input type="text" id="qr-category" value="${reply?.category || ''}" placeholder="e.g., Greetings, Actions" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary);">Content (supports {{char}}, {{user}}, {{date}}, {{time}})</label>
+          <textarea id="qr-content" rows="4" placeholder="Hello {{char}}! How are you today?" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); resize: vertical;">${reply?.content || ''}</textarea>
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-secondary" id="cancel-qr-btn">Cancel</button>
+          <button class="btn-primary" id="save-qr-btn">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  modal.querySelector('#close-editor').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+  modal.querySelector('#cancel-qr-btn').addEventListener('click', () => modal.remove());
+
+  modal.querySelector('#save-qr-btn').addEventListener('click', async () => {
+    const name = modal.querySelector('#qr-name').value.trim();
+    const category = modal.querySelector('#qr-category').value.trim();
+    const content = modal.querySelector('#qr-content').value.trim();
+
+    if (!name || !content) {
+      setStatus('Name and content are required', 'error');
+      return;
+    }
+
+    try {
+      if (isEdit) {
+        await invoke('update_quick_reply', { id: reply.id, name, content, category });
+      } else {
+        await invoke('add_quick_reply', { name, content, category });
+      }
+
+      modal.remove();
+      await loadQuickRepliesBar();
+      // Reopen manager to show updated list
+      setTimeout(() => openQuickRepliesManager(), 100);
+      setStatus(isEdit ? 'Quick reply updated' : 'Quick reply added', 'success');
+    } catch (error) {
+      setStatus(`Failed to save quick reply: ${error}`, 'error');
+    }
+  });
+}
+
+// ============================================================================
+// Theme System
+// ============================================================================
+
+let currentTheme = null;
+
+async function initializeTheme() {
+  try {
+    const theme = await invoke('get_theme_config');
+    currentTheme = theme;
+    applyTheme(theme);
+  } catch (error) {
+    console.error('Failed to load theme:', error);
+    // Apply default theme
+    applyTheme({
+      mode: 'dark',
+      accent_color: '#6366f1',
+      font_family: 'system-ui',
+      font_size: 14,
+      message_bubble_style: 'default'
+    });
+  }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+
+  // Apply theme mode
+  root.setAttribute('data-theme', theme.mode);
+
+  // Apply accent color
+  if (theme.accent_color) {
+    const hex = theme.accent_color.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+
+    root.style.setProperty('--accent', theme.accent_color);
+    root.style.setProperty('--accent-rgb', `${r}, ${g}, ${b}`);
+
+    // Calculate hover color (slightly darker)
+    const hoverColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`;
+    root.style.setProperty('--accent-hover', hoverColor);
+
+    // Update user message color
+    root.style.setProperty('--user-msg', theme.accent_color);
+  }
+
+  // Apply font family
+  if (theme.font_family && theme.font_family !== 'system-ui') {
+    root.style.setProperty('font-family', theme.font_family);
+  }
+
+  // Apply font size
+  if (theme.font_size) {
+    root.style.setProperty('font-size', `${theme.font_size}px`);
+  }
+
+  // Apply background image if present
+  if (theme.background_image) {
+    document.body.style.backgroundImage = `url('${theme.background_image}')`;
+    document.body.style.backgroundSize = 'cover';
+    document.body.style.backgroundPosition = 'center';
+    document.body.style.backgroundAttachment = 'fixed';
+
+    if (theme.background_blur) {
+      // Add blur overlay
+      if (!document.querySelector('.bg-blur-overlay')) {
+        const overlay = document.createElement('div');
+        overlay.className = 'bg-blur-overlay';
+        overlay.style.cssText = `
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          pointer-events: none;
+          z-index: -1;
+        `;
+        document.body.appendChild(overlay);
+      }
+    }
+  }
+}
+
+async function toggleThemeMode() {
+  if (!currentTheme) return;
+
+  const newMode = currentTheme.mode === 'dark' ? 'light' : 'dark';
+  currentTheme.mode = newMode;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+    showToast(`Switched to ${newMode} mode`, 'success');
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+async function updateAccentColor(color) {
+  if (!currentTheme) return;
+
+  currentTheme.accent_color = color;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+async function updateFontSettings(fontFamily, fontSize) {
+  if (!currentTheme) return;
+
+  if (fontFamily) currentTheme.font_family = fontFamily;
+  if (fontSize) currentTheme.font_size = fontSize;
+
+  try {
+    await invoke('save_theme', currentTheme);
+    applyTheme(currentTheme);
+  } catch (error) {
+    console.error('Failed to save theme:', error);
+    showToast('Failed to save theme', 'error');
+  }
+}
+
+function openThemeSettings() {
+  if (!currentTheme) {
+    showToast('Theme not loaded', 'error');
+    return;
+  }
+
+  const modal = document.createElement('div');
+  modal.className = 'branch-manager-modal';
+  modal.innerHTML = `
+    <div class="branch-manager-overlay"></div>
+    <div class="branch-manager-content" style="max-width: 500px;">
+      <div class="branch-manager-header">
+        <h3>Theme Settings</h3>
+        <button class="icon-btn" id="close-theme-settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div style="padding: 16px;">
+        <div style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px; font-weight: 600;">Appearance</label>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-secondary theme-mode-btn" data-mode="dark" style="flex: 1;">
+              🌙 Dark
+            </button>
+            <button class="btn-secondary theme-mode-btn" data-mode="light" style="flex: 1;">
+              ☀️ Light
+            </button>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="accent-color" style="display: block; margin-bottom: 8px; font-weight: 600;">Accent Color</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="color" id="accent-color" value="${currentTheme.accent_color}" style="width: 60px; height: 40px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
+            <div style="flex: 1;">
+              <input type="text" id="accent-color-hex" value="${currentTheme.accent_color}" placeholder="#6366f1" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
+            ${['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'].map(color => `
+              <button class="preset-color-btn" data-color="${color}" style="width: 32px; height: 32px; border-radius: 6px; background: ${color}; border: 2px solid ${currentTheme.accent_color === color ? 'white' : 'transparent'}; cursor: pointer; transition: all 0.15s;"></button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="font-family" style="display: block; margin-bottom: 8px; font-weight: 600;">Font Family</label>
+          <select id="font-family" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary);">
+            <option value="system-ui" ${currentTheme.font_family === 'system-ui' ? 'selected' : ''}>System Default</option>
+            <option value="'Inter', sans-serif" ${currentTheme.font_family.includes('Inter') ? 'selected' : ''}>Inter</option>
+            <option value="'Roboto', sans-serif" ${currentTheme.font_family.includes('Roboto') ? 'selected' : ''}>Roboto</option>
+            <option value="'Open Sans', sans-serif" ${currentTheme.font_family.includes('Open Sans') ? 'selected' : ''}>Open Sans</option>
+            <option value="'Fira Code', monospace" ${currentTheme.font_family.includes('Fira Code') ? 'selected' : ''}>Fira Code (Mono)</option>
+            <option value="'JetBrains Mono', monospace" ${currentTheme.font_family.includes('JetBrains') ? 'selected' : ''}>JetBrains Mono</option>
+          </select>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="font-size" style="display: block; margin-bottom: 8px; font-weight: 600;">Font Size: <span id="font-size-value">${currentTheme.font_size}px</span></label>
+          <input type="range" id="font-size" min="12" max="18" value="${currentTheme.font_size}" style="width: 100%;">
+        </div>
+
+        <div style="display: flex; gap: 8px; justify-content: flex-end;">
+          <button class="btn-secondary" id="reset-theme-btn">Reset to Default</button>
+          <button class="btn-primary" id="apply-theme-btn">Apply</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Update active mode button
+  modal.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    if (btn.dataset.mode === currentTheme.mode) {
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+    }
+  });
+
+  // Event listeners
+  modal.querySelector('#close-theme-settings').addEventListener('click', () => modal.remove());
+  modal.querySelector('.branch-manager-overlay').addEventListener('click', () => modal.remove());
+
+  // Theme mode buttons
+  modal.querySelectorAll('.theme-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.theme-mode-btn').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-secondary');
+      });
+      btn.classList.remove('btn-secondary');
+      btn.classList.add('btn-primary');
+      currentTheme.mode = btn.dataset.mode;
+    });
+  });
+
+  // Color picker
+  const colorPicker = modal.querySelector('#accent-color');
+  const colorHex = modal.querySelector('#accent-color-hex');
+
+  colorPicker.addEventListener('input', (e) => {
+    colorHex.value = e.target.value;
+  });
+
+  colorHex.addEventListener('input', (e) => {
+    if (/^#[0-9A-F]{6}$/i.test(e.target.value)) {
+      colorPicker.value = e.target.value;
+    }
+  });
+
+  // Preset colors
+  modal.querySelectorAll('.preset-color-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const color = btn.dataset.color;
+      colorPicker.value = color;
+      colorHex.value = color;
+      modal.querySelectorAll('.preset-color-btn').forEach(b => b.style.borderColor = 'transparent');
+      btn.style.borderColor = 'white';
+    });
+  });
+
+  // Font size slider
+  const fontSizeSlider = modal.querySelector('#font-size');
+  const fontSizeValue = modal.querySelector('#font-size-value');
+  fontSizeSlider.addEventListener('input', (e) => {
+    fontSizeValue.textContent = `${e.target.value}px`;
+  });
+
+  // Reset button
+  modal.querySelector('#reset-theme-btn').addEventListener('click', async () => {
+    const defaultTheme = {
+      mode: 'dark',
+      accent_color: '#6366f1',
+      background_image: null,
+      background_blur: false,
+      font_family: 'system-ui',
+      font_size: 14,
+      message_bubble_style: 'default'
+    };
+
+    try {
+      await invoke('save_theme', defaultTheme);
+      currentTheme = defaultTheme;
+      applyTheme(defaultTheme);
+      modal.remove();
+      showToast('Theme reset to default', 'success');
+    } catch (error) {
+      showToast('Failed to reset theme', 'error');
+    }
+  });
+
+  // Apply button
+  modal.querySelector('#apply-theme-btn').addEventListener('click', async () => {
+    currentTheme.accent_color = colorPicker.value;
+    currentTheme.font_family = modal.querySelector('#font-family').value;
+    currentTheme.font_size = parseInt(fontSizeSlider.value);
+
+    try {
+      await invoke('save_theme', currentTheme);
+      applyTheme(currentTheme);
+      modal.remove();
+      showToast('Theme applied', 'success');
+    } catch (error) {
+      showToast('Failed to save theme', 'error');
+    }
+  });
+}
+
+// ============================================================================
+// Rich Media - Image Viewer
+// ============================================================================
+
+function openImageFullscreen(src, alt = '') {
+  const modal = document.createElement('div');
+  modal.className = 'image-fullscreen-modal';
+  modal.innerHTML = `
+    <div class="image-fullscreen-overlay"></div>
+    <div class="image-fullscreen-content">
+      <button class="image-fullscreen-close" title="Close (Esc)">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <img src="${src}" alt="${alt || ''}" class="image-fullscreen-img">
+      ${alt ? `<div class="image-fullscreen-caption">${alt}</div>` : ''}
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  // Close handlers
+  const closeModal = () => modal.remove();
+  modal.querySelector('.image-fullscreen-close').addEventListener('click', closeModal);
+  modal.querySelector('.image-fullscreen-overlay').addEventListener('click', closeModal);
+
+  // Escape key to close
+  const handleKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      closeModal();
+      document.removeEventListener('keydown', handleKeyDown);
+    }
+  };
+  document.addEventListener('keydown', handleKeyDown);
+
+  // Cleanup on modal removal
+  modal.addEventListener('DOMNodeRemoved', () => {
+    document.removeEventListener('keydown', handleKeyDown);
+  });
+
+  // Animate in
+  requestAnimationFrame(() => {
+    modal.style.opacity = '1';
+  });
+}

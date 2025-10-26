@@ -106,6 +106,53 @@ fn default_max_tokens() -> u32 {
 // Get effective sampling settings for a character (character override or global)
 fn get_effective_sampling_settings(character: &Character, config: &ApiConfig) -> SamplingSettings {
     character.sampling_settings.clone().unwrap_or_else(|| config.sampling_settings.clone())
+// Theme Configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ThemeConfig {
+    #[serde(default = "default_theme_mode")]
+    mode: String, // "dark" or "light"
+    #[serde(default = "default_accent_color")]
+    accent_color: String, // Hex color like "#6366f1"
+    #[serde(default)]
+    background_image: Option<String>, // Path to background image
+    #[serde(default)]
+    background_blur: bool, // Enable blur on background
+    #[serde(default = "default_font_family")]
+    font_family: String, // Font family name
+    #[serde(default = "default_font_size")]
+    font_size: u8, // Font size in px
+    #[serde(default)]
+    message_bubble_style: String, // "default", "rounded", "minimal"
+}
+
+fn default_theme_mode() -> String {
+    "dark".to_string()
+}
+
+fn default_accent_color() -> String {
+    "#6366f1".to_string() // Indigo
+}
+
+fn default_font_family() -> String {
+    "system-ui".to_string()
+}
+
+fn default_font_size() -> u8 {
+    14
+}
+
+impl Default for ThemeConfig {
+    fn default() -> Self {
+        Self {
+            mode: default_theme_mode(),
+            accent_color: default_accent_color(),
+            background_image: None,
+            background_blur: false,
+            font_family: default_font_family(),
+            font_size: default_font_size(),
+            message_bubble_style: "default".to_string(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,6 +330,7 @@ struct Message {
     hidden: bool, // Whether this message is temporarily hidden from view
     #[serde(default)]
     bookmarked: bool, // Whether this message is bookmarked for quick navigation
+    bookmarked: bool, // Whether this message is bookmarked for quick access
     #[serde(default)]
     expression: Option<String>, // Expression name used for this message
     #[serde(default)]
@@ -471,6 +519,14 @@ struct RoleplaySettings {
     examples_enabled: bool, // Whether to include message examples from character card
     #[serde(default = "default_examples_position")]
     examples_position: String, // Where to insert examples: "after_system" or "before_history"
+    #[serde(default)]
+    context_pruning_enabled: bool, // Enable automatic context pruning
+    #[serde(default = "default_context_reserve_tokens")]
+    context_reserve_tokens: usize, // Tokens to reserve for completion (default 4000)
+    #[serde(default)]
+    context_preserve_pinned: bool, // Always keep pinned messages (default true)
+    #[serde(default = "default_context_min_messages")]
+    context_min_messages: usize, // Minimum messages to keep (default 10)
 }
 
 fn default_authors_note_depth() -> usize {
@@ -489,6 +545,14 @@ fn default_recursion_depth() -> usize {
     3
 }
 
+fn default_context_reserve_tokens() -> usize {
+    4000 // Reserve 4k tokens for completion
+}
+
+fn default_context_min_messages() -> usize {
+    10 // Keep at least 10 messages
+}
+
 impl Default for RoleplaySettings {
     fn default() -> Self {
         Self {
@@ -504,6 +568,37 @@ impl Default for RoleplaySettings {
             active_preset_id: None, // No preset selected by default
             examples_enabled: false, // Message examples disabled by default
             examples_position: default_examples_position(), // After system prompt by default
+            context_pruning_enabled: true, // Enable smart context management by default
+            context_reserve_tokens: default_context_reserve_tokens(),
+            context_preserve_pinned: true, // Always preserve pinned messages
+            context_min_messages: default_context_min_messages(),
+        }
+    }
+}
+
+// Quick Replies System
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct QuickReply {
+    id: String,
+    name: String,
+    content: String,
+    #[serde(default)]
+    category: String, // Optional category for organization (e.g., "Greetings", "Actions")
+    #[serde(default)]
+    order: i32, // Display order
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct QuickRepliesData {
+    #[serde(default)]
+    replies: Vec<QuickReply>,
+}
+
+impl Default for QuickRepliesData {
+    fn default() -> Self {
+        Self {
+            replies: Vec::new(),
         }
     }
 }
@@ -969,6 +1064,38 @@ fn get_avatar_path(filename: &str) -> PathBuf {
 fn get_roleplay_settings_path(character_id: &str) -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     PathBuf::from(home).join(format!(".config/claudia/roleplay_{}.json", character_id))
+}
+
+fn get_theme_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/theme.json")
+}
+
+fn load_theme_config() -> ThemeConfig {
+    let path = get_theme_path();
+    if let Ok(contents) = fs::read_to_string(path) {
+        serde_json::from_str(&contents).unwrap_or_default()
+    } else {
+        ThemeConfig::default()
+    }
+}
+
+fn save_theme_config(config: &ThemeConfig) -> Result<(), String> {
+    let path = get_theme_path();
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| format!("Failed to serialize theme config: {}", e))?;
+
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write theme config: {}", e))?;
+
+    Ok(())
 }
 
 fn load_roleplay_settings(character_id: &str) -> RoleplaySettings {
@@ -1787,6 +1914,7 @@ fn get_character() -> Result<Character, String> {
 
 #[tauri::command]
 fn update_character(
+    character_id: String,
     name: String,
     system_prompt: String,
     greeting: Option<String>,
@@ -1802,7 +1930,8 @@ fn update_character(
     creator_notes: Option<String>,
     avatar_path: Option<String>,
 ) -> Result<(), String> {
-    let mut character = get_active_character();
+    let mut character = load_character(&character_id)
+        .ok_or_else(|| "Character not found".to_string())?;
     character.name = name;
     character.system_prompt = system_prompt;
     character.greeting = greeting;
@@ -1945,6 +2074,13 @@ fn update_character_sampling_settings(character_id: String, settings: Option<Sam
         .ok_or_else(|| format!("Character {} not found", character_id))?;
     character.sampling_settings = settings;
     save_character(&character)
+fn get_theme_config() -> ThemeConfig {
+    load_theme_config()
+}
+
+#[tauri::command]
+fn save_theme(config: ThemeConfig) -> Result<(), String> {
+    save_theme_config(&config)
 }
 
 // Roleplay Context Injection Logic
@@ -2405,6 +2541,104 @@ fn build_roleplay_context(
     (system_additions, authors_note_content, settings.authors_note_depth)
 }
 
+// Smart context management: prune history to fit within token limit
+fn prune_history_for_context(
+    messages: &[Message],
+    current_context: &[Message],
+    settings: &RoleplaySettings,
+) -> Vec<Message> {
+    let config = get_api_config();
+    let context_limit = config.context_limit;
+    let reserve_tokens = settings.context_reserve_tokens;
+    let min_messages = settings.context_min_messages;
+
+    // Get tokenizer
+    let tokenizer = match tiktoken_rs::cl100k_base() {
+        Ok(t) => t,
+        Err(_) => return messages.to_vec(), // Fallback: return all messages
+    };
+
+    // Calculate tokens used by current context (system, examples, etc.)
+    let mut current_tokens = 0;
+    for msg in current_context {
+        let content = msg.get_content();
+        current_tokens += tokenizer.encode_with_special_tokens(content).len();
+    }
+
+    // Available tokens for history
+    let available_for_history = context_limit
+        .saturating_sub(current_tokens)
+        .saturating_sub(reserve_tokens);
+
+    // If we have plenty of space, return all messages
+    let mut total_history_tokens = 0;
+    for msg in messages {
+        total_history_tokens += tokenizer.encode_with_special_tokens(msg.get_content()).len();
+    }
+
+    if total_history_tokens <= available_for_history {
+        return messages.to_vec();
+    }
+
+    // Need to prune - collect messages with metadata
+    let mut message_info: Vec<(usize, usize, bool)> = Vec::new(); // (index, tokens, is_pinned)
+
+    for (idx, msg) in messages.iter().enumerate() {
+        let tokens = tokenizer.encode_with_special_tokens(msg.get_content()).len();
+        message_info.push((idx, tokens, msg.pinned));
+    }
+
+    // Always keep the most recent messages (last min_messages)
+    let messages_to_keep_count = messages.len().saturating_sub(min_messages);
+
+    let mut pruned_messages = Vec::new();
+    let mut token_count = 0;
+
+    // First pass: Add all pinned messages if preserve_pinned is enabled
+    if settings.context_preserve_pinned {
+        for (idx, tokens, is_pinned) in &message_info {
+            if *is_pinned {
+                if token_count + tokens <= available_for_history {
+                    pruned_messages.push((*idx, *tokens));
+                    token_count += tokens;
+                }
+            }
+        }
+    }
+
+    // Second pass: Add recent messages (working backwards from the end)
+    for i in (0..messages.len()).rev() {
+        // Skip if already added as pinned
+        if pruned_messages.iter().any(|(idx, _)| *idx == i) {
+            continue;
+        }
+
+        let tokens = message_info[i].1;
+
+        // Always try to keep minimum recent messages
+        let is_in_min_range = i >= messages_to_keep_count;
+
+        if is_in_min_range || token_count + tokens <= available_for_history {
+            if token_count + tokens <= available_for_history {
+                pruned_messages.push((i, tokens));
+                token_count += tokens;
+            } else if is_in_min_range {
+                // Force include minimum messages even if over budget
+                pruned_messages.push((i, tokens));
+                token_count += tokens;
+            }
+        }
+    }
+
+    // Sort by original index to maintain chronological order
+    pruned_messages.sort_by_key(|(idx, _)| *idx);
+
+    // Extract the actual messages
+    pruned_messages.iter()
+        .map(|(idx, _)| messages[*idx].clone())
+        .collect()
+}
+
 // Helper function to build API messages array with all context injection
 fn build_api_messages(
     character: &Character,
@@ -2473,8 +2707,19 @@ fn build_api_messages(
         }
     }
 
-    // Add history messages with current swipe content
-    for msg in &history.messages {
+    // Add history messages with smart context management
+    let history_messages = if roleplay_settings.context_pruning_enabled {
+        prune_history_for_context(
+            &history.messages,
+            &api_messages,
+            roleplay_settings,
+        )
+    } else {
+        // No pruning - add all messages
+        history.messages.clone()
+    };
+
+    for msg in &history_messages {
         let mut api_msg = Message::new_user(msg.get_content().to_string());
         api_msg.role = msg.role.clone();
         api_messages.push(api_msg);
@@ -4459,6 +4704,151 @@ fn is_builtin_preset_modified(preset_id: String) -> bool {
     path.exists()
 }
 
+// Quick Replies Commands
+
+fn get_quick_replies_path() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/quick_replies.json")
+}
+
+fn load_quick_replies() -> QuickRepliesData {
+    let path = get_quick_replies_path();
+    match fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(_) => QuickRepliesData::default(),
+    }
+}
+
+fn save_quick_replies(data: &QuickRepliesData) -> Result<(), String> {
+    let path = get_quick_replies_path();
+
+    // Create parent directory if it doesn't exist
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
+
+    let content = serde_json::to_string_pretty(data)
+        .map_err(|e| format!("Failed to serialize quick replies: {}", e))?;
+
+    fs::write(&path, content)
+        .map_err(|e| format!("Failed to write quick replies: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_quick_replies() -> Result<Vec<QuickReply>, String> {
+    Ok(load_quick_replies().replies)
+}
+
+#[tauri::command]
+fn add_quick_reply(name: String, content: String, category: String) -> Result<QuickReply, String> {
+    let mut data = load_quick_replies();
+
+    // Generate unique ID
+    let id = uuid::Uuid::new_v4().to_string();
+
+    // Determine order (append to end)
+    let order = data.replies.iter().map(|r| r.order).max().unwrap_or(0) + 1;
+
+    let quick_reply = QuickReply {
+        id: id.clone(),
+        name,
+        content,
+        category,
+        order,
+    };
+
+    data.replies.push(quick_reply.clone());
+    save_quick_replies(&data)?;
+
+    Ok(quick_reply)
+}
+
+#[tauri::command]
+fn update_quick_reply(
+    id: String,
+    name: String,
+    content: String,
+    category: String,
+) -> Result<(), String> {
+    let mut data = load_quick_replies();
+
+    let reply = data
+        .replies
+        .iter_mut()
+        .find(|r| r.id == id)
+        .ok_or_else(|| "Quick reply not found".to_string())?;
+
+    reply.name = name;
+    reply.content = content;
+    reply.category = category;
+
+    save_quick_replies(&data)
+}
+
+#[tauri::command]
+fn delete_quick_reply(id: String) -> Result<(), String> {
+    let mut data = load_quick_replies();
+    data.replies.retain(|r| r.id != id);
+    save_quick_replies(&data)
+}
+
+#[tauri::command]
+fn reorder_quick_replies(reply_ids: Vec<String>) -> Result<(), String> {
+    let mut data = load_quick_replies();
+
+    // Update order based on position in array
+    for (index, id) in reply_ids.iter().enumerate() {
+        if let Some(reply) = data.replies.iter_mut().find(|r| r.id == *id) {
+            reply.order = index as i32;
+        }
+    }
+
+    // Sort by new order
+    data.replies.sort_by_key(|r| r.order);
+
+    save_quick_replies(&data)
+}
+
+#[tauri::command]
+fn process_quick_reply_template(template: String) -> Result<String, String> {
+    // Process template variables like {{char}}, {{user}}, etc.
+    let character = get_active_character();
+    let roleplay = load_roleplay_settings(&character.id);
+
+    let mut result = template;
+
+    // Replace character name
+    result = result.replace("{{char}}", &character.name);
+
+    // Replace user name
+    if let Some(persona_name) = &roleplay.persona_name {
+        result = result.replace("{{user}}", persona_name);
+    } else {
+        result = result.replace("{{user}}", "User");
+    }
+
+    // Replace date/time
+    let now = chrono::Local::now();
+    result = result.replace("{{date}}", &now.format("%Y-%m-%d").to_string());
+    result = result.replace("{{time}}", &now.format("%H:%M:%S").to_string());
+
+    // Character info
+    if !character.description.is_empty() {
+        result = result.replace("{{description}}", &character.description);
+    }
+    if !character.personality.is_empty() {
+        result = result.replace("{{personality}}", &character.personality);
+    }
+    if !character.scenario.is_empty() {
+        result = result.replace("{{scenario}}", &character.scenario);
+    }
+
+    Ok(result)
+}
+
 #[tauri::command]
 fn restore_builtin_preset(preset_id: String) -> Result<PromptPreset, String> {
     // Verify it's a built-in preset
@@ -4624,6 +5014,61 @@ fn get_token_count(character_id: Option<String>, current_input: String) -> Resul
         message_history: history_tokens,
         current_input: input_tokens,
         estimated_max_tokens,
+    })
+}
+
+#[derive(Debug, Serialize)]
+struct ContextStatus {
+    total_tokens: usize,
+    context_limit: usize,
+    percentage_used: f64,
+    pruning_enabled: bool,
+    messages_pruned: usize,
+    total_messages: usize,
+    warning_level: String, // "none", "warning", "critical"
+}
+
+#[tauri::command]
+fn get_context_status(character_id: Option<String>) -> Result<ContextStatus, String> {
+    let character = if let Some(id) = character_id {
+        load_character(&id).ok_or_else(|| "Character not found".to_string())?
+    } else {
+        get_active_character()
+    };
+
+    let history = load_history(&character.id);
+    let settings = load_roleplay_settings(&character.id);
+    let config = get_api_config();
+
+    // Get token breakdown
+    let breakdown = get_token_count(Some(character.id.clone()), String::new())?;
+
+    let percentage_used = (breakdown.total as f64 / config.context_limit as f64) * 100.0;
+
+    let warning_level = if percentage_used >= 90.0 {
+        "critical".to_string()
+    } else if percentage_used >= 75.0 {
+        "warning".to_string()
+    } else {
+        "none".to_string()
+    };
+
+    // Calculate how many messages would be pruned
+    let messages_pruned = if settings.context_pruning_enabled {
+        let pruned = prune_history_for_context(&history.messages, &[], &settings);
+        history.messages.len().saturating_sub(pruned.len())
+    } else {
+        0
+    };
+
+    Ok(ContextStatus {
+        total_tokens: breakdown.total,
+        context_limit: config.context_limit,
+        percentage_used,
+        pruning_enabled: settings.context_pruning_enabled,
+        messages_pruned,
+        total_messages: history.messages.len(),
+        warning_level,
     })
 }
 
@@ -6041,6 +6486,8 @@ pub fn run() {
             get_api_config,
             update_sampling_settings,
             update_character_sampling_settings,
+            get_theme_config,
+            save_theme,
             get_chat_history,
             clear_chat_history,
             truncate_history_from,
@@ -6100,7 +6547,14 @@ pub fn run() {
             duplicate_preset,
             is_builtin_preset_modified,
             restore_builtin_preset,
+            get_quick_replies,
+            add_quick_reply,
+            update_quick_reply,
+            delete_quick_reply,
+            reorder_quick_replies,
+            process_quick_reply_template,
             get_token_count,
+            get_context_status,
             add_world_info_entry,
             update_world_info_entry,
             delete_world_info_entry,
