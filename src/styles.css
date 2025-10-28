@@ -172,6 +172,37 @@ select option {
   align-items: center;
 }
 
+.window-controls {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
+}
+
+.window-control-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  padding: 0;
+}
+
+.window-control-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.window-control-btn.close:hover {
+  background-color: #e81123;
+  color: white;
+}
+
 .character-display {
   display: flex;
   align-items: center;
@@ -4351,7 +4382,7 @@ body.drag-over {
 .layout-spacious .main-panel {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 

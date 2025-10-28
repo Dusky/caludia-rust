@@ -1,4 +1,5 @@
 const { invoke } = window.__TAURI__.core;
+const appWindow = window.__TAURI__.window.getCurrent();
 
 // Track app start time for loading overlay
 window.appStartTime = Date.now();
@@ -9404,6 +9405,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Quick Replies
   setupQuickReplies();
+
+  // Window Controls
+  const minimizeBtn = document.getElementById('minimize-btn');
+  const maximizeBtn = document.getElementById('maximize-btn');
+  const closeBtn_window = document.getElementById('close-btn');
+
+  if (minimizeBtn) {
+    minimizeBtn.addEventListener('click', async () => {
+      await appWindow.minimize();
+    });
+  }
+
+  if (maximizeBtn) {
+    maximizeBtn.addEventListener('click', async () => {
+      const isMaximized = await appWindow.isMaximized();
+      if (isMaximized) {
+        await appWindow.unmaximize();
+      } else {
+        await appWindow.maximize();
+      }
+    });
+  }
+
+  if (closeBtn_window) {
+    closeBtn_window.addEventListener('click', async () => {
+      await appWindow.close();
+    });
+  }
 
   // Theme System - use new theme system
   initializeTheme();
