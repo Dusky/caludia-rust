@@ -422,7 +422,8 @@ const themes = {
   }
 };
 
-// Apply theme
+// Apply theme (OLD SYSTEM - Commented out, using new theme system below)
+/*
 function applyTheme(themeName) {
   const theme = themes[themeName];
   if (!theme) return;
@@ -459,6 +460,7 @@ function loadSavedTheme() {
   }
   applyTheme(savedTheme);
 }
+*/
 
 // Toast Notification System
 const toastQueue = [];
@@ -7929,6 +7931,16 @@ async function loadExistingConfig() {
   }
 }
 
+// Failsafe: Remove loading overlay after 5 seconds no matter what
+setTimeout(() => {
+  const loadingOverlay = document.getElementById('app-loading');
+  if (loadingOverlay && !loadingOverlay.classList.contains('hidden')) {
+    console.warn('Loading took too long, force-removing overlay');
+    loadingOverlay.classList.add('hidden');
+    setTimeout(() => loadingOverlay.remove(), 300);
+  }
+}, 5000);
+
 // Initialize app
 window.addEventListener('DOMContentLoaded', () => {
   messageInput = document.getElementById('message-input');
@@ -8294,7 +8306,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setStatus('Ready');
 
   // Load saved preferences before anything else
-  loadSavedTheme();
+  initializeTheme();
   loadSavedViewMode();
   loadSavedFontSize();
   loadSavedLayoutMode();
@@ -8321,7 +8333,20 @@ window.addEventListener('DOMContentLoaded', () => {
   // Setup keyboard shortcuts modal
   setupShortcutsModal();
 
-  loadExistingConfig();
+  // Load existing config - wrapped to catch errors
+  (async () => {
+    try {
+      await loadExistingConfig();
+    } catch (error) {
+      console.error('Fatal error during initialization:', error);
+      // Remove loading overlay even if initialization fails
+      const loadingOverlay = document.getElementById('app-loading');
+      if (loadingOverlay) {
+        loadingOverlay.classList.add('hidden');
+        setTimeout(() => loadingOverlay.remove(), 300);
+      }
+    }
+  })();
 });
 
 // ============================================================================
@@ -9380,7 +9405,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Quick Replies
   setupQuickReplies();
 
-  // Theme System
+  // Theme System - use new theme system
   initializeTheme();
 });
 

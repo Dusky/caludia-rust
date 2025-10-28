@@ -2450,8 +2450,8 @@ fn prune_history_for_context(
     current_context: &[Message],
     settings: &RoleplaySettings,
 ) -> Vec<Message> {
-    let config = get_api_config();
-    let context_limit = config.context_limit;
+    let config = get_api_config().unwrap_or_default();
+    let context_limit = config.context_limit as usize;
     let reserve_tokens = settings.context_reserve_tokens;
     let min_messages = settings.context_min_messages;
 
@@ -4673,14 +4673,20 @@ fn process_quick_reply_template(template: String) -> Result<String, String> {
     result = result.replace("{{time}}", &now.format("%H:%M:%S").to_string());
 
     // Character info
-    if !character.description.is_empty() {
-        result = result.replace("{{description}}", &character.description);
+    if let Some(description) = &character.description {
+        if !description.is_empty() {
+            result = result.replace("{{description}}", description);
+        }
     }
-    if !character.personality.is_empty() {
-        result = result.replace("{{personality}}", &character.personality);
+    if let Some(personality) = &character.personality {
+        if !personality.is_empty() {
+            result = result.replace("{{personality}}", personality);
+        }
     }
-    if !character.scenario.is_empty() {
-        result = result.replace("{{scenario}}", &character.scenario);
+    if let Some(scenario) = &character.scenario {
+        if !scenario.is_empty() {
+            result = result.replace("{{scenario}}", scenario);
+        }
     }
 
     Ok(result)
@@ -4875,7 +4881,7 @@ fn get_context_status(character_id: Option<String>) -> Result<ContextStatus, Str
 
     let history = load_history(&character.id);
     let settings = load_roleplay_settings(&character.id);
-    let config = get_api_config();
+    let config = get_api_config().unwrap_or_default();
 
     // Get token breakdown
     let breakdown = get_token_count(Some(character.id.clone()), String::new())?;
@@ -4900,7 +4906,7 @@ fn get_context_status(character_id: Option<String>) -> Result<ContextStatus, Str
 
     Ok(ContextStatus {
         total_tokens: breakdown.total,
-        context_limit: config.context_limit,
+        context_limit: config.context_limit as usize,
         percentage_used,
         pruning_enabled: settings.context_pruning_enabled,
         messages_pruned,
