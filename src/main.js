@@ -9708,7 +9708,7 @@ async function toggleThemeMode() {
   currentTheme.mode = newMode;
 
   try {
-    await invoke('save_theme', currentTheme);
+    await invoke('save_theme', { config: currentTheme });
     applyTheme(currentTheme);
     showSuccess('Theme Updated', `Switched to ${newMode} mode`);
   } catch (error) {
@@ -9723,7 +9723,7 @@ async function updateAccentColor(color) {
   currentTheme.accent_color = color;
 
   try {
-    await invoke('save_theme', currentTheme);
+    await invoke('save_theme', { config: currentTheme });
     applyTheme(currentTheme);
   } catch (error) {
     console.error('Failed to save theme:', error);
@@ -9738,7 +9738,7 @@ async function updateFontSettings(fontFamily, fontSize) {
   if (fontSize) currentTheme.font_size = fontSize;
 
   try {
-    await invoke('save_theme', currentTheme);
+    await invoke('save_theme', { config: currentTheme });
     applyTheme(currentTheme);
   } catch (error) {
     console.error('Failed to save theme:', error);
@@ -9891,7 +9891,7 @@ function openThemeSettings() {
       // Apply the color immediately
       currentTheme.accent_color = color;
       try {
-        await invoke('save_theme', currentTheme);
+        await invoke('save_theme', { config: currentTheme });
         applyTheme(currentTheme);
         showSuccess('Color Changed', `Applied ${btn.title} accent color`);
       } catch (error) {
@@ -9921,7 +9921,7 @@ function openThemeSettings() {
     };
 
     try {
-      await invoke('save_theme', defaultTheme);
+      await invoke('save_theme', { config: defaultTheme });
       currentTheme = defaultTheme;
       applyTheme(defaultTheme);
       modal.remove();
@@ -9938,7 +9938,7 @@ function openThemeSettings() {
     currentTheme.font_size = parseInt(fontSizeSlider.value);
 
     try {
-      await invoke('save_theme', currentTheme);
+      await invoke('save_theme', { config: currentTheme });
       applyTheme(currentTheme);
       modal.remove();
       showSuccess('Theme Applied', 'Your theme settings have been saved');
