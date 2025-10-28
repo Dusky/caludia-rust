@@ -223,6 +223,152 @@
       </main>
 
       <!-- Roleplay sidebar overlay -->
+
+      <!-- Settings overlay backdrop -->
+      <!-- Quick Replies Bar -->
+      </div>
+
+      <footer class="input-container" role="contentinfo">
+        <form id="chat-form" class="chat-form">
+          <textarea
+            id="message-input"
+            placeholder="Ask me anything..."
+            rows="1"
+            autocomplete="off"
+            aria-label="Message input"
+          ></textarea>
+          <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <path d="M3 10L17 3L13 10L17 17L3 10Z" fill="currentColor"/>
+            </svg>
+          </button>
+        </form>
+
+        <!-- @Mention Autocomplete Dropdown -->
+        <div id="mention-autocomplete" class="mention-autocomplete" style="display: none;">
+          <!-- Autocomplete suggestions will be populated here -->
+        </div>
+
+        <!-- Group Reply Controls (shown only for group chats) -->
+        <div id="group-reply-controls" class="group-reply-controls" style="display: none;">
+          <div class="group-reply-mode">
+            <label class="group-reply-label">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M8 2C5.79086 2 4 3.79086 4 6C4 8.20914 5.79086 10 8 10C10.2091 10 12 8.20914 12 6C12 3.79086 10.2091 2 8 2Z" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M3 14C3 11.7909 4.79086 10 7 10H9C11.2091 10 13 11.7909 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              Reply as:
+            </label>
+            <select id="group-reply-character" class="group-reply-select">
+              <option value="">Select character...</option>
+            </select>
+          </div>
+          <div class="group-reply-auto">
+            <label class="toggle-label">
+              <input type="checkbox" id="group-auto-mode-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Auto-mode</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="status-bar">
+          <span id="status-text" class="status-text" role="status" aria-live="polite">Ready</span>
+          <div id="token-counter" class="token-counter">
+            <span id="token-count-total" class="token-count" role="status" aria-live="polite">0 tokens</span>
+            <button id="token-details-btn" class="token-details-btn" title="Show token breakdown" aria-label="Show detailed token breakdown" aria-expanded="false">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M8 7v4M8 5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <!-- Token Breakdown Tooltip -->
+        <div id="token-breakdown" class="token-breakdown" style="display: none;">
+          <div class="token-breakdown-header">Token Breakdown</div>
+          <div class="token-breakdown-list">
+            <div class="token-breakdown-item">
+              <span>System Prompt:</span>
+              <span id="token-system">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Preset Instructions:</span>
+              <span id="token-preset">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Persona:</span>
+              <span id="token-persona">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>World Info:</span>
+              <span id="token-worldinfo">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Author's Note:</span>
+              <span id="token-authorsnote">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Message Examples:</span>
+              <span id="token-examples">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Message History:</span>
+              <span id="token-history">0</span>
+            </div>
+            <div class="token-breakdown-item">
+              <span>Current Input:</span>
+              <span id="token-input">0</span>
+            </div>
+            <div class="token-breakdown-total">
+              <span>Total:</span>
+              <span id="token-total-detail">0</span>
+            </div>
+          </div>
+        </div>
+      </footer>
+      </div>
+      <!-- End Main Panel -->
+
+      <!-- Right Sidebar - Roleplay Tools (Spacious Mode) -->
+      <aside class="right-sidebar" role="complementary" aria-label="Roleplay tools">
+        <div class="sidebar-header">
+          <h3>Roleplay Tools</h3>
+          <button id="toggle-right-sidebar" class="icon-btn" title="Collapse sidebar" aria-label="Collapse roleplay tools sidebar" aria-expanded="true" aria-controls="roleplay-sidebar-tab">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M10 4L6 8L10 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="right-sidebar-content">
+          <!-- Group Members Panel (shown only for group chats) -->
+          <div id="group-members-panel" class="group-members-panel" style="display: none;">
+            <div class="group-members-header">
+              <h3>Group Members</h3>
+              <span id="group-member-count" class="member-count">0 members</span>
+            </div>
+            <div class="group-members-list" id="group-members-list">
+              <!-- Members will be populated here -->
+            </div>
+            <div class="group-members-actions">
+              <button id="add-member-btn" class="secondary-btn-sm">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Add Member
+              </button>
+            </div>
+          </div>
+
+          <!-- Roleplay panel will be moved here in spacious mode -->
+          <div id="roleplay-sidebar-tab">
+            <!-- Roleplay tools will be moved here -->
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- Overlays and Panels moved outside grid -->
       <div class="roleplay-overlay" id="roleplay-overlay" aria-hidden="true"></div>
 
       <!-- Roleplay sidebar (left) -->
@@ -452,8 +598,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Settings overlay backdrop -->
       <div class="settings-overlay" id="settings-overlay" aria-hidden="true"></div>
 
       <div class="settings-panel" id="settings-panel" role="dialog" aria-labelledby="settings-panel-title" aria-modal="true">
@@ -922,7 +1066,6 @@
         </div>
       </div>
 
-      <!-- Quick Replies Bar -->
       <div id="quick-replies-bar" class="quick-replies-bar" style="display: none;">
         <div class="quick-replies-header">
           <span class="quick-replies-title">Quick Replies</span>
@@ -943,147 +1086,6 @@
         <div id="quick-replies-list" class="quick-replies-list">
           <!-- Quick reply buttons will be populated here -->
         </div>
-      </div>
-
-      <footer class="input-container" role="contentinfo">
-        <form id="chat-form" class="chat-form">
-          <textarea
-            id="message-input"
-            placeholder="Ask me anything..."
-            rows="1"
-            autocomplete="off"
-            aria-label="Message input"
-          ></textarea>
-          <button type="submit" id="send-btn" class="send-btn" aria-label="Send message">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <path d="M3 10L17 3L13 10L17 17L3 10Z" fill="currentColor"/>
-            </svg>
-          </button>
-        </form>
-
-        <!-- @Mention Autocomplete Dropdown -->
-        <div id="mention-autocomplete" class="mention-autocomplete" style="display: none;">
-          <!-- Autocomplete suggestions will be populated here -->
-        </div>
-
-        <!-- Group Reply Controls (shown only for group chats) -->
-        <div id="group-reply-controls" class="group-reply-controls" style="display: none;">
-          <div class="group-reply-mode">
-            <label class="group-reply-label">
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                <path d="M8 2C5.79086 2 4 3.79086 4 6C4 8.20914 5.79086 10 8 10C10.2091 10 12 8.20914 12 6C12 3.79086 10.2091 2 8 2Z" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M3 14C3 11.7909 4.79086 10 7 10H9C11.2091 10 13 11.7909 13 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              Reply as:
-            </label>
-            <select id="group-reply-character" class="group-reply-select">
-              <option value="">Select character...</option>
-            </select>
-          </div>
-          <div class="group-reply-auto">
-            <label class="toggle-label">
-              <input type="checkbox" id="group-auto-mode-toggle" class="toggle-input">
-              <span class="toggle-slider"></span>
-              <span class="toggle-text">Auto-mode</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="status-bar">
-          <span id="status-text" class="status-text" role="status" aria-live="polite">Ready</span>
-          <div id="token-counter" class="token-counter">
-            <span id="token-count-total" class="token-count" role="status" aria-live="polite">0 tokens</span>
-            <button id="token-details-btn" class="token-details-btn" title="Show token breakdown" aria-label="Show detailed token breakdown" aria-expanded="false">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M8 7v4M8 5h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-        <!-- Token Breakdown Tooltip -->
-        <div id="token-breakdown" class="token-breakdown" style="display: none;">
-          <div class="token-breakdown-header">Token Breakdown</div>
-          <div class="token-breakdown-list">
-            <div class="token-breakdown-item">
-              <span>System Prompt:</span>
-              <span id="token-system">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>Preset Instructions:</span>
-              <span id="token-preset">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>Persona:</span>
-              <span id="token-persona">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>World Info:</span>
-              <span id="token-worldinfo">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>Author's Note:</span>
-              <span id="token-authorsnote">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>Message Examples:</span>
-              <span id="token-examples">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>Message History:</span>
-              <span id="token-history">0</span>
-            </div>
-            <div class="token-breakdown-item">
-              <span>Current Input:</span>
-              <span id="token-input">0</span>
-            </div>
-            <div class="token-breakdown-total">
-              <span>Total:</span>
-              <span id="token-total-detail">0</span>
-            </div>
-          </div>
-        </div>
-      </footer>
-      </div>
-      <!-- End Main Panel -->
-
-      <!-- Right Sidebar - Roleplay Tools (Spacious Mode) -->
-      <aside class="right-sidebar" role="complementary" aria-label="Roleplay tools">
-        <div class="sidebar-header">
-          <h3>Roleplay Tools</h3>
-          <button id="toggle-right-sidebar" class="icon-btn" title="Collapse sidebar" aria-label="Collapse roleplay tools sidebar" aria-expanded="true" aria-controls="roleplay-sidebar-tab">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path d="M10 4L6 8L10 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </button>
-        </div>
-        <div class="right-sidebar-content">
-          <!-- Group Members Panel (shown only for group chats) -->
-          <div id="group-members-panel" class="group-members-panel" style="display: none;">
-            <div class="group-members-header">
-              <h3>Group Members</h3>
-              <span id="group-member-count" class="member-count">0 members</span>
-            </div>
-            <div class="group-members-list" id="group-members-list">
-              <!-- Members will be populated here -->
-            </div>
-            <div class="group-members-actions">
-              <button id="add-member-btn" class="secondary-btn-sm">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M7 3v8M3 7h8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-                Add Member
-              </button>
-            </div>
-          </div>
-
-          <!-- Roleplay panel will be moved here in spacious mode -->
-          <div id="roleplay-sidebar-tab">
-            <!-- Roleplay tools will be moved here -->
-          </div>
-        </div>
-      </aside>
-    </div>
 
     <!-- Toast Container -->
     <div id="toast-container" class="toast-container" role="region" aria-live="polite" aria-label="Notifications"></div>
