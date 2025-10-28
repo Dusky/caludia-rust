@@ -17,7 +17,8 @@
       "WebSearch",
       "Bash(python3:*)",
       "Bash(npm run tauri:build:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "Bash(awk:*)"
     ],
     "deny": [],
     "ask": []

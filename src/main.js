@@ -1,5 +1,5 @@
 const { invoke } = window.__TAURI__.core;
-const { appWindow } = window.__TAURI__.window;
+const { getCurrentWindow } = window.__TAURI__.window;
 
 // Track app start time for loading overlay
 window.appStartTime = Date.now();
@@ -3915,16 +3915,18 @@ function handleAvatarRemove() {
 // App controls
 function setupAppControls() {
   // Window controls
+  const currentWindow = getCurrentWindow();
+
   document.getElementById('window-minimize').addEventListener('click', async () => {
-    await appWindow.minimize();
+    await currentWindow.minimize();
   });
 
   document.getElementById('window-maximize').addEventListener('click', async () => {
-    await appWindow.toggleMaximize();
+    await currentWindow.toggleMaximize();
   });
 
   document.getElementById('window-close').addEventListener('click', async () => {
-    await appWindow.close();
+    await currentWindow.close();
   });
 
   document.getElementById('settings-btn').addEventListener('click', showSettings);
