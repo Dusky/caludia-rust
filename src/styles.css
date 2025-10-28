@@ -310,6 +310,37 @@ select option {
   position: relative;
 }
 
+/* Window Controls */
+.window-controls {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 8px;
+}
+
+.window-control-btn {
+  all: unset;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 32px;
+  cursor: pointer;
+  background: transparent;
+  transition: background-color 0.2s ease;
+  color: var(--text-secondary);
+}
+
+.window-control-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.window-close-btn:hover {
+  background: #e81123;
+  color: #ffffff;
+}
+
 .character-select {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
