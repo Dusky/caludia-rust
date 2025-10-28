@@ -9872,12 +9872,13 @@ function openThemeSettings() {
     }
   });
 
-  // Preset colors
+  // Preset colors - apply immediately
   modal.querySelectorAll('.preset-color-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const color = btn.dataset.color;
       colorPicker.value = color;
       colorHex.value = color;
+
       // Update all preset button borders
       modal.querySelectorAll('.preset-color-btn').forEach(b => {
         b.style.borderColor = 'transparent';
@@ -9886,6 +9887,17 @@ function openThemeSettings() {
       // Highlight selected button
       btn.style.borderColor = 'var(--text-primary)';
       btn.style.borderWidth = '3px';
+
+      // Apply the color immediately
+      currentTheme.accent_color = color;
+      try {
+        await invoke('save_theme', currentTheme);
+        applyTheme(currentTheme);
+        showSuccess('Color Changed', `Applied ${btn.title} accent color`);
+      } catch (error) {
+        console.error('Failed to save theme:', error);
+        showError('Theme Error', 'Failed to apply preset color');
+      }
     });
   });
 
