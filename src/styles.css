@@ -172,6 +172,18 @@ select option {
   align-items: center;
 }
 
+/* Disable drag region on interactive elements */
+.app-header button,
+.app-header select,
+.app-header input,
+.character-display,
+.header-left-controls,
+.character-controls,
+.window-controls {
+  /* Remove data-tauri-drag-region effect for interactive elements */
+  -webkit-app-region: no-drag;
+}
+
 .character-display {
   display: flex;
   align-items: center;
