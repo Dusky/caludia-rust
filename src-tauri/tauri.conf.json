@@ -21,7 +21,8 @@
         "transparent": false,
         "alwaysOnTop": false,
         "center": true,
-        "devtools": true
+        "devtools": true,
+        "titleBarStyle": "Visible"
       }
     ],
     "security": {
