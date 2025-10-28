@@ -4185,13 +4185,40 @@ function setupAppControls() {
 
   // Left sidebar toggle
   const toggleLeftSidebar = document.getElementById('toggle-left-sidebar');
+  console.log('[Sidebar] Toggle button found:', !!toggleLeftSidebar);
+
   if (toggleLeftSidebar) {
     toggleLeftSidebar.addEventListener('click', () => {
+      console.log('[Sidebar] Toggle button clicked');
       const leftSidebar = document.querySelector('.left-sidebar');
       const appContainer = document.querySelector('.app-container');
+      console.log('[Sidebar] Elements found - sidebar:', !!leftSidebar, 'container:', !!appContainer);
+
       if (leftSidebar && appContainer) {
+        // Log state before toggle
+        const beforeClasses = {
+          sidebar: leftSidebar.className,
+          container: appContainer.className
+        };
+        const beforeGrid = window.getComputedStyle(appContainer).gridTemplateColumns;
+        console.log('[Sidebar] Before toggle - classes:', beforeClasses);
+        console.log('[Sidebar] Before toggle - grid:', beforeGrid);
+
         const isCollapsed = leftSidebar.classList.toggle('collapsed');
         appContainer.classList.toggle('left-sidebar-collapsed');
+
+        // Log state after toggle
+        const afterClasses = {
+          sidebar: leftSidebar.className,
+          container: appContainer.className
+        };
+        // Use setTimeout to get computed styles after they've been applied
+        setTimeout(() => {
+          const afterGrid = window.getComputedStyle(appContainer).gridTemplateColumns;
+          console.log('[Sidebar] After toggle - classes:', afterClasses);
+          console.log('[Sidebar] After toggle - grid:', afterGrid);
+          console.log('[Sidebar] isCollapsed:', isCollapsed);
+        }, 50);
 
         // Update aria-expanded and aria-label
         toggleLeftSidebar.setAttribute('aria-expanded', !isCollapsed);
@@ -4208,14 +4235,19 @@ function setupAppControls() {
 
         // Save preference
         localStorage.setItem('left-sidebar-collapsed', isCollapsed);
+      } else {
+        console.error('[Sidebar] Required elements not found!');
       }
     });
 
     // Restore saved state
     const savedLeftCollapsed = localStorage.getItem('left-sidebar-collapsed') === 'true';
+    console.log('[Sidebar] Restoring saved state:', savedLeftCollapsed);
     if (savedLeftCollapsed) {
       toggleLeftSidebar.click();
     }
+  } else {
+    console.error('[Sidebar] Toggle button not found in DOM!');
   }
 }
 
