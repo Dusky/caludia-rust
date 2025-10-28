@@ -2969,7 +2969,7 @@ body.view-comfortable .message-content pre {
 }
 
 /* Mobile phones and small tablets (landscape) - 481px to 768px */
-@media (min-width: 481px) and (max-width: 768px) {
+@media (min-width: 481px) and (max-width: 767px) {
   .app-header {
     padding: 10px 14px;
   }
@@ -2992,8 +2992,8 @@ body.view-comfortable .message-content pre {
   }
 }
 
-/* Medium tablets and small windows - 600px to 768px */
-@media (min-width: 600px) and (max-width: 768px) {
+/* Medium tablets and small windows - 600px to 767px */
+@media (min-width: 600px) and (max-width: 767px) {
   /* Reduce roleplay panel width on tablets */
   .roleplay-panel {
     max-width: 400px;
@@ -3005,8 +3005,8 @@ body.view-comfortable .message-content pre {
   }
 }
 
-/* Tablets - 768px and below */
-@media (max-width: 768px) {
+/* Mobile - 767px and below */
+@media (max-width: 767px) {
   .feature-badges {
     display: none; /* Hide on tablets to save space */
   }
@@ -4362,9 +4362,19 @@ body.drag-over {
   transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* When left sidebar is collapsed */
+.layout-spacious .app-container.left-sidebar-collapsed {
+  grid-template-columns: 48px 1fr 360px;
+}
+
 /* When right sidebar is collapsed */
 .layout-spacious .app-container.right-sidebar-collapsed {
   grid-template-columns: 240px 1fr 48px;
+}
+
+/* When both sidebars are collapsed */
+.layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+  grid-template-columns: 48px 1fr 48px;
 }
 
 .layout-spacious .main-panel {
@@ -4779,24 +4789,7 @@ body.drag-over {
   padding: 0;
 }
 
-.layout-spacious .app-container.left-sidebar-collapsed {
-  grid-template-columns: 48px 1fr 280px;
-}
-
-/* Both sidebars collapsed */
-.layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
-  grid-template-columns: 48px 1fr 48px;
-}
-
-@media (max-width: 1200px) {
-  .layout-spacious .app-container.left-sidebar-collapsed {
-    grid-template-columns: 48px 1fr 200px;
-  }
-
-  .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
-    grid-template-columns: 48px 1fr 48px;
-  }
-}
+/* Duplicate rules removed - now defined in base spacious layout section above */
 
 /* ==========================================
    SPACIOUS MODE - HEADER ADJUSTMENTS
@@ -5035,6 +5028,7 @@ body.drag-over {
 
   .layout-spacious .left-sidebar {
     left: -280px;
+    width: 280px;
     transition: left 0.3s ease;
   }
 
@@ -5044,6 +5038,7 @@ body.drag-over {
 
   .layout-spacious .right-sidebar {
     right: -320px;
+    width: 320px;
     transition: right 0.3s ease;
   }
 
@@ -5132,7 +5127,8 @@ body.drag-over {
 }
 
 /* Mobile responsiveness for VN mode */
-@media (max-width: 768px) {
+/* Mobile - below 768px */
+@media (max-width: 767px) {
   .view-visual-novel .expression-display-panel {
     position: static;
     width: 100%;
@@ -5148,7 +5144,7 @@ body.drag-over {
   /* Hide spacious layout sidebars completely on mobile */
   .layout-spacious .left-sidebar,
   .layout-spacious .right-sidebar {
-    display: none;
+    display: none !important;
   }
 
   .layout-spacious .app-container {
