@@ -1,5 +1,4 @@
 const { invoke } = window.__TAURI__.core;
-const appWindow = window.__TAURI__.window.getCurrent();
 
 // Track app start time for loading overlay
 window.appStartTime = Date.now();
@@ -9413,12 +9412,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (minimizeBtn) {
     minimizeBtn.addEventListener('click', async () => {
+      const appWindow = window.__TAURI__.window.getCurrent();
       await appWindow.minimize();
     });
   }
 
   if (maximizeBtn) {
     maximizeBtn.addEventListener('click', async () => {
+      const appWindow = window.__TAURI__.window.getCurrent();
       const isMaximized = await appWindow.isMaximized();
       if (isMaximized) {
         await appWindow.unmaximize();
@@ -9430,6 +9431,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (closeBtn_window) {
     closeBtn_window.addEventListener('click', async () => {
+      const appWindow = window.__TAURI__.window.getCurrent();
       await appWindow.close();
     });
   }
