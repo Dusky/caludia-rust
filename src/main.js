@@ -9710,10 +9710,10 @@ async function toggleThemeMode() {
   try {
     await invoke('save_theme', currentTheme);
     applyTheme(currentTheme);
-    showToast(`Switched to ${newMode} mode`, 'success');
+    showSuccess('Theme Updated', `Switched to ${newMode} mode`);
   } catch (error) {
     console.error('Failed to save theme:', error);
-    showToast('Failed to save theme', 'error');
+    showError('Theme Error', 'Failed to save theme');
   }
 }
 
@@ -9727,7 +9727,7 @@ async function updateAccentColor(color) {
     applyTheme(currentTheme);
   } catch (error) {
     console.error('Failed to save theme:', error);
-    showToast('Failed to save theme', 'error');
+    showError('Theme Error', 'Failed to save theme');
   }
 }
 
@@ -9742,13 +9742,13 @@ async function updateFontSettings(fontFamily, fontSize) {
     applyTheme(currentTheme);
   } catch (error) {
     console.error('Failed to save theme:', error);
-    showToast('Failed to save theme', 'error');
+    showError('Theme Error', 'Failed to save theme');
   }
 }
 
 function openThemeSettings() {
   if (!currentTheme) {
-    showToast('Theme not loaded', 'error');
+    showError('Theme Error', 'Theme not loaded');
     return;
   }
 
@@ -9781,16 +9781,28 @@ function openThemeSettings() {
 
         <div style="margin-bottom: 20px;">
           <label for="accent-color" style="display: block; margin-bottom: 8px; font-weight: 600;">Accent Color</label>
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
             <input type="color" id="accent-color" value="${currentTheme.accent_color}" style="width: 60px; height: 40px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;">
             <div style="flex: 1;">
               <input type="text" id="accent-color-hex" value="${currentTheme.accent_color}" placeholder="#6366f1" style="width: 100%; padding: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-family: monospace;">
             </div>
           </div>
-          <div style="display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap;">
-            ${['#6366f1', '#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6'].map(color => `
-              <button class="preset-color-btn" data-color="${color}" style="width: 32px; height: 32px; border-radius: 6px; background: ${color}; border: 2px solid ${currentTheme.accent_color === color ? 'white' : 'transparent'}; cursor: pointer; transition: all 0.15s;"></button>
-            `).join('')}
+          <div style="margin-bottom: 8px;">
+            <label style="display: block; margin-bottom: 6px; font-size: 13px; color: var(--text-secondary); font-weight: 500;">Color Presets</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${[
+                { color: '#6366f1', name: 'Indigo' },
+                { color: '#ef4444', name: 'Red' },
+                { color: '#f59e0b', name: 'Amber' },
+                { color: '#10b981', name: 'Green' },
+                { color: '#3b82f6', name: 'Blue' },
+                { color: '#8b5cf6', name: 'Purple' },
+                { color: '#ec4899', name: 'Pink' },
+                { color: '#14b8a6', name: 'Teal' }
+              ].map(({color, name}) => `
+                <button class="preset-color-btn" data-color="${color}" title="${name}" style="width: 36px; height: 36px; border-radius: 8px; background: ${color}; border: 2px solid ${currentTheme.accent_color === color ? 'var(--text-primary)' : 'transparent'}; cursor: pointer; transition: all 0.15s; box-shadow: 0 2px 4px rgba(0,0,0,0.1);"></button>
+              `).join('')}
+            </div>
           </div>
         </div>
 
@@ -9866,8 +9878,14 @@ function openThemeSettings() {
       const color = btn.dataset.color;
       colorPicker.value = color;
       colorHex.value = color;
-      modal.querySelectorAll('.preset-color-btn').forEach(b => b.style.borderColor = 'transparent');
-      btn.style.borderColor = 'white';
+      // Update all preset button borders
+      modal.querySelectorAll('.preset-color-btn').forEach(b => {
+        b.style.borderColor = 'transparent';
+        b.style.borderWidth = '2px';
+      });
+      // Highlight selected button
+      btn.style.borderColor = 'var(--text-primary)';
+      btn.style.borderWidth = '3px';
     });
   });
 
@@ -9895,9 +9913,9 @@ function openThemeSettings() {
       currentTheme = defaultTheme;
       applyTheme(defaultTheme);
       modal.remove();
-      showToast('Theme reset to default', 'success');
+      showSuccess('Theme Reset', 'Theme reset to default settings');
     } catch (error) {
-      showToast('Failed to reset theme', 'error');
+      showError('Theme Error', 'Failed to reset theme');
     }
   });
 
@@ -9911,9 +9929,9 @@ function openThemeSettings() {
       await invoke('save_theme', currentTheme);
       applyTheme(currentTheme);
       modal.remove();
-      showToast('Theme applied', 'success');
+      showSuccess('Theme Applied', 'Your theme settings have been saved');
     } catch (error) {
-      showToast('Failed to save theme', 'error');
+      showError('Theme Error', 'Failed to save theme settings');
     }
   });
 }
