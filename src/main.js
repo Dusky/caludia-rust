@@ -3930,22 +3930,14 @@ function setupAppControls() {
   });
 
   // Window dragging for Tauri v2 (works on Wayland)
-  const appHeader = document.querySelector('.app-header');
-  if (appHeader) {
-    appHeader.addEventListener('mousedown', async (e) => {
-      // Don't start drag if clicking on interactive elements
+  const titlebar = document.querySelector('.titlebar');
+  if (titlebar) {
+    titlebar.addEventListener('mousedown', async (e) => {
+      // Don't start drag if clicking on window control buttons
       const target = e.target;
-      const isInteractive =
-        target.tagName === 'BUTTON' ||
-        target.tagName === 'INPUT' ||
-        target.tagName === 'SELECT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.closest('button') ||
-        target.closest('select') ||
-        target.closest('input') ||
-        target.closest('textarea');
+      const isButton = target.tagName === 'BUTTON' || target.closest('button');
 
-      if (!isInteractive) {
+      if (!isButton) {
         try {
           await currentWindow.startDragging();
         } catch (error) {
