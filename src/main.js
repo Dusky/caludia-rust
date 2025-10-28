@@ -422,46 +422,6 @@ const themes = {
   }
 };
 
-// Apply theme (OLD SYSTEM - Commented out, using new theme system below)
-/*
-function applyTheme(themeName) {
-  const theme = themes[themeName];
-  if (!theme) return;
-
-  const root = document.documentElement;
-  root.style.setProperty('--bg-primary', theme.bgPrimary);
-  root.style.setProperty('--bg-secondary', theme.bgSecondary);
-  root.style.setProperty('--bg-tertiary', theme.bgTertiary);
-  root.style.setProperty('--text-primary', theme.textPrimary);
-  root.style.setProperty('--text-secondary', theme.textSecondary);
-  root.style.setProperty('--accent', theme.accent);
-  root.style.setProperty('--accent-hover', theme.accentHover);
-  root.style.setProperty('--user-msg', theme.userMsg);
-  root.style.setProperty('--assistant-msg', theme.assistantMsg);
-  root.style.setProperty('--border', theme.border);
-
-  // Update gradient and glow
-  const appContainer = document.querySelector('.app-container');
-  if (appContainer) {
-    appContainer.style.background = theme.gradient;
-    const glow = appContainer.querySelector('::before');
-  }
-
-  // Store preference
-  localStorage.setItem('claudia-theme', themeName);
-}
-
-// Load saved theme
-function loadSavedTheme() {
-  const savedTheme = localStorage.getItem('claudia-theme') || 'dark';
-  const themeSelect = document.getElementById('theme-select');
-  if (themeSelect) {
-    themeSelect.value = savedTheme;
-  }
-  applyTheme(savedTheme);
-}
-*/
-
 // Toast Notification System
 const toastQueue = [];
 let toastContainer;
@@ -743,32 +703,28 @@ const commands = [
   },
   // Theme actions
   {
-    id: 'theme-dark',
-    title: 'Switch to Dark Theme',
-    description: 'Change theme to dark mode',
+    id: 'theme-toggle',
+    title: 'Toggle Dark/Light Theme',
+    description: 'Switch between dark and light mode',
     category: 'Appearance',
     icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M17 10.5A7 7 0 1 1 9.5 3a6 6 0 0 0 7.5 7.5z" stroke="currentColor" stroke-width="1.5"/></svg>`,
     action: () => {
-      applyTheme('dark');
-      document.getElementById('theme-select').value = 'dark';
+      toggleThemeMode();
       closeCommandPalette();
-      showSuccess('Theme Changed', 'Switched to Dark theme');
     },
-    keywords: ['color', 'style']
+    keywords: ['color', 'style', 'dark', 'light']
   },
   {
-    id: 'theme-light',
-    title: 'Switch to Light Theme',
-    description: 'Change theme to light mode',
+    id: 'theme-settings',
+    title: 'Theme Settings',
+    description: 'Customize theme colors and appearance',
     category: 'Appearance',
-    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M10 2v2M10 16v2M18 10h-2M4 10H2M15.66 4.34l-1.41 1.41M5.75 14.25l-1.41 1.41M15.66 15.66l-1.41-1.41M5.75 5.75L4.34 4.34" stroke="currentColor" stroke-width="1.5"/></svg>`,
+    icon: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M10 6v8M6 10h8" stroke="currentColor" stroke-width="1.5"/></svg>`,
     action: () => {
-      applyTheme('light');
-      document.getElementById('theme-select').value = 'light';
+      openThemeSettings();
       closeCommandPalette();
-      showSuccess('Theme Changed', 'Switched to Light theme');
     },
-    keywords: ['color', 'style']
+    keywords: ['color', 'style', 'customize', 'accent']
   }
 ];
 
@@ -4062,11 +4018,11 @@ function setupAppControls() {
     });
   });
 
-  // Setup theme selector
-  const themeSelect = document.getElementById('theme-select');
-  if (themeSelect) {
-    themeSelect.addEventListener('change', (e) => {
-      applyTheme(e.target.value);
+  // Setup theme settings button
+  const openThemeSettingsBtn = document.getElementById('open-theme-settings-btn');
+  if (openThemeSettingsBtn) {
+    openThemeSettingsBtn.addEventListener('click', () => {
+      openThemeSettings();
     });
   }
 
@@ -9400,13 +9356,8 @@ document.addEventListener('DOMContentLoaded', () => {
     autoModeToggle.addEventListener('change', handleGroupAutoModeToggle);
   }
 
-// Quick Replies code to be appended to main.js
-
-  // Quick Replies
+  // Setup quick replies
   setupQuickReplies();
-
-  // Theme System - use new theme system
-  initializeTheme();
 });
 
 // ============================================================================
