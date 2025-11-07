@@ -1319,7 +1319,8 @@ function highlightSettingsMatch(element, term) {
       const match = text.substring(index, index + term.length);
       const after = text.substring(index + term.length);
 
-      label.innerHTML = before + '<span class="settings-search-highlight">' + match + '</span>' + after;
+      // Sanitize text parts to prevent XSS from malicious search terms
+      label.innerHTML = sanitizeText(before) + '<span class="settings-search-highlight">' + sanitizeText(match) + '</span>' + sanitizeText(after);
     }
   });
 }
