@@ -3842,6 +3842,10 @@ async function handleSaveSettings(e) {
   setStatus('Saving configuration...', 'default');
 
   try {
+    // Save sampling parameters first
+    await saveSamplingParameters();
+
+    // Then save API config
     await invoke('save_api_config', { baseUrl, apiKey, model, stream, contextLimit });
 
     // Update cached context limit
@@ -7914,6 +7918,10 @@ async function loadExistingConfig() {
     document.getElementById('models-group').style.display = 'flex';
     document.getElementById('save-settings-btn').disabled = false;
 
+    // Load backend presets and sampling parameters
+    await loadBackendPresets();
+    await loadSamplingParameters();
+
     // Load characters
     await loadCharacters();
   } catch (error) {
@@ -7939,6 +7947,202 @@ async function loadExistingConfig() {
       }, remainingTime);
     }
   }
+}
+
+// ============================================================================
+// BACKEND MANAGEMENT
+// ============================================================================
+
+// Load backend presets into dropdown
+async function loadBackendPresets() {
+  try {
+    const presets = await invoke('get_backend_presets');
+    const select = document.getElementById('backend-preset-select');
+
+    // Clear existing options except "Custom Configuration"
+    select.innerHTML = '<option value="">Custom Configuration</option>';
+
+    // Add presets
+    presets.forEach(preset => {
+      const option = document.createElement('option');
+      option.value = preset.name;
+      option.textContent = preset.name;
+      option.dataset.backend = JSON.stringify(preset);
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Failed to load backend presets:', error);
+  }
+}
+
+// Apply backend preset when selected
+async function handleBackendPresetChange(e) {
+  const select = e.target;
+  const selectedOption = select.options[select.selectedIndex];
+
+  if (!selectedOption.dataset.backend) {
+    return; // "Custom Configuration" selected
+  }
+
+  try {
+    const preset = JSON.parse(selectedOption.dataset.backend);
+
+    // Update UI fields
+    document.getElementById('api-base-url').value = preset.base_url;
+
+    // Apply preset to backend
+    await invoke('apply_backend_preset', { presetName: preset.name });
+
+    // Show success message
+    const validationMsg = document.getElementById('validation-message');
+    validationMsg.textContent = `${preset.name} preset applied. Update API key and validate.`;
+    validationMsg.className = 'validation-message success';
+
+    setTimeout(() => {
+      validationMsg.textContent = '';
+      validationMsg.className = 'validation-message';
+    }, 3000);
+  } catch (error) {
+    console.error('Failed to apply backend preset:', error);
+    const validationMsg = document.getElementById('validation-message');
+    validationMsg.textContent = `Failed to apply preset: ${error}`;
+    validationMsg.className = 'validation-message error';
+  }
+}
+
+// Load current sampling parameters
+async function loadSamplingParameters() {
+  try {
+    const params = await invoke('get_sampling_params');
+
+    // Update sliders and displays
+    document.getElementById('temperature-slider').value = params.temperature;
+    document.getElementById('temperature-value').textContent = params.temperature.toFixed(1);
+
+    document.getElementById('top-p-slider').value = params.top_p;
+    document.getElementById('top-p-value').textContent = params.top_p.toFixed(2);
+
+    document.getElementById('top-k-input').value = params.top_k;
+    document.getElementById('top-k-value').textContent = params.top_k;
+
+    document.getElementById('max-tokens-input').value = params.max_tokens;
+    document.getElementById('max-tokens-value').textContent = params.max_tokens;
+
+    // Advanced parameters
+    if (params.min_p !== null && params.min_p !== undefined) {
+      document.getElementById('min-p-slider').value = params.min_p;
+      document.getElementById('min-p-value').textContent = params.min_p.toFixed(2);
+    }
+
+    if (params.repetition_penalty !== null && params.repetition_penalty !== undefined) {
+      document.getElementById('repetition-penalty-slider').value = params.repetition_penalty;
+      document.getElementById('repetition-penalty-value').textContent = params.repetition_penalty.toFixed(2);
+    }
+
+    if (params.frequency_penalty !== null && params.frequency_penalty !== undefined) {
+      document.getElementById('frequency-penalty-slider').value = params.frequency_penalty;
+      document.getElementById('frequency-penalty-value').textContent = params.frequency_penalty.toFixed(1);
+    }
+
+    if (params.presence_penalty !== null && params.presence_penalty !== undefined) {
+      document.getElementById('presence-penalty-slider').value = params.presence_penalty;
+      document.getElementById('presence-penalty-value').textContent = params.presence_penalty.toFixed(1);
+    }
+  } catch (error) {
+    console.error('Failed to load sampling parameters:', error);
+  }
+}
+
+// Save sampling parameters
+async function saveSamplingParameters() {
+  try {
+    const params = {
+      temperature: parseFloat(document.getElementById('temperature-slider').value),
+      top_p: parseFloat(document.getElementById('top-p-slider').value),
+      top_k: parseInt(document.getElementById('top-k-input').value),
+      max_tokens: parseInt(document.getElementById('max-tokens-input').value),
+      min_p: parseFloat(document.getElementById('min-p-slider').value) || null,
+      repetition_penalty: parseFloat(document.getElementById('repetition-penalty-slider').value) || null,
+      frequency_penalty: parseFloat(document.getElementById('frequency-penalty-slider').value) || null,
+      presence_penalty: parseFloat(document.getElementById('presence-penalty-slider').value) || null,
+      // These would be added when UI is expanded:
+      top_a: null,
+      typical_p: null,
+      tfs: null,
+      mirostat_mode: null,
+      mirostat_tau: null,
+      mirostat_eta: null,
+      seed: null
+    };
+
+    await invoke('update_sampling_params', { params });
+  } catch (error) {
+    console.error('Failed to save sampling parameters:', error);
+    throw error;
+  }
+}
+
+// Initialize sampling parameter event listeners
+function initializeSamplingControls() {
+  // Temperature slider
+  const tempSlider = document.getElementById('temperature-slider');
+  const tempValue = document.getElementById('temperature-value');
+  tempSlider.addEventListener('input', (e) => {
+    tempValue.textContent = parseFloat(e.target.value).toFixed(1);
+  });
+
+  // Top P slider
+  const topPSlider = document.getElementById('top-p-slider');
+  const topPValue = document.getElementById('top-p-value');
+  topPSlider.addEventListener('input', (e) => {
+    topPValue.textContent = parseFloat(e.target.value).toFixed(2);
+  });
+
+  // Top K input
+  const topKInput = document.getElementById('top-k-input');
+  const topKValue = document.getElementById('top-k-value');
+  topKInput.addEventListener('input', (e) => {
+    topKValue.textContent = e.target.value;
+  });
+
+  // Max tokens input
+  const maxTokensInput = document.getElementById('max-tokens-input');
+  const maxTokensValue = document.getElementById('max-tokens-value');
+  maxTokensInput.addEventListener('input', (e) => {
+    maxTokensValue.textContent = e.target.value;
+  });
+
+  // Min P slider
+  const minPSlider = document.getElementById('min-p-slider');
+  const minPValue = document.getElementById('min-p-value');
+  minPSlider.addEventListener('input', (e) => {
+    minPValue.textContent = parseFloat(e.target.value).toFixed(2);
+  });
+
+  // Repetition penalty slider
+  const repPenSlider = document.getElementById('repetition-penalty-slider');
+  const repPenValue = document.getElementById('repetition-penalty-value');
+  repPenSlider.addEventListener('input', (e) => {
+    repPenValue.textContent = parseFloat(e.target.value).toFixed(2);
+  });
+
+  // Frequency penalty slider
+  const freqPenSlider = document.getElementById('frequency-penalty-slider');
+  const freqPenValue = document.getElementById('frequency-penalty-value');
+  freqPenSlider.addEventListener('input', (e) => {
+    freqPenValue.textContent = parseFloat(e.target.value).toFixed(1);
+  });
+
+  // Presence penalty slider
+  const presPenSlider = document.getElementById('presence-penalty-slider');
+  const presPenValue = document.getElementById('presence-penalty-value');
+  presPenSlider.addEventListener('input', (e) => {
+    presPenValue.textContent = parseFloat(e.target.value).toFixed(1);
+  });
+
+  // Backend preset selector
+  const backendPresetSelect = document.getElementById('backend-preset-select');
+  backendPresetSelect.addEventListener('change', handleBackendPresetChange);
 }
 
 // Failsafe: Remove loading overlay after 5 seconds no matter what
@@ -7994,6 +8198,9 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('settings-form').addEventListener('submit', handleSaveSettings);
   document.getElementById('character-form').addEventListener('submit', handleSaveCharacter);
   document.getElementById('validate-btn').addEventListener('click', handleValidate);
+
+  // Initialize backend management controls
+  initializeSamplingControls();
 
   // Edit character modal event listeners
   const editCharacterModal = document.getElementById('edit-character-modal');

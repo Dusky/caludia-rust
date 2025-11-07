@@ -1,8 +1,10 @@
 mod plugin_manager;
 mod error;
+mod backends;
 
 use serde::{Deserialize, Serialize};
 use error::{AppError, Result};
+use backends::{BackendType, SamplingParams, BackendPreset};
 use std::fs;
 use std::path::PathBuf;
 use std::io::BufWriter;
@@ -17,22 +19,34 @@ use tiktoken_rs::cl100k_base;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ApiConfig {
+    // Backend configuration
+    #[serde(default)]
+    backend_type: BackendType,
     base_url: String,
     api_key: String,
     model: String,
+
+    // Active state
     #[serde(default)]
     active_character_id: Option<String>,
     #[serde(default)]
     active_chat_id: Option<String>,
+
+    // Generation settings
     #[serde(default)]
     stream: bool,
     #[serde(default = "default_context_limit")]
     context_limit: u32,
+
+    // Sampling parameters
+    #[serde(default)]
+    sampling: SamplingParams,
 }
 
 impl Default for ApiConfig {
     fn default() -> Self {
         Self {
+            backend_type: BackendType::default(),
             base_url: String::new(),
             api_key: String::new(),
             model: String::new(),
@@ -40,6 +54,7 @@ impl Default for ApiConfig {
             active_chat_id: None,
             stream: false,
             context_limit: default_context_limit(),
+            sampling: SamplingParams::default(),
         }
     }
 }
@@ -6300,6 +6315,56 @@ fn load_plugins() -> Result<String, String> {
     plugin_manager::load_enabled_plugins()
 }
 
+// ============================================================================
+// BACKEND MANAGEMENT COMMANDS
+// ============================================================================
+
+/// Get list of built-in backend presets
+#[tauri::command]
+fn get_backend_presets() -> Vec<BackendPreset> {
+    BackendPreset::builtin_presets()
+}
+
+/// Update sampling parameters
+#[tauri::command]
+fn update_sampling_params(params: SamplingParams) -> Result<(), String> {
+    let config_path = get_config_path();
+    let mut config = load_config_internal().unwrap_or_default();
+    config.sampling = params;
+    save_config_internal(&config, &config_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Get current sampling parameters
+#[tauri::command]
+fn get_sampling_params() -> Result<SamplingParams, String> {
+    let config = load_config_internal().unwrap_or_default();
+    Ok(config.sampling)
+}
+
+/// Apply a backend preset
+#[tauri::command]
+fn apply_backend_preset(preset_name: String) -> Result<(), String> {
+    let presets = BackendPreset::builtin_presets();
+    let preset = presets
+        .iter()
+        .find(|p| p.name == preset_name)
+        .ok_or("Preset not found")?;
+
+    let config_path = get_config_path();
+    let mut config = load_config_internal().unwrap_or_default();
+    config.backend_type = preset.backend_type.clone();
+    config.base_url = preset.base_url.clone();
+
+    // Set default model if empty
+    if config.model.is_empty() {
+        config.model = preset.backend_type.default_model().to_string();
+    }
+
+    save_config_internal(&config, &config_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -6421,7 +6486,12 @@ pub fn run() {
             uninstall_plugin,
             update_plugin,
             get_plugin,
-            load_plugins
+            load_plugins,
+            // Backend management
+            get_backend_presets,
+            update_sampling_params,
+            get_sampling_params,
+            apply_backend_preset
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

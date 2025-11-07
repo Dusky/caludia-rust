@@ -31,7 +31,7 @@
         "style-src": ["'self'", "https://cdnjs.cloudflare.com", "'unsafe-inline'"],
         "img-src": ["'self'", "data:", "https:", "asset:", "tauri:"],
         "font-src": ["'self'", "data:"],
-        "connect-src": ["'self'", "https://api.anthropic.com", "https://api.openai.com"],
+        "connect-src": ["'self'", "https://api.anthropic.com", "https://api.openai.com", "http://localhost:*", "http://127.0.0.1:*"],
         "worker-src": ["'self'", "blob:"]
       },
       "assetProtocol": {
