@@ -173,6 +173,14 @@ struct Character {
     expressions: std::collections::HashMap<String, String>, // expression_name -> image_filename
     #[serde(default)]
     default_expression: Option<String>, // default expression to use
+
+    // Author's Note system
+    #[serde(default)]
+    authors_note: Option<String>, // Author's note text
+    #[serde(default)]
+    authors_note_enabled: bool, // Whether author's note is active
+    #[serde(default)]
+    authors_note_depth: Option<u32>, // Position from bottom (default: 3)
 }
 
 // V2/V3 character card specification structs

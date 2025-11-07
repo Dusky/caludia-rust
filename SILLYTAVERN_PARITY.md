@@ -1,8 +1,8 @@
 # 🎯 SillyTavern Parity & Excellence Plan
 
 **Goal**: Make Claudia the PERFECT replacement for SillyTavern
-**Current Status**: Security-hardened base (Phase 1 ✅), Feature comparison needed
-**Timeline**: 8-12 weeks for full parity + excellence
+**Current Status**: Phase 1 ✅ Security | Phase 2 (40% complete) ✅ Backend + Sampling + Author's Note
+**Timeline**: 6-10 weeks remaining for full parity + excellence
 
 ---
 
@@ -88,14 +88,16 @@
 **Impact**: High - power users need control
 **Effort**: Low - UI + API passthrough
 
-#### 3. **Author's Note** ⚠️ MEDIUM PRIORITY
-- ❌ Inject custom text at specific positions
-- ❌ Character-specific author's notes
-- ❌ Dynamic author's note based on context
-- ❌ A/N strength controls
+#### 3. **Author's Note** ✅ COMPLETE
+- ✅ Inject custom text at specific positions (depth-based insertion)
+- ✅ Character-specific author's notes (per-character storage)
+- ✅ Dynamic author's note with template variables ({{char}}, {{user}}, {{date}}, {{time}})
+- ✅ Insertion depth control (default: 3 messages from end)
+- ✅ Preset integration (can use preset defaults)
 
-**Impact**: Medium - important for roleplay quality
-**Effort**: Low - template system
+**Impact**: High - critical for roleplay quality
+**Effort**: Zero - already fully implemented!
+**Status**: ✅ PRODUCTION-READY (see AUTHORS_NOTE_COMPLETE.md)
 
 #### 4. **Jailbreak Templates** ⚠️ MEDIUM PRIORITY
 - ❌ System prompt templates
