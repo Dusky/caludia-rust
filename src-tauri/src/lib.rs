@@ -1366,16 +1366,6 @@ struct CompletionRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct CompletionChoice {
-    text: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct CompletionResponse {
-    choices: Vec<CompletionChoice>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
 struct CompletionStreamChoice {
     text: String,
 }
