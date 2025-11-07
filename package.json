@@ -9,6 +9,10 @@
     "build": "tauri build"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2"
+    "@tauri-apps/cli": "^2",
+    "@types/dompurify": "^3.0.5"
+  },
+  "dependencies": {
+    "dompurify": "^3.3.0"
   }
 }

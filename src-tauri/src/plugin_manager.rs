@@ -148,8 +148,8 @@ pub fn install_from_git(repo_url: &str) -> Result<Plugin, String> {
     // Create plugin metadata
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as i64;
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0); // Fallback to 0 if time somehow fails
 
     let plugin = Plugin {
         manifest,
@@ -233,8 +233,8 @@ pub fn update_plugin(plugin_id: &str) -> Result<(), String> {
     if let Some(plugin) = registry.plugins.get_mut(plugin_id) {
         plugin.updated_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64;
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0); // Fallback to 0 if time fails
     }
     save_registry(&registry)?;
 
