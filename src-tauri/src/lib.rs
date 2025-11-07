@@ -1,6 +1,8 @@
 mod plugin_manager;
+mod error;
 
 use serde::{Deserialize, Serialize};
+use error::{AppError, Result};
 use std::fs;
 use std::path::PathBuf;
 use std::io::BufWriter;
