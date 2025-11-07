@@ -48,6 +48,24 @@ fn default_context_limit() -> u32 {
     200000
 }
 
+/// Safe timestamp helper - returns current time in milliseconds
+/// Falls back to 0 if system time is somehow before UNIX_EPOCH
+fn current_timestamp_millis() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Safe timestamp helper - returns current time in seconds
+/// Falls back to 0 if system time is somehow before UNIX_EPOCH
+fn current_timestamp_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 fn default_true() -> bool {
     true
 }
@@ -280,10 +298,7 @@ struct Message {
 
 impl Message {
     fn new_user(content: String) -> Self {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let timestamp = current_timestamp_millis();
 
         Self {
             role: "user".to_string(),
@@ -300,10 +315,7 @@ impl Message {
     }
 
     fn new_assistant(content: String) -> Self {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let timestamp = current_timestamp_millis();
 
         Self {
             role: "assistant".to_string(),
@@ -321,10 +333,7 @@ impl Message {
 
     // Constructor for group chat assistant messages with character ID
     fn new_assistant_with_character(content: String, character_id: String) -> Self {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64;
+        let timestamp = current_timestamp_millis();
 
         Self {
             role: "assistant".to_string(),
@@ -784,10 +793,7 @@ struct BranchedChatHistory {
 }
 
 fn default_branches() -> Vec<Branch> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let timestamp = current_timestamp_millis();
 
     vec![Branch {
         id: "main".to_string(),
@@ -1126,10 +1132,7 @@ fn load_group_chat_history(group_id: String, chat_id: String) -> Result<FullChat
 
 // Create a new group chat history
 fn create_group_chat_history(group_id: &str, chat_id: &str) -> FullChatHistory {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let now = current_timestamp_millis();
 
     let main_branch_id = uuid::Uuid::new_v4().to_string();
     let main_branch = Branch {
@@ -1786,10 +1789,7 @@ fn create_default_character() -> Character {
         system_prompt: "You are a helpful AI assistant. Be friendly, concise, and informative.".to_string(),
         greeting: Some("Hello! How can I help you today?".to_string()),
         personality: Some("helpful, friendly, knowledgeable".to_string()),
-        created_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64,
+        created_at: current_timestamp_secs(),
         description: None,
         scenario: None,
         mes_example: None,
@@ -3711,8 +3711,8 @@ fn create_character(
         personality,
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as i64,
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0),
         description,
         scenario,
         mes_example,
@@ -3779,10 +3779,7 @@ fn duplicate_character(character_id: String) -> Result<Character, String> {
 
     // Create new character with duplicated data
     let new_id = Uuid::new_v4().to_string();
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let timestamp = current_timestamp_millis();
 
     let mut new_character = Character {
         id: new_id.clone(),
@@ -3847,8 +3844,11 @@ fn list_characters() -> Result<Vec<Character>, String> {
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
-            if let Some(character) = load_character(path.file_stem().unwrap().to_str().unwrap()) {
-                characters.push(character);
+            // Safely extract filename without crashing on invalid UTF-8
+            if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if let Some(character) = load_character(file_stem) {
+                    characters.push(character);
+                }
             }
         }
     }
@@ -3927,10 +3927,7 @@ async fn import_character_card(app_handle: tauri::AppHandle) -> Result<Character
         ),
         greeting: card_data.first_mes,
         personality: card_data.personality,
-        created_at: std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as i64,
+        created_at: current_timestamp_secs(),
         description: card_data.description,
         scenario: card_data.scenario,
         mes_example: card_data.mes_example,
@@ -4740,8 +4737,15 @@ fn count_tokens(text: &str) -> usize {
         return 0;
     }
 
-    let bpe = cl100k_base().unwrap();
-    bpe.encode_with_special_tokens(text).len()
+    // Safely initialize tokenizer - return rough estimate if it fails
+    match cl100k_base() {
+        Ok(bpe) => bpe.encode_with_special_tokens(text).len(),
+        Err(e) => {
+            eprintln!("Warning: Failed to initialize tokenizer: {}", e);
+            // Fallback: rough estimate (1 token ≈ 4 characters)
+            (text.len() as f64 / 4.0).ceil() as usize
+        }
+    }
 }
 
 #[tauri::command]
@@ -5305,10 +5309,7 @@ fn create_branch(message_index: usize, branch_name: String) -> Result<Branch, St
     }
 
     // Create new branch
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let timestamp = current_timestamp_millis();
 
     let new_branch = Branch {
         id: branch_id.clone(),
@@ -5529,10 +5530,7 @@ fn migrate_to_chat_system(character_id: &str) -> Result<(), String> {
     let branched = load_branched_history(character_id);
 
     // Create first chat from old data
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let timestamp = current_timestamp_millis();
 
     // Calculate last message time
     let last_message_at = branched.branch_messages
@@ -5600,10 +5598,7 @@ fn list_chats(character_id: String) -> Result<Vec<ChatInfo>, String> {
 
 #[tauri::command]
 fn create_chat(character_id: String, name: String) -> Result<Chat, String> {
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let timestamp = current_timestamp_millis();
 
     let chat = Chat {
         id: Uuid::new_v4().to_string(),
@@ -5719,10 +5714,7 @@ fn create_group_chat(character_ids: Vec<String>, name: String) -> Result<GroupCh
         return Err("Group chat requires at least 2 characters".to_string());
     }
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64;
+    let timestamp = current_timestamp_millis();
 
     let group_chat = GroupChat {
         id: Uuid::new_v4().to_string(),
