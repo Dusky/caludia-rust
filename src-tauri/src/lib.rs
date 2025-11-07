@@ -836,6 +836,54 @@ impl Default for FormatHints {
     }
 }
 
+// Sampling Parameters for Chat Completion Presets (Jailbreak Templates)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SamplingParameters {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,           // 0.0-2.0, controls randomness
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,                 // 0.0-1.0, nucleus sampling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i32>,                 // 0-100, top-k sampling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_p: Option<f32>,                 // 0.0-1.0, minimum probability
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,     // -2.0-2.0, penalize frequent tokens
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,      // -2.0-2.0, penalize existing tokens
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repetition_penalty: Option<f32>,    // 1.0-2.0, penalize repetition
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_a: Option<f32>,                 // 0.0-1.0, top-a sampling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    typical_p: Option<f32>,             // 0.0-1.0, typical sampling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tfs: Option<f32>,                   // 0.0-1.0, tail free sampling
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_length: Option<i32>,            // minimum response length
+    #[serde(skip_serializing_if = "Option::is_none")]
+    max_tokens: Option<i32>,            // maximum tokens to generate
+}
+
+impl Default for SamplingParameters {
+    fn default() -> Self {
+        Self {
+            temperature: Some(1.0),
+            top_p: Some(1.0),
+            top_k: None,
+            min_p: None,
+            frequency_penalty: Some(0.0),
+            presence_penalty: Some(0.0),
+            repetition_penalty: None,
+            top_a: None,
+            typical_p: None,
+            tfs: None,
+            min_length: None,
+            max_tokens: Some(4096),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PromptPreset {
     id: String,
@@ -849,6 +897,8 @@ struct PromptPreset {
     instructions: Vec<InstructionBlock>,
     #[serde(default)]
     format_hints: FormatHints,
+    #[serde(default)]
+    sampling: SamplingParameters,    // Jailbreak Templates: sampling parameters
 }
 
 // Simplified info for listing presets
@@ -870,6 +920,20 @@ fn create_default_preset() -> PromptPreset {
         authors_note_default: String::new(),
         instructions: vec![],
         format_hints: FormatHints::default(),
+        sampling: SamplingParameters {
+            temperature: Some(1.0),
+            top_p: Some(1.0),
+            top_k: None,
+            min_p: None,
+            frequency_penalty: Some(0.0),
+            presence_penalty: Some(0.0),
+            repetition_penalty: None,
+            top_a: None,
+            typical_p: None,
+            tfs: None,
+            min_length: None,
+            max_tokens: Some(4096),
+        },
     }
 }
 
@@ -897,6 +961,20 @@ fn create_roleplay_preset() -> PromptPreset {
             },
         ],
         format_hints: FormatHints::default(),
+        sampling: SamplingParameters {
+            temperature: Some(1.1),
+            top_p: Some(0.95),
+            top_k: None,
+            min_p: None,
+            frequency_penalty: Some(0.1),
+            presence_penalty: Some(0.6),
+            repetition_penalty: None,
+            top_a: None,
+            typical_p: None,
+            tfs: None,
+            min_length: None,
+            max_tokens: Some(4096),
+        },
     }
 }
 
@@ -924,6 +1002,20 @@ fn create_creative_writing_preset() -> PromptPreset {
             },
         ],
         format_hints: FormatHints::default(),
+        sampling: SamplingParameters {
+            temperature: Some(1.2),
+            top_p: Some(0.9),
+            top_k: None,
+            min_p: None,
+            frequency_penalty: Some(0.3),
+            presence_penalty: Some(0.3),
+            repetition_penalty: None,
+            top_a: None,
+            typical_p: None,
+            tfs: None,
+            min_length: None,
+            max_tokens: Some(4096),
+        },
     }
 }
 
@@ -944,6 +1036,20 @@ fn create_assistant_preset() -> PromptPreset {
             },
         ],
         format_hints: FormatHints::default(),
+        sampling: SamplingParameters {
+            temperature: Some(0.7),
+            top_p: Some(0.9),
+            top_k: None,
+            min_p: None,
+            frequency_penalty: Some(0.0),
+            presence_penalty: Some(0.0),
+            repetition_penalty: None,
+            top_a: None,
+            typical_p: None,
+            tfs: None,
+            min_length: None,
+            max_tokens: Some(4096),
+        },
     }
 }
 
@@ -1137,6 +1243,26 @@ struct ChatRequest {
     model: String,
     max_tokens: u32,
     messages: Vec<Message>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repetition_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_a: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    typical_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tfs: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1170,6 +1296,26 @@ struct StreamChatRequest {
     max_tokens: u32,
     messages: Vec<Message>,
     stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repetition_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_a: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    typical_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tfs: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1197,6 +1343,26 @@ struct CompletionRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     stop: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_k: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    min_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frequency_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    presence_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repetition_penalty: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    top_a: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    typical_p: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tfs: Option<f32>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -3306,10 +3472,29 @@ async fn chat(message: String) -> Result<String, String> {
     let roleplay_settings = load_roleplay_settings(&character.id);
     let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     let request = ChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
         messages: api_messages,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        min_p: sampling.min_p,
+        frequency_penalty: sampling.frequency_penalty,
+        presence_penalty: sampling.presence_penalty,
+        repetition_penalty: sampling.repetition_penalty,
+        top_a: sampling.top_a,
+        typical_p: sampling.typical_p,
+        tfs: sampling.tfs,
     };
 
     let response = client
@@ -3361,6 +3546,15 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
     let roleplay_settings = load_roleplay_settings(&character.id);
     let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     // Check if instruct mode is enabled
     let use_instruct_mode = roleplay_settings.instruct_mode_enabled &&
                              roleplay_settings.instruct_template_id != "none";
@@ -3392,9 +3586,19 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
         let request = CompletionRequest {
             model: config.model.clone(),
             prompt,
-            max_tokens: 4096,
+            max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
             stream: true,
             stop,
+            temperature: sampling.temperature,
+            top_p: sampling.top_p,
+            top_k: sampling.top_k,
+            min_p: sampling.min_p,
+            frequency_penalty: sampling.frequency_penalty,
+            presence_penalty: sampling.presence_penalty,
+            repetition_penalty: sampling.repetition_penalty,
+            top_a: sampling.top_a,
+            typical_p: sampling.typical_p,
+            tfs: sampling.tfs,
         };
 
         let response = client
@@ -3459,9 +3663,19 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
 
         let request = StreamChatRequest {
             model: config.model.clone(),
-            max_tokens: 4096,
+            max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
             messages: api_messages,
             stream: true,
+            temperature: sampling.temperature,
+            top_p: sampling.top_p,
+            top_k: sampling.top_k,
+            min_p: sampling.min_p,
+            frequency_penalty: sampling.frequency_penalty,
+            presence_penalty: sampling.presence_penalty,
+            repetition_penalty: sampling.repetition_penalty,
+            top_a: sampling.top_a,
+            typical_p: sampling.typical_p,
+            tfs: sampling.tfs,
         };
 
         let response = client
@@ -3743,6 +3957,16 @@ async fn continue_message(message_index: usize) -> Result<String, String> {
 
     // Load roleplay settings and build context up to the message we're continuing
     let roleplay_settings = load_roleplay_settings(&character.id);
+
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     let messages_up_to = &history.messages[..=message_index];
     let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, messages_up_to, &roleplay_settings);
 
@@ -3772,8 +3996,18 @@ async fn continue_message(message_index: usize) -> Result<String, String> {
     // Convert to API format
     let api_request = ChatRequest {
         model: config.model.clone(),
+        max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
         messages: api_messages,
-        max_tokens: 4096,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        min_p: sampling.min_p,
+        frequency_penalty: sampling.frequency_penalty,
+        presence_penalty: sampling.presence_penalty,
+        repetition_penalty: sampling.repetition_penalty,
+        top_a: sampling.top_a,
+        typical_p: sampling.typical_p,
+        tfs: sampling.tfs,
     };
 
     let response = client
@@ -3837,6 +4071,16 @@ async fn regenerate_at_index(message_index: usize) -> Result<SwipeInfo, String> 
 
     // Load roleplay settings and build context up to (but not including) the message we're regenerating
     let roleplay_settings = load_roleplay_settings(&character.id);
+
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     let messages_before = &history.messages[..message_index];
     let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, messages_before, &roleplay_settings);
 
@@ -3866,8 +4110,18 @@ async fn regenerate_at_index(message_index: usize) -> Result<SwipeInfo, String> 
     // Convert to API format
     let api_request = ChatRequest {
         model: config.model.clone(),
+        max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
         messages: api_messages,
-        max_tokens: 4096,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        min_p: sampling.min_p,
+        frequency_penalty: sampling.frequency_penalty,
+        presence_penalty: sampling.presence_penalty,
+        repetition_penalty: sampling.repetition_penalty,
+        top_a: sampling.top_a,
+        typical_p: sampling.typical_p,
+        tfs: sampling.tfs,
     };
 
     let response = client
@@ -3923,6 +4177,16 @@ async fn generate_response_only() -> Result<String, String> {
 
     // Load roleplay settings and build context
     let roleplay_settings = load_roleplay_settings(&character.id);
+
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
     // Build messages with enhanced system prompt first (with template variables replaced)
@@ -3950,8 +4214,18 @@ async fn generate_response_only() -> Result<String, String> {
 
     let request = ChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
         messages: api_messages,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        min_p: sampling.min_p,
+        frequency_penalty: sampling.frequency_penalty,
+        presence_penalty: sampling.presence_penalty,
+        repetition_penalty: sampling.repetition_penalty,
+        top_a: sampling.top_a,
+        typical_p: sampling.typical_p,
+        tfs: sampling.tfs,
     };
 
     let response = client
@@ -3997,6 +4271,16 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
 
     // Load roleplay settings and build context
     let roleplay_settings = load_roleplay_settings(&character.id);
+
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     let (system_additions, authors_note, note_depth) = build_roleplay_context(&character, &history.messages, &roleplay_settings);
 
     // Build messages with enhanced system prompt first (with template variables replaced)
@@ -4024,9 +4308,19 @@ async fn generate_response_stream(app_handle: tauri::AppHandle) -> Result<String
 
     let request = StreamChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
         messages: api_messages,
         stream: true,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        min_p: sampling.min_p,
+        frequency_penalty: sampling.frequency_penalty,
+        presence_penalty: sampling.presence_penalty,
+        repetition_penalty: sampling.repetition_penalty,
+        top_a: sampling.top_a,
+        typical_p: sampling.typical_p,
+        tfs: sampling.tfs,
     };
 
     let response = client
@@ -6412,6 +6706,16 @@ async fn generate_group_response(
 
     // Build context
     let roleplay_settings = load_roleplay_settings(&character_id);
+
+    // Load preset if one is active to get sampling parameters
+    let sampling = if let Some(preset_id) = &roleplay_settings.active_preset_id {
+        load_preset(preset_id)
+            .map(|preset| preset.sampling)
+            .unwrap_or_default()
+    } else {
+        SamplingParameters::default()
+    };
+
     let api_messages = build_api_messages_for_group(
         responding_character,
         &all_characters,
@@ -6430,8 +6734,18 @@ async fn generate_group_response(
 
     let request_body = ChatRequest {
         model: config.model.clone(),
-        max_tokens: 4096,
+        max_tokens: sampling.max_tokens.unwrap_or(4096) as u32,
         messages: api_messages,
+        temperature: sampling.temperature,
+        top_p: sampling.top_p,
+        top_k: sampling.top_k,
+        min_p: sampling.min_p,
+        frequency_penalty: sampling.frequency_penalty,
+        presence_penalty: sampling.presence_penalty,
+        repetition_penalty: sampling.repetition_penalty,
+        top_a: sampling.top_a,
+        typical_p: sampling.typical_p,
+        tfs: sampling.tfs,
     };
 
     let response = client

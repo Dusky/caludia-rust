@@ -432,6 +432,121 @@
                 <textarea id="preset-authors-note-editable" style="display: none; width: 100%; min-height: 60px; font-size: 11px;" placeholder="Default Author's Note if user hasn't set one..."></textarea>
               </div>
 
+              <!-- Sampling Parameters Section (Jailbreak Templates) -->
+              <div id="preset-sampling-section" style="margin-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; cursor: pointer;" id="sampling-header">
+                  <div style="font-size: 11px; color: var(--text-secondary);">
+                    <strong>⚙️ Sampling Parameters (Chat Completion Preset)</strong>
+                  </div>
+                  <span id="sampling-toggle" style="font-size: 10px; color: var(--text-secondary);">▼</span>
+                </div>
+                <div id="sampling-controls" style="background: var(--bg-primary); padding: 12px; border-radius: 4px; display: none;">
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px;">
+                    <!-- Temperature -->
+                    <div>
+                      <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                        Temperature <span id="temp-value" style="color: var(--accent);">1.0</span>
+                      </label>
+                      <input type="range" id="sampling-temperature" min="0" max="2" step="0.05" value="1.0" style="width: 100%;">
+                      <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">Randomness (0-2)</div>
+                    </div>
+                    <!-- Top P -->
+                    <div>
+                      <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                        Top P <span id="topp-value" style="color: var(--accent);">1.0</span>
+                      </label>
+                      <input type="range" id="sampling-top-p" min="0" max="1" step="0.05" value="1.0" style="width: 100%;">
+                      <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">Nucleus sampling</div>
+                    </div>
+                    <!-- Frequency Penalty -->
+                    <div>
+                      <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                        Freq. Penalty <span id="freq-value" style="color: var(--accent);">0.0</span>
+                      </label>
+                      <input type="range" id="sampling-frequency-penalty" min="-2" max="2" step="0.1" value="0" style="width: 100%;">
+                      <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">Penalize frequency</div>
+                    </div>
+                    <!-- Presence Penalty -->
+                    <div>
+                      <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                        Pres. Penalty <span id="pres-value" style="color: var(--accent);">0.0</span>
+                      </label>
+                      <input type="range" id="sampling-presence-penalty" min="-2" max="2" step="0.1" value="0" style="width: 100%;">
+                      <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">Penalize presence</div>
+                    </div>
+                    <!-- Top K -->
+                    <div>
+                      <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                        Top K <span id="topk-value" style="color: var(--accent);">off</span>
+                      </label>
+                      <input type="range" id="sampling-top-k" min="0" max="100" step="1" value="0" style="width: 100%;">
+                      <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">0 = disabled</div>
+                    </div>
+                    <!-- Min P -->
+                    <div>
+                      <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                        Min P <span id="minp-value" style="color: var(--accent);">off</span>
+                      </label>
+                      <input type="range" id="sampling-min-p" min="0" max="1" step="0.05" value="0" style="width: 100%;">
+                      <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">0 = disabled</div>
+                    </div>
+                  </div>
+                  <!-- Advanced Parameters (Collapsed by default) -->
+                  <div style="margin-top: 8px;">
+                    <div style="font-size: 10px; color: var(--text-tertiary); cursor: pointer; margin-bottom: 6px;" id="advanced-sampling-toggle">
+                      ▶ Advanced Parameters
+                    </div>
+                    <div id="advanced-sampling-controls" style="display: none; padding-left: 8px; border-left: 2px solid var(--bg-secondary);">
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <!-- Repetition Penalty -->
+                        <div>
+                          <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                            Rep. Penalty <span id="rep-value" style="color: var(--accent);">off</span>
+                          </label>
+                          <input type="range" id="sampling-repetition-penalty" min="1" max="2" step="0.05" value="1" style="width: 100%;">
+                          <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">1 = disabled</div>
+                        </div>
+                        <!-- Top A -->
+                        <div>
+                          <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                            Top A <span id="topa-value" style="color: var(--accent);">off</span>
+                          </label>
+                          <input type="range" id="sampling-top-a" min="0" max="1" step="0.05" value="0" style="width: 100%;">
+                          <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">0 = disabled</div>
+                        </div>
+                        <!-- Typical P -->
+                        <div>
+                          <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                            Typical P <span id="typical-value" style="color: var(--accent);">off</span>
+                          </label>
+                          <input type="range" id="sampling-typical-p" min="0" max="1" step="0.05" value="0" style="width: 100%;">
+                          <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">0 = disabled</div>
+                        </div>
+                        <!-- TFS -->
+                        <div>
+                          <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                            TFS <span id="tfs-value" style="color: var(--accent);">off</span>
+                          </label>
+                          <input type="range" id="sampling-tfs" min="0" max="1" step="0.05" value="0" style="width: 100%;">
+                          <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">0 = disabled</div>
+                        </div>
+                      </div>
+                      <!-- Max Tokens -->
+                      <div style="margin-top: 12px;">
+                        <label style="font-size: 10px; color: var(--text-secondary); display: block; margin-bottom: 4px;">
+                          Max Tokens <span id="maxtoken-value" style="color: var(--accent);">4096</span>
+                        </label>
+                        <input type="range" id="sampling-max-tokens" min="512" max="8192" step="256" value="4096" style="width: 100%;">
+                        <div style="font-size: 9px; color: var(--text-tertiary); margin-top: 2px;">Maximum response length</div>
+                      </div>
+                    </div>
+                  </div>
+                  <p style="font-size: 9px; color: var(--text-tertiary); margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--bg-secondary);">
+                    <strong>Note:</strong> These parameters control how the AI generates responses. Changes only apply to custom presets.
+                  </p>
+                </div>
+              </div>
+
               <!-- Save Changes Button (only for custom presets) -->
               <button type="button" id="save-preset-changes-btn" class="btn-secondary" style="display: none; width: 100%; margin-bottom: 8px;">
                 Save Changes

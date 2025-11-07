@@ -4146,6 +4146,49 @@ function setupAppControls() {
   document.getElementById('duplicate-preset-btn').addEventListener('click', duplicatePreset);
   document.getElementById('restore-preset-btn').addEventListener('click', restoreBuiltinPreset);
 
+  // Setup sampling parameters UI
+  const samplingHeader = document.getElementById('sampling-header');
+  if (samplingHeader) {
+    samplingHeader.addEventListener('click', () => {
+      const controls = document.getElementById('sampling-controls');
+      const toggle = document.getElementById('sampling-toggle');
+      if (controls.style.display === 'none') {
+        controls.style.display = 'block';
+        toggle.textContent = '▼';
+      } else {
+        controls.style.display = 'none';
+        toggle.textContent = '▶';
+      }
+    });
+  }
+
+  const advancedSamplingToggle = document.getElementById('advanced-sampling-toggle');
+  if (advancedSamplingToggle) {
+    advancedSamplingToggle.addEventListener('click', () => {
+      const controls = document.getElementById('advanced-sampling-controls');
+      if (controls.style.display === 'none') {
+        controls.style.display = 'block';
+        advancedSamplingToggle.textContent = '▼ Advanced Parameters';
+      } else {
+        controls.style.display = 'none';
+        advancedSamplingToggle.textContent = '▶ Advanced Parameters';
+      }
+    });
+  }
+
+  // Add event listeners for all sampling parameter sliders
+  document.getElementById('sampling-temperature')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-top-p')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-frequency-penalty')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-presence-penalty')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-top-k')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-min-p')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-repetition-penalty')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-top-a')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-typical-p')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-tfs')?.addEventListener('input', updateSamplingDisplayValues);
+  document.getElementById('sampling-max-tokens')?.addEventListener('input', updateSamplingDisplayValues);
+
   // Setup plugin controls
   const installPluginBtn = document.getElementById('install-plugin-btn');
   if (installPluginBtn) {
@@ -7016,6 +7059,89 @@ async function handleRecursionDepthChange() {
 
 // Prompt Preset Management
 
+// Helper function to update all sampling parameter display values
+function updateSamplingDisplayValues() {
+  const temperature = parseFloat(document.getElementById('sampling-temperature')?.value || 1.0);
+  const topP = parseFloat(document.getElementById('sampling-top-p')?.value || 1.0);
+  const freqPenalty = parseFloat(document.getElementById('sampling-frequency-penalty')?.value || 0);
+  const presPenalty = parseFloat(document.getElementById('sampling-presence-penalty')?.value || 0);
+  const topK = parseInt(document.getElementById('sampling-top-k')?.value || 0);
+  const minP = parseFloat(document.getElementById('sampling-min-p')?.value || 0);
+  const repPenalty = parseFloat(document.getElementById('sampling-repetition-penalty')?.value || 1);
+  const topA = parseFloat(document.getElementById('sampling-top-a')?.value || 0);
+  const typicalP = parseFloat(document.getElementById('sampling-typical-p')?.value || 0);
+  const tfs = parseFloat(document.getElementById('sampling-tfs')?.value || 0);
+  const maxTokens = parseInt(document.getElementById('sampling-max-tokens')?.value || 4096);
+
+  // Update display spans
+  document.getElementById('temp-value').textContent = temperature.toFixed(2);
+  document.getElementById('topp-value').textContent = topP.toFixed(2);
+  document.getElementById('freq-value').textContent = freqPenalty.toFixed(1);
+  document.getElementById('pres-value').textContent = presPenalty.toFixed(1);
+  document.getElementById('topk-value').textContent = topK === 0 ? 'off' : topK;
+  document.getElementById('minp-value').textContent = minP === 0 ? 'off' : minP.toFixed(2);
+  document.getElementById('rep-value').textContent = repPenalty === 1 ? 'off' : repPenalty.toFixed(2);
+  document.getElementById('topa-value').textContent = topA === 0 ? 'off' : topA.toFixed(2);
+  document.getElementById('typical-value').textContent = typicalP === 0 ? 'off' : typicalP.toFixed(2);
+  document.getElementById('tfs-value').textContent = tfs === 0 ? 'off' : tfs.toFixed(2);
+  document.getElementById('maxtoken-value').textContent = maxTokens;
+}
+
+// Helper function to load sampling parameters into UI
+function loadSamplingParameters(sampling) {
+  if (!sampling) sampling = {};
+
+  // Set default values if not present
+  const defaults = {
+    temperature: 1.0,
+    top_p: 1.0,
+    frequency_penalty: 0.0,
+    presence_penalty: 0.0,
+    top_k: 0,
+    min_p: 0.0,
+    repetition_penalty: 1.0,
+    top_a: 0.0,
+    typical_p: 0.0,
+    tfs: 0.0,
+    max_tokens: 4096
+  };
+
+  // Load values into sliders
+  document.getElementById('sampling-temperature').value = sampling.temperature ?? defaults.temperature;
+  document.getElementById('sampling-top-p').value = sampling.top_p ?? defaults.top_p;
+  document.getElementById('sampling-frequency-penalty').value = sampling.frequency_penalty ?? defaults.frequency_penalty;
+  document.getElementById('sampling-presence-penalty').value = sampling.presence_penalty ?? defaults.presence_penalty;
+  document.getElementById('sampling-top-k').value = sampling.top_k ?? defaults.top_k;
+  document.getElementById('sampling-min-p').value = sampling.min_p ?? defaults.min_p;
+  document.getElementById('sampling-repetition-penalty').value = sampling.repetition_penalty ?? defaults.repetition_penalty;
+  document.getElementById('sampling-top-a').value = sampling.top_a ?? defaults.top_a;
+  document.getElementById('sampling-typical-p').value = sampling.typical_p ?? defaults.typical_p;
+  document.getElementById('sampling-tfs').value = sampling.tfs ?? defaults.tfs;
+  document.getElementById('sampling-max-tokens').value = sampling.max_tokens ?? defaults.max_tokens;
+
+  // Update all display values
+  updateSamplingDisplayValues();
+}
+
+// Helper function to collect sampling parameters from UI
+function collectSamplingParameters() {
+  const sampling = {
+    temperature: parseFloat(document.getElementById('sampling-temperature').value),
+    top_p: parseFloat(document.getElementById('sampling-top-p').value),
+    frequency_penalty: parseFloat(document.getElementById('sampling-frequency-penalty').value),
+    presence_penalty: parseFloat(document.getElementById('sampling-presence-penalty').value),
+    top_k: parseInt(document.getElementById('sampling-top-k').value),
+    min_p: parseFloat(document.getElementById('sampling-min-p').value),
+    repetition_penalty: parseFloat(document.getElementById('sampling-repetition-penalty').value),
+    top_a: parseFloat(document.getElementById('sampling-top-a').value),
+    typical_p: parseFloat(document.getElementById('sampling-typical-p').value),
+    tfs: parseFloat(document.getElementById('sampling-tfs').value),
+    max_tokens: parseInt(document.getElementById('sampling-max-tokens').value)
+  };
+
+  return sampling;
+}
+
 // Load available presets
 async function loadPresets() {
   try {
@@ -7143,6 +7269,9 @@ async function handlePresetSelect(presetId) {
 
     // Render instruction blocks (all presets are now editable)
     renderInstructionBlocks(preset.instructions, false);
+
+    // Load sampling parameters into UI
+    loadSamplingParameters(preset.sampling);
 
     // Enable apply button
     applyBtn.disabled = false;
@@ -7750,6 +7879,9 @@ async function savePresetChanges() {
 
     currentEditingPreset.system_additions = systemEditable.value;
     currentEditingPreset.authors_note_default = authorsNoteEditable.value;
+
+    // Collect sampling parameters from UI
+    currentEditingPreset.sampling = collectSamplingParameters();
 
     // Save via update_preset_instructions command
     await invoke('update_preset_instructions', {
