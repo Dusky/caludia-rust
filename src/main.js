@@ -4569,7 +4569,7 @@ async function updateTokenCount() {
       const tokenCountTotal = document.getElementById('token-count-total');
       tokenCountTotal.textContent = '0 / 200k tokens';
     }
-  }, 300); // Update after 300ms of no typing
+  }, 1500); // Update after 1.5 seconds of no typing (reduced frequency to improve performance)
 }
 
 function showContextWarning(status) {

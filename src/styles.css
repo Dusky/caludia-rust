@@ -4802,10 +4802,15 @@ body.drag-over {
    ========================================== */
 
 /* Hide character controls in header when in spacious mode (they're in left sidebar) */
+/* BUT keep hamburger menu visible for roleplay tools */
 .layout-spacious .character-display,
-.layout-spacious .character-controls,
-.layout-spacious .header-left-controls {
+.layout-spacious .character-controls {
   display: none;
+}
+
+/* Keep hamburger menu visible in spacious mode for accessing roleplay tools */
+.layout-spacious .header-left-controls {
+  display: flex;
 }
 
 /* Simplify header in spacious mode */
