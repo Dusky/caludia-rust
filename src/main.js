@@ -8494,6 +8494,21 @@ window.addEventListener('DOMContentLoaded', () => {
   // Setup keyboard shortcuts modal
   setupShortcutsModal();
 
+  // Force-remove loading overlay after initialization to ensure UI is never blocked
+  // This runs after all sync setup is complete
+  setTimeout(() => {
+    const loadingOverlay = document.getElementById('app-loading');
+    if (loadingOverlay) {
+      console.log('Force-removing loading overlay to ensure UI is interactive');
+      loadingOverlay.classList.add('hidden');
+      setTimeout(() => {
+        if (loadingOverlay.parentNode) {
+          loadingOverlay.remove();
+        }
+      }, 300);
+    }
+  }, 1000);
+
   // Load existing config - wrapped to catch errors
   (async () => {
     try {
@@ -8504,7 +8519,11 @@ window.addEventListener('DOMContentLoaded', () => {
       const loadingOverlay = document.getElementById('app-loading');
       if (loadingOverlay) {
         loadingOverlay.classList.add('hidden');
-        setTimeout(() => loadingOverlay.remove(), 300);
+        setTimeout(() => {
+          if (loadingOverlay.parentNode) {
+            loadingOverlay.remove();
+          }
+        }, 300);
       }
     }
   })();
