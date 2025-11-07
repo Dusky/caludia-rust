@@ -494,6 +494,7 @@
         <div class="settings-tabs" role="tablist" aria-label="Settings categories">
           <button class="tab-btn active" data-tab="api" role="tab" aria-selected="true" aria-controls="api-tab">API</button>
           <button class="tab-btn" data-tab="character" role="tab" aria-selected="false" aria-controls="character-tab">Character</button>
+          <button class="tab-btn" data-tab="context" role="tab" aria-selected="false" aria-controls="context-tab">Context</button>
           <button class="tab-btn" data-tab="appearance" role="tab" aria-selected="false" aria-controls="appearance-tab">Appearance</button>
           <button class="tab-btn" data-tab="plugins" role="tab" aria-selected="false" aria-controls="plugins-tab">Plugins</button>
         </div>
@@ -967,6 +968,85 @@
                 Export v2 Card
               </button>
             </div>
+          </form>
+        </div>
+
+        <div id="context-tab" class="tab-content" role="tabpanel" aria-labelledby="context-tab" hidden>
+          <form id="context-settings-form" class="settings-form">
+            <h3 style="margin-top: 0;">Context Management</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+              Control how conversation history is managed to stay within token limits.
+            </p>
+
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="context-pruning-enabled" />
+                Enable Smart Context Pruning
+              </label>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">
+                Automatically remove older messages when context limit is reached
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="context-reserve-tokens">
+                Reserve Tokens for Response: <span id="context-reserve-value">4000</span>
+              </label>
+              <input
+                type="range"
+                id="context-reserve-tokens"
+                min="1000"
+                max="16000"
+                step="500"
+                value="4000"
+                style="width: 100%;"
+              />
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">
+                Tokens to reserve for the AI's response (recommended: 4000-8000)
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label for="context-min-messages">
+                Minimum Messages to Keep: <span id="context-min-value">10</span>
+              </label>
+              <input
+                type="range"
+                id="context-min-messages"
+                min="5"
+                max="50"
+                step="1"
+                value="10"
+                style="width: 100%;"
+              />
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">
+                Always keep at least this many recent messages, even if over budget
+              </small>
+            </div>
+
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="context-preserve-pinned" />
+                Preserve Pinned Messages
+              </label>
+              <small style="color: var(--text-secondary); margin-top: 4px; display: block;">
+                Always keep pinned messages in context, even when pruning
+              </small>
+            </div>
+
+            <div style="background: var(--bg-secondary); padding: 12px; border-radius: 6px; margin-top: 16px;">
+              <p style="margin: 0 0 8px 0; font-weight: 500;">How Context Pruning Works:</p>
+              <ul style="margin: 0; padding-left: 20px; color: var(--text-secondary); font-size: 12px;">
+                <li>Calculates total tokens used (system + history + world info + etc.)</li>
+                <li>Removes older messages if total exceeds (context limit - reserve tokens)</li>
+                <li>Always preserves pinned messages and minimum recent messages</li>
+                <li>Works backwards from most recent to oldest when removing</li>
+              </ul>
+            </div>
+
+            <button type="button" id="save-context-settings-btn" class="btn-primary" style="width: 100%; margin-top: 16px;">
+              Save Context Settings
+            </button>
           </form>
         </div>
 

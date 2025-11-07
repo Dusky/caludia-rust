@@ -4445,6 +4445,30 @@ fn update_recursion_depth(
     save_roleplay_settings(&character_id, &settings)
 }
 
+#[tauri::command]
+fn update_context_settings(
+    character_id: String,
+    pruning_enabled: bool,
+    reserve_tokens: usize,
+    min_messages: usize,
+    preserve_pinned: bool,
+) -> Result<(), String> {
+    // Validate settings
+    if reserve_tokens < 1000 || reserve_tokens > 16000 {
+        return Err("Reserve tokens must be between 1000 and 16000".to_string());
+    }
+    if min_messages < 5 || min_messages > 50 {
+        return Err("Minimum messages must be between 5 and 50".to_string());
+    }
+
+    let mut settings = load_roleplay_settings(&character_id);
+    settings.context_pruning_enabled = pruning_enabled;
+    settings.context_reserve_tokens = reserve_tokens;
+    settings.context_min_messages = min_messages;
+    settings.context_preserve_pinned = preserve_pinned;
+    save_roleplay_settings(&character_id, &settings)
+}
+
 // Prompt Preset Commands
 
 #[tauri::command]
@@ -6437,6 +6461,7 @@ pub fn run() {
             update_persona,
             update_examples_settings,
             update_recursion_depth,
+            update_context_settings,
             get_presets,
             get_preset,
             set_active_preset,

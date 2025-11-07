@@ -4144,9 +4144,18 @@ function setupAppControls() {
   document.getElementById('save-authors-note-btn').addEventListener('click', handleSaveAuthorsNote);
   document.getElementById('save-persona-btn').addEventListener('click', handleSavePersona);
   document.getElementById('save-examples-btn').addEventListener('click', handleSaveExamples);
+  document.getElementById('save-context-settings-btn').addEventListener('click', handleSaveContextSettings);
 
   // Setup recursion depth change handler
   document.getElementById('recursion-depth').addEventListener('change', handleRecursionDepthChange);
+
+  // Setup context management slider controls
+  document.getElementById('context-reserve-tokens').addEventListener('input', (e) => {
+    document.getElementById('context-reserve-value').textContent = e.target.value;
+  });
+  document.getElementById('context-min-messages').addEventListener('input', (e) => {
+    document.getElementById('context-min-value').textContent = e.target.value;
+  });
 
   // Setup preset controls
   document.getElementById('preset-select').addEventListener('change', (e) => {
@@ -6452,6 +6461,14 @@ async function loadRoleplaySettings() {
     document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
     document.getElementById('examples-position').value = settings.examples_position || 'after_system';
 
+    // Load Context Management Settings
+    document.getElementById('context-pruning-enabled').checked = settings.context_pruning_enabled !== undefined ? settings.context_pruning_enabled : true;
+    document.getElementById('context-reserve-tokens').value = settings.context_reserve_tokens || 4000;
+    document.getElementById('context-reserve-value').textContent = settings.context_reserve_tokens || 4000;
+    document.getElementById('context-min-messages').value = settings.context_min_messages || 10;
+    document.getElementById('context-min-value').textContent = settings.context_min_messages || 10;
+    document.getElementById('context-preserve-pinned').checked = settings.context_preserve_pinned !== undefined ? settings.context_preserve_pinned : true;
+
     // Load Presets
     await loadPresets();
 
@@ -6945,6 +6962,43 @@ async function handleSavePersona() {
   } catch (error) {
     console.error('Failed to save Persona:', error);
     showError('Save Failed', `Failed to save persona: ${error}`);
+  }
+}
+
+// Save Context Management Settings
+async function handleSaveContextSettings() {
+  if (!currentCharacter) return;
+
+  const pruningEnabled = document.getElementById('context-pruning-enabled').checked;
+  const reserveTokens = parseInt(document.getElementById('context-reserve-tokens').value);
+  const minMessages = parseInt(document.getElementById('context-min-messages').value);
+  const preservePinned = document.getElementById('context-preserve-pinned').checked;
+
+  try {
+    await invoke('update_context_settings', {
+      characterId: currentCharacter.id,
+      pruningEnabled,
+      reserveTokens,
+      minMessages,
+      preservePinned
+    });
+
+    // Update currentRoleplaySettings
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.context_pruning_enabled = pruningEnabled;
+      currentRoleplaySettings.context_reserve_tokens = reserveTokens;
+      currentRoleplaySettings.context_min_messages = minMessages;
+      currentRoleplaySettings.context_preserve_pinned = preservePinned;
+    }
+
+    // Update feature badges
+    updateFeatureBadges();
+
+    // Show success message
+    showSuccess('Context Settings Saved', 'Your context management settings have been saved successfully.');
+  } catch (error) {
+    console.error('Failed to save context settings:', error);
+    showError('Save Failed', `Failed to save context settings: ${error}`);
   }
 }
 
