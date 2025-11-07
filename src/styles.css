@@ -5022,7 +5022,7 @@ body.drag-over {
 
 /* Tablets - 768px to 899px - Auto-collapse sidebars for better space */
 @media (min-width: 768px) and (max-width: 899px) {
-  /* Force compact layout on tablets */
+  /* Force sidebars to overlay mode, not part of grid */
   .layout-spacious .left-sidebar,
   .layout-spacious .right-sidebar {
     position: fixed;
@@ -5050,13 +5050,32 @@ body.drag-over {
     right: 0;
   }
 
+  /* CRITICAL FIX: Use only main panel, no sidebar columns */
   .layout-spacious .app-container {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Override any collapsed state grid changes */
+  .layout-spacious .app-container.left-sidebar-collapsed,
+  .layout-spacious .app-container.right-sidebar-collapsed,
+  .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 1fr !important;
   }
 
   /* Show overlay when sidebars are open */
   .layout-spacious .sidebar-overlay {
     display: block;
+  }
+
+  /* Show hamburger menu button */
+  .layout-spacious .header-left-controls {
+    display: flex !important;
+  }
+
+  /* Show character controls in header on smaller screens */
+  .layout-spacious .character-display,
+  .layout-spacious .character-controls {
+    display: flex !important;
   }
 }
 
@@ -5147,18 +5166,26 @@ body.drag-over {
   /* Hide spacious layout sidebars completely on mobile */
   .layout-spacious .left-sidebar,
   .layout-spacious .right-sidebar {
-    display: none;
+    display: none !important;
   }
 
+  /* CRITICAL FIX: Force full-width layout on mobile */
   .layout-spacious .app-container {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Override any collapsed state grid changes */
+  .layout-spacious .app-container.left-sidebar-collapsed,
+  .layout-spacious .app-container.right-sidebar-collapsed,
+  .layout-spacious .app-container.left-sidebar-collapsed.right-sidebar-collapsed {
+    grid-template-columns: 1fr !important;
   }
 
   /* Restore character controls in header on mobile spacious mode */
   .layout-spacious .character-display,
   .layout-spacious .character-controls,
   .layout-spacious .header-left-controls {
-    display: flex;
+    display: flex !important;
   }
 
   /* Reduce roleplay panel padding on mobile */
