@@ -1,5 +1,8 @@
 const { invoke } = window.__TAURI__.core;
 
+// Import plugin sandbox for safe plugin execution
+import { PluginSandbox, createSandboxedAPI } from './plugin-sandbox.js';
+
 // Track app start time for loading overlay
 window.appStartTime = Date.now();
 
@@ -7954,20 +7957,28 @@ window.addEventListener('DOMContentLoaded', () => {
   characterHeaderName = document.getElementById('character-header-name');
   newCharacterBtn = document.getElementById('new-character-btn');
 
-  // Load and execute plugins
+  // Load and execute plugins safely
   (async () => {
     try {
       const pluginCode = await invoke('load_plugins');
       if (pluginCode) {
-        console.log('Executing plugin code...');
-        // Execute plugin code
-        eval(pluginCode);
-        console.log('Plugins loaded successfully');
+        console.log('Loading plugins in secure sandbox...');
+
+        // Create sandboxed API to restrict plugin access
+        const sandboxedAPI = createSandboxedAPI(window.ClaudiaPluginAPI);
+
+        // Create plugin sandbox
+        const sandbox = new PluginSandbox(sandboxedAPI);
+
+        // Execute plugin code safely (no eval!)
+        await sandbox.executePlugin(pluginCode, 'main-plugins');
+
+        console.log('✅ Plugins loaded successfully in sandbox');
         console.log('Plugin settings registry:', pluginSettingsRegistry);
         console.log('Registry keys:', Object.keys(pluginSettingsRegistry));
       }
     } catch (error) {
-      console.error('Failed to load plugins:', error);
+      console.error('❌ Failed to load plugins:', error);
       showError('Plugin Error', 'Failed to load plugins: ' + error.message);
     }
   })();
