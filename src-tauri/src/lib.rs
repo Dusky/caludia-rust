@@ -5299,6 +5299,7 @@ fn duplicate_preset(source_preset_id: String, new_name: String) -> Result<Prompt
         authors_note_default: source_preset.authors_note_default.clone(),
         instructions: source_preset.instructions.clone(),
         format_hints: source_preset.format_hints.clone(),
+        sampling: source_preset.sampling.clone(),
     };
 
     // Save as custom preset
