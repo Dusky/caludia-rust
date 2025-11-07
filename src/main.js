@@ -3,6 +3,9 @@ const { invoke } = window.__TAURI__.core;
 // Import plugin sandbox for safe plugin execution
 import { PluginSandbox, createSandboxedAPI } from './plugin-sandbox.js';
 
+// Import HTML sanitizer for XSS protection
+import { sanitizeMessage, sanitizeRichContent, sanitizeText } from './utils/sanitizer.js';
+
 // Track app start time for loading overlay
 window.appStartTime = Date.now();
 
@@ -2396,9 +2399,10 @@ function renderAssistantContent(contentDiv, messageText) {
     contentDiv.appendChild(nameIndicator);
   }
 
-  // Add message content
+  // Add message content (sanitized to prevent XSS)
   const messageContent = document.createElement('div');
-  messageContent.innerHTML = marked.parse(messageText);
+  const rawHTML = marked.parse(messageText);
+  messageContent.innerHTML = sanitizeMessage(rawHTML);
   contentDiv.appendChild(messageContent);
 
   // Apply syntax highlighting to code blocks
@@ -2462,7 +2466,8 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
 
     // Check if content contains markdown image syntax or URLs
     if (content.includes('![') || /https?:\/\/.*\.(jpg|jpeg|png|gif|webp)/i.test(content)) {
-      messageContent.innerHTML = marked.parse(content);
+      const rawHTML = marked.parse(content);
+      messageContent.innerHTML = sanitizeMessage(rawHTML);
 
       // Apply syntax highlighting to code blocks if any
       messageContent.querySelectorAll('pre code').forEach((block) => {
@@ -2537,7 +2542,8 @@ async function addMessage(content, isUser = false, skipActions = false, timestam
     }
 
     const messageContent = document.createElement('div');
-    messageContent.innerHTML = marked.parse(content);
+    const rawHTML = marked.parse(content);
+    messageContent.innerHTML = sanitizeMessage(rawHTML);
     contentDiv.appendChild(messageContent);
 
     // Apply syntax highlighting to code blocks
