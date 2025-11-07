@@ -6438,6 +6438,10 @@ async function loadRoleplaySettings() {
     document.getElementById('examples-enabled').checked = settings.examples_enabled || false;
     document.getElementById('examples-position').value = settings.examples_position || 'after_system';
 
+    // Load Instruct Mode settings
+    document.getElementById('instruct-mode-enabled').checked = settings.instruct_mode_enabled || false;
+    document.getElementById('instruct-template-select').value = settings.instruct_template_id || 'none';
+
     // Load Presets
     await loadPresets();
 
@@ -6530,6 +6534,31 @@ function updateFeatureBadges() {
         <path d="M6 6h4M6 9h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
       <span>A/N</span>
+    `;
+    badgesContainer.appendChild(badge);
+  }
+
+  // Instruct Mode badge
+  if (currentRoleplaySettings.instruct_mode_enabled && currentRoleplaySettings.instruct_template_id !== 'none') {
+    const badge = document.createElement('div');
+    badge.className = 'feature-badge';
+    // Get template name for display
+    const templateNames = {
+      'alpaca': 'Alpaca',
+      'chatml': 'ChatML',
+      'llama2': 'Llama 2',
+      'llama3': 'Llama 3',
+      'mistral': 'Mistral',
+      'vicuna': 'Vicuna',
+      'command_r': 'Command-R'
+    };
+    const templateName = templateNames[currentRoleplaySettings.instruct_template_id] || currentRoleplaySettings.instruct_template_id;
+    badge.title = `Instruct Mode: ${templateName}`;
+    badge.innerHTML = `
+      <svg class="feature-badge-icon" viewBox="0 0 16 16" fill="none">
+        <path d="M2 5l3 3-3 3M7 11h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>${templateName}</span>
     `;
     badgesContainer.appendChild(badge);
   }
@@ -9370,6 +9399,88 @@ async function sendGroupMessage(message, isRegenerate = false) {
     messageInput.disabled = false;
     messageInput.focus();
   }
+}
+
+// ============================================================================
+// Instruct Mode System
+// ============================================================================
+
+// Load instruct templates into dropdown
+async function loadInstructTemplates() {
+  try {
+    const templates = await invoke('get_instruct_templates');
+    const select = document.getElementById('instruct-template-select');
+
+    if (!select) return;
+
+    // Clear existing options except the first one (None)
+    select.innerHTML = '';
+
+    // Add all templates
+    templates.forEach(template => {
+      const option = document.createElement('option');
+      option.value = template.id;
+      option.textContent = template.name;
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Failed to load instruct templates:', error);
+  }
+}
+
+// Save instruct mode settings
+async function handleSaveInstructSettings() {
+  const enabled = document.getElementById('instruct-mode-enabled').checked;
+  const templateId = document.getElementById('instruct-template-select').value;
+  const messageDiv = document.getElementById('instruct-save-message');
+
+  try {
+    await invoke('update_instruct_settings', {
+      enabled: enabled,
+      templateId: templateId
+    });
+
+    // Update cached settings
+    if (currentRoleplaySettings) {
+      currentRoleplaySettings.instruct_mode_enabled = enabled;
+      currentRoleplaySettings.instruct_template_id = templateId;
+    }
+
+    // Show success message
+    messageDiv.textContent = 'Instruct Mode settings saved successfully!';
+    messageDiv.style.display = 'block';
+    messageDiv.style.color = 'var(--success-color, #10b981)';
+
+    setTimeout(() => {
+      messageDiv.style.display = 'none';
+    }, 3000);
+
+    // Update feature badges
+    updateFeatureBadges();
+  } catch (error) {
+    console.error('Failed to save instruct settings:', error);
+    messageDiv.textContent = `Error saving settings: ${error}`;
+    messageDiv.style.display = 'block';
+    messageDiv.style.color = 'var(--error-color, #ef4444)';
+  }
+}
+
+// Initialize instruct mode
+async function initializeInstructMode() {
+  await loadInstructTemplates();
+
+  // Add event listener for save button
+  const saveBtn = document.getElementById('save-instruct-settings');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', handleSaveInstructSettings);
+  }
+}
+
+// Call initialization when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeInstructMode);
+} else {
+  initializeInstructMode();
 }
 
 // Event listeners for group chat modal

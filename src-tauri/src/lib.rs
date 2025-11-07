@@ -99,6 +99,246 @@ impl Default for ThemeConfig {
     }
 }
 
+// Instruct Mode Template for formatting messages for instruction-tuned models
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InstructTemplate {
+    id: String,
+    name: String,
+    #[serde(default)]
+    system_prefix: String, // Before system message
+    #[serde(default)]
+    system_suffix: String, // After system message
+    #[serde(default)]
+    user_prefix: String, // Before user message
+    #[serde(default)]
+    user_suffix: String, // After user message
+    #[serde(default)]
+    assistant_prefix: String, // Before assistant message
+    #[serde(default)]
+    assistant_suffix: String, // After assistant message
+    #[serde(default)]
+    system_sequence_prefix: String, // Between system messages
+    #[serde(default)]
+    system_sequence_suffix: String,
+    #[serde(default)]
+    first_output_sequence: String, // What triggers the first response
+    #[serde(default)]
+    last_output_sequence: String, // What triggers continuation
+    #[serde(default)]
+    system_same_as_user: bool, // Some models need system formatted as user
+    #[serde(default)]
+    user_alignment_message: String, // Optional alignment message after user
+    #[serde(default)]
+    last_system_sequence_suffix: String, // Suffix for last system message
+    #[serde(default)]
+    stop_sequence: String, // Stop token for generation
+    #[serde(default)]
+    wrap_system: bool, // Whether to wrap system messages
+    #[serde(default)]
+    macro_format: Option<String>, // Optional macro for complex formatting
+}
+
+impl InstructTemplate {
+    // Built-in template constructors
+
+    fn none() -> Self {
+        Self {
+            id: "none".to_string(),
+            name: "None (Chat API)".to_string(),
+            system_prefix: String::new(),
+            system_suffix: String::new(),
+            user_prefix: String::new(),
+            user_suffix: String::new(),
+            assistant_prefix: String::new(),
+            assistant_suffix: String::new(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: String::new(),
+            last_output_sequence: String::new(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: String::new(),
+            wrap_system: false,
+            macro_format: None,
+        }
+    }
+
+    fn alpaca() -> Self {
+        Self {
+            id: "alpaca".to_string(),
+            name: "Alpaca".to_string(),
+            system_prefix: String::new(),
+            system_suffix: "\n\n".to_string(),
+            user_prefix: "### Instruction:\n".to_string(),
+            user_suffix: "\n\n".to_string(),
+            assistant_prefix: "### Response:\n".to_string(),
+            assistant_suffix: "\n\n".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "### Response:\n".to_string(),
+            last_output_sequence: "### Response:\n".to_string(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: "### Instruction:".to_string(),
+            wrap_system: false,
+            macro_format: None,
+        }
+    }
+
+    fn chatml() -> Self {
+        Self {
+            id: "chatml".to_string(),
+            name: "ChatML".to_string(),
+            system_prefix: "<|im_start|>system\n".to_string(),
+            system_suffix: "<|im_end|>\n".to_string(),
+            user_prefix: "<|im_start|>user\n".to_string(),
+            user_suffix: "<|im_end|>\n".to_string(),
+            assistant_prefix: "<|im_start|>assistant\n".to_string(),
+            assistant_suffix: "<|im_end|>\n".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "<|im_start|>assistant\n".to_string(),
+            last_output_sequence: "<|im_start|>assistant\n".to_string(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: "<|im_end|>".to_string(),
+            wrap_system: true,
+            macro_format: None,
+        }
+    }
+
+    fn llama2() -> Self {
+        Self {
+            id: "llama2".to_string(),
+            name: "Llama 2".to_string(),
+            system_prefix: "[INST] <<SYS>>\n".to_string(),
+            system_suffix: "\n<</SYS>>\n\n".to_string(),
+            user_prefix: "".to_string(),
+            user_suffix: " [/INST] ".to_string(),
+            assistant_prefix: "".to_string(),
+            assistant_suffix: " </s><s>[INST] ".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "".to_string(),
+            last_output_sequence: "".to_string(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: "\n<</SYS>>\n\n".to_string(),
+            stop_sequence: "</s>".to_string(),
+            wrap_system: true,
+            macro_format: None,
+        }
+    }
+
+    fn llama3() -> Self {
+        Self {
+            id: "llama3".to_string(),
+            name: "Llama 3".to_string(),
+            system_prefix: "<|start_header_id|>system<|end_header_id|>\n\n".to_string(),
+            system_suffix: "<|eot_id|>".to_string(),
+            user_prefix: "<|start_header_id|>user<|end_header_id|>\n\n".to_string(),
+            user_suffix: "<|eot_id|>".to_string(),
+            assistant_prefix: "<|start_header_id|>assistant<|end_header_id|>\n\n".to_string(),
+            assistant_suffix: "<|eot_id|>".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "<|start_header_id|>assistant<|end_header_id|>\n\n".to_string(),
+            last_output_sequence: "<|start_header_id|>assistant<|end_header_id|>\n\n".to_string(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: "<|eot_id|>".to_string(),
+            wrap_system: true,
+            macro_format: None,
+        }
+    }
+
+    fn mistral() -> Self {
+        Self {
+            id: "mistral".to_string(),
+            name: "Mistral/Mixtral".to_string(),
+            system_prefix: "".to_string(),
+            system_suffix: "\n\n".to_string(),
+            user_prefix: "[INST] ".to_string(),
+            user_suffix: " [/INST]".to_string(),
+            assistant_prefix: "".to_string(),
+            assistant_suffix: "</s>".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "".to_string(),
+            last_output_sequence: "[INST] ".to_string(),
+            system_same_as_user: true,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: "</s>".to_string(),
+            wrap_system: false,
+            macro_format: None,
+        }
+    }
+
+    fn vicuna() -> Self {
+        Self {
+            id: "vicuna".to_string(),
+            name: "Vicuna".to_string(),
+            system_prefix: "".to_string(),
+            system_suffix: "\n\n".to_string(),
+            user_prefix: "USER: ".to_string(),
+            user_suffix: "\n".to_string(),
+            assistant_prefix: "ASSISTANT: ".to_string(),
+            assistant_suffix: "\n".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "ASSISTANT: ".to_string(),
+            last_output_sequence: "ASSISTANT: ".to_string(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: "USER:".to_string(),
+            wrap_system: false,
+            macro_format: None,
+        }
+    }
+
+    fn command_r() -> Self {
+        Self {
+            id: "command_r".to_string(),
+            name: "Command-R".to_string(),
+            system_prefix: "<|START_OF_TURN_TOKEN|><|SYSTEM_TOKEN|>".to_string(),
+            system_suffix: "<|END_OF_TURN_TOKEN|>".to_string(),
+            user_prefix: "<|START_OF_TURN_TOKEN|><|USER_TOKEN|>".to_string(),
+            user_suffix: "<|END_OF_TURN_TOKEN|>".to_string(),
+            assistant_prefix: "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>".to_string(),
+            assistant_suffix: "<|END_OF_TURN_TOKEN|>".to_string(),
+            system_sequence_prefix: String::new(),
+            system_sequence_suffix: String::new(),
+            first_output_sequence: "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>".to_string(),
+            last_output_sequence: "<|START_OF_TURN_TOKEN|><|CHATBOT_TOKEN|>".to_string(),
+            system_same_as_user: false,
+            user_alignment_message: String::new(),
+            last_system_sequence_suffix: String::new(),
+            stop_sequence: "<|END_OF_TURN_TOKEN|>".to_string(),
+            wrap_system: true,
+            macro_format: None,
+        }
+    }
+
+    fn get_all_builtin_templates() -> Vec<InstructTemplate> {
+        vec![
+            Self::none(),
+            Self::alpaca(),
+            Self::chatml(),
+            Self::llama2(),
+            Self::llama3(),
+            Self::mistral(),
+            Self::vicuna(),
+            Self::command_r(),
+        ]
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Character {
     id: String,
@@ -466,6 +706,10 @@ struct RoleplaySettings {
     context_preserve_pinned: bool, // Always keep pinned messages (default true)
     #[serde(default = "default_context_min_messages")]
     context_min_messages: usize, // Minimum messages to keep (default 10)
+    #[serde(default)]
+    instruct_mode_enabled: bool, // Enable instruct mode formatting
+    #[serde(default = "default_instruct_template_id")]
+    instruct_template_id: String, // ID of selected template (default "none")
 }
 
 fn default_authors_note_depth() -> usize {
@@ -492,6 +736,10 @@ fn default_context_min_messages() -> usize {
     10 // Keep at least 10 messages
 }
 
+fn default_instruct_template_id() -> String {
+    "none".to_string() // Use chat API by default
+}
+
 impl Default for RoleplaySettings {
     fn default() -> Self {
         Self {
@@ -511,6 +759,8 @@ impl Default for RoleplaySettings {
             context_reserve_tokens: default_context_reserve_tokens(),
             context_preserve_pinned: true, // Always preserve pinned messages
             context_min_messages: default_context_min_messages(),
+            instruct_mode_enabled: false, // Instruct mode disabled by default (use chat API)
+            instruct_template_id: default_instruct_template_id(), // "none" by default
         }
     }
 }
@@ -936,6 +1186,37 @@ struct Delta {
 #[derive(Debug, Serialize, Deserialize)]
 struct StreamResponse {
     choices: Vec<StreamChoice>,
+}
+
+// Completion API structs (for instruct mode)
+#[derive(Debug, Serialize, Deserialize)]
+struct CompletionRequest {
+    model: String,
+    prompt: String,
+    max_tokens: u32,
+    stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    stop: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CompletionChoice {
+    text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CompletionResponse {
+    choices: Vec<CompletionChoice>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CompletionStreamChoice {
+    text: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CompletionStreamResponse {
+    choices: Vec<CompletionStreamChoice>,
 }
 
 fn get_config_path() -> PathBuf {
@@ -2657,6 +2938,116 @@ fn build_api_messages(
     api_messages
 }
 
+// Apply instruct mode template to convert messages to text prompt
+fn apply_instruct_template(messages: &[Message], template: &InstructTemplate) -> String {
+    let mut prompt = String::new();
+    let mut system_messages = Vec::new();
+    let mut conversation_messages = Vec::new();
+
+    // Separate system messages from conversation
+    for msg in messages {
+        if msg.role == "system" {
+            system_messages.push(msg);
+        } else {
+            conversation_messages.push(msg);
+        }
+    }
+
+    // Format system messages
+    if !system_messages.is_empty() {
+        if template.wrap_system {
+            // Each system message gets wrapped individually
+            for (i, msg) in system_messages.iter().enumerate() {
+                prompt.push_str(&template.system_prefix);
+                prompt.push_str(&msg.get_content());
+
+                // Use special suffix for last system message if specified
+                if i == system_messages.len() - 1 && !template.last_system_sequence_suffix.is_empty() {
+                    prompt.push_str(&template.last_system_sequence_suffix);
+                } else {
+                    prompt.push_str(&template.system_suffix);
+                }
+
+                // Add sequence separator if not last
+                if i < system_messages.len() - 1 {
+                    prompt.push_str(&template.system_sequence_prefix);
+                }
+            }
+        } else {
+            // Combine all system messages into one
+            let combined_system = system_messages
+                .iter()
+                .map(|m| m.get_content())
+                .collect::<Vec<_>>()
+                .join("\n\n");
+            prompt.push_str(&template.system_prefix);
+            prompt.push_str(&combined_system);
+            prompt.push_str(&template.system_suffix);
+        }
+    }
+
+    // Format conversation messages
+    for (i, msg) in conversation_messages.iter().enumerate() {
+        let is_last = i == conversation_messages.len() - 1;
+
+        match msg.role.as_str() {
+            "user" => {
+                prompt.push_str(&template.user_prefix);
+                prompt.push_str(&msg.get_content());
+                prompt.push_str(&template.user_suffix);
+
+                // Add user alignment message if specified
+                if !template.user_alignment_message.is_empty() {
+                    prompt.push_str(&template.user_alignment_message);
+                }
+            }
+            "assistant" => {
+                prompt.push_str(&template.assistant_prefix);
+                prompt.push_str(&msg.get_content());
+
+                // Don't add suffix to last assistant message (we want to continue)
+                if !is_last {
+                    prompt.push_str(&template.assistant_suffix);
+                }
+            }
+            "system" => {
+                // Handle mid-conversation system messages (like Author's Note)
+                if template.system_same_as_user {
+                    // Treat as user message
+                    prompt.push_str(&template.user_prefix);
+                    prompt.push_str(&msg.get_content());
+                    prompt.push_str(&template.user_suffix);
+                } else if template.wrap_system {
+                    // Wrap as system message
+                    prompt.push_str(&template.system_prefix);
+                    prompt.push_str(&msg.get_content());
+                    prompt.push_str(&template.system_suffix);
+                } else {
+                    // Just add the content with minimal formatting
+                    prompt.push_str("\n");
+                    prompt.push_str(&msg.get_content());
+                    prompt.push_str("\n");
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Add the output sequence to trigger the assistant's response
+    if !conversation_messages.is_empty() {
+        let last_role = &conversation_messages.last().unwrap().role;
+        if last_role == "user" || last_role == "system" {
+            // Last message was from user, add first_output_sequence
+            prompt.push_str(&template.first_output_sequence);
+        } else {
+            // Last message was from assistant, add last_output_sequence for continuation
+            prompt.push_str(&template.last_output_sequence);
+        }
+    }
+
+    prompt
+}
+
 // Helper function to build API messages for group chats
 // Only injects the responding character's prompt, not all group members
 fn build_api_messages_for_group(
@@ -2965,64 +3356,88 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
 
     let client = reqwest::Client::new();
     let base = config.base_url.trim_end_matches('/');
-    let url = if base.ends_with("/v1") {
-        format!("{}/chat/completions", base)
-    } else {
-        format!("{}/v1/chat/completions", base)
-    };
 
     // Build API messages with all roleplay context
     let roleplay_settings = load_roleplay_settings(&character.id);
     let api_messages = build_api_messages(&character, &history, &roleplay_settings);
 
-    let request = StreamChatRequest {
-        model: config.model.clone(),
-        max_tokens: 4096,
-        messages: api_messages,
-        stream: true,
-    };
+    // Check if instruct mode is enabled
+    let use_instruct_mode = roleplay_settings.instruct_mode_enabled &&
+                             roleplay_settings.instruct_template_id != "none";
 
-    let response = client
-        .post(&url)
-        .header("authorization", format!("Bearer {}", &config.api_key))
-        .header("content-type", "application/json")
-        .json(&request)
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+    let full_content = if use_instruct_mode {
+        // Instruct Mode: Use completions API
+        let url = if base.ends_with("/v1") {
+            format!("{}/completions", base)
+        } else {
+            format!("{}/v1/completions", base)
+        };
 
-    if !response.status().is_success() {
-        return Err(format!("API error: {}", response.status()));
-    }
+        // Get the selected template
+        let template = InstructTemplate::get_all_builtin_templates()
+            .into_iter()
+            .find(|t| t.id == roleplay_settings.instruct_template_id)
+            .unwrap_or_else(|| InstructTemplate::none());
 
-    // Process streaming response
-    let mut full_content = String::new();
-    let mut stream = response.bytes_stream();
+        // Convert messages to text prompt using template
+        let prompt = apply_instruct_template(&api_messages, &template);
 
-    let mut buffer = String::new();
-    while let Some(chunk_result) = stream.next().await {
-        let chunk = chunk_result.map_err(|e| format!("Stream error: {}", e))?;
-        let chunk_str = String::from_utf8_lossy(&chunk);
-        buffer.push_str(&chunk_str);
+        // Build stop sequences
+        let stop = if !template.stop_sequence.is_empty() {
+            Some(vec![template.stop_sequence.clone()])
+        } else {
+            None
+        };
 
-        // Process complete lines
-        while let Some(line_end) = buffer.find('\n') {
-            let line = buffer[..line_end].trim().to_string();
-            buffer = buffer[line_end + 1..].to_string();
+        let request = CompletionRequest {
+            model: config.model.clone(),
+            prompt,
+            max_tokens: 4096,
+            stream: true,
+            stop,
+        };
 
-            // Parse SSE data lines
-            if line.starts_with("data: ") {
-                let data = &line[6..];
+        let response = client
+            .post(&url)
+            .header("authorization", format!("Bearer {}", &config.api_key))
+            .header("content-type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
 
-                // Check for stream end
-                if data == "[DONE]" {
-                    break;
-                }
+        if !response.status().is_success() {
+            return Err(format!("API error: {}", response.status()));
+        }
 
-                // Parse JSON and extract content
-                if let Ok(stream_response) = serde_json::from_str::<StreamResponse>(data) {
-                    if let Some(choice) = stream_response.choices.first() {
-                        if let Some(content) = &choice.delta.content {
+        // Process streaming completion response
+        let mut full_content = String::new();
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.map_err(|e| format!("Stream error: {}", e))?;
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&chunk_str);
+
+            // Process complete lines
+            while let Some(line_end) = buffer.find('\n') {
+                let line = buffer[..line_end].trim().to_string();
+                buffer = buffer[line_end + 1..].to_string();
+
+                // Parse SSE data lines
+                if line.starts_with("data: ") {
+                    let data = &line[6..];
+
+                    // Check for stream end
+                    if data == "[DONE]" {
+                        break;
+                    }
+
+                    // Parse JSON and extract text
+                    if let Ok(stream_response) = serde_json::from_str::<CompletionStreamResponse>(data) {
+                        if let Some(choice) = stream_response.choices.first() {
+                            let content = &choice.text;
                             full_content.push_str(content);
 
                             // Emit token to frontend
@@ -3032,7 +3447,77 @@ async fn chat_stream(app_handle: tauri::AppHandle, message: String) -> Result<St
                 }
             }
         }
-    }
+
+        full_content
+    } else {
+        // Chat API Mode (default)
+        let url = if base.ends_with("/v1") {
+            format!("{}/chat/completions", base)
+        } else {
+            format!("{}/v1/chat/completions", base)
+        };
+
+        let request = StreamChatRequest {
+            model: config.model.clone(),
+            max_tokens: 4096,
+            messages: api_messages,
+            stream: true,
+        };
+
+        let response = client
+            .post(&url)
+            .header("authorization", format!("Bearer {}", &config.api_key))
+            .header("content-type", "application/json")
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("API error: {}", response.status()));
+        }
+
+        // Process streaming response
+        let mut full_content = String::new();
+        let mut stream = response.bytes_stream();
+        let mut buffer = String::new();
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.map_err(|e| format!("Stream error: {}", e))?;
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            buffer.push_str(&chunk_str);
+
+            // Process complete lines
+            while let Some(line_end) = buffer.find('\n') {
+                let line = buffer[..line_end].trim().to_string();
+                buffer = buffer[line_end + 1..].to_string();
+
+                // Parse SSE data lines
+                if line.starts_with("data: ") {
+                    let data = &line[6..];
+
+                    // Check for stream end
+                    if data == "[DONE]" {
+                        break;
+                    }
+
+                    // Parse JSON and extract content
+                    if let Ok(stream_response) = serde_json::from_str::<StreamResponse>(data) {
+                        if let Some(choice) = stream_response.choices.first() {
+                            if let Some(content) = &choice.delta.content {
+                                full_content.push_str(content);
+
+                                // Emit token to frontend
+                                let _ = app_handle.emit_to("main", "chat-token", content.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        full_content
+    };
 
     // Add assistant message to history
     history.messages.push(Message::new_assistant(full_content.clone()));
@@ -6306,6 +6791,27 @@ fn load_plugins() -> Result<String, String> {
     plugin_manager::load_enabled_plugins()
 }
 
+// Instruct Mode commands
+#[tauri::command]
+fn get_instruct_templates() -> Vec<InstructTemplate> {
+    InstructTemplate::get_all_builtin_templates()
+}
+
+#[tauri::command]
+fn update_instruct_settings(
+    enabled: bool,
+    template_id: String,
+) -> Result<(), String> {
+    let character = get_active_character();
+    let mut settings = load_roleplay_settings(&character.id);
+
+    settings.instruct_mode_enabled = enabled;
+    settings.instruct_template_id = template_id;
+
+    save_roleplay_settings(&character.id, &settings)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -6427,7 +6933,9 @@ pub fn run() {
             uninstall_plugin,
             update_plugin,
             get_plugin,
-            load_plugins
+            load_plugins,
+            get_instruct_templates,
+            update_instruct_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

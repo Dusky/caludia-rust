@@ -491,6 +491,7 @@
           <button class="tab-btn active" data-tab="api" role="tab" aria-selected="true" aria-controls="api-tab">API</button>
           <button class="tab-btn" data-tab="character" role="tab" aria-selected="false" aria-controls="character-tab">Character</button>
           <button class="tab-btn" data-tab="appearance" role="tab" aria-selected="false" aria-controls="appearance-tab">Appearance</button>
+          <button class="tab-btn" data-tab="instruct" role="tab" aria-selected="false" aria-controls="instruct-tab">Instruct Mode</button>
           <button class="tab-btn" data-tab="plugins" role="tab" aria-selected="false" aria-controls="plugins-tab">Plugins</button>
         </div>
 
@@ -894,6 +895,62 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div id="instruct-tab" class="tab-content" role="tabpanel" aria-labelledby="instruct-tab" hidden>
+          <div class="settings-form">
+            <div class="info-box" style="margin-bottom: 20px; padding: 15px; background: var(--surface); border-left: 4px solid var(--accent-color); border-radius: 4px;">
+              <h4 style="margin-top: 0; color: var(--accent-color);">What is Instruct Mode?</h4>
+              <p style="margin-bottom: 0;">
+                Instruct Mode formats your conversation using instruction templates required by local/open-source models.
+                Use this when your backend expects specific formatting like Alpaca, ChatML, or Llama formats.
+                <br><br>
+                <strong>Note:</strong> Only enable this if your model requires instruction formatting. Most cloud APIs (OpenAI, Anthropic, etc.) should leave this disabled (use "None").
+              </p>
+            </div>
+
+            <div class="form-group">
+              <label>
+                <input type="checkbox" id="instruct-mode-enabled" />
+                Enable Instruct Mode
+              </label>
+              <small style="display: block; margin-top: 8px; color: var(--text-secondary);">
+                When enabled, messages will be formatted using the selected template before sending to the API.
+              </small>
+            </div>
+
+            <div class="form-group" id="instruct-template-group">
+              <label for="instruct-template-select">Instruction Template</label>
+              <select id="instruct-template-select">
+                <option value="none">None (Chat API - Default)</option>
+              </select>
+              <small style="display: block; margin-top: 8px; color: var(--text-secondary);">
+                Select the instruction format your model expects. "None" uses standard chat API format.
+              </small>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px; padding: 15px; background: var(--background); border: 1px solid var(--border-color); border-radius: 4px;">
+              <h4 style="margin-top: 0;">Template Guide:</h4>
+              <ul style="margin: 0; padding-left: 20px; line-height: 1.8;">
+                <li><strong>None:</strong> Standard OpenAI/Anthropic chat format (use for cloud APIs)</li>
+                <li><strong>Alpaca:</strong> ### Instruction / ### Response format</li>
+                <li><strong>ChatML:</strong> &lt;|im_start|&gt; tag-based format (GPT-4, many fine-tunes)</li>
+                <li><strong>Llama 2:</strong> [INST] / [/INST] with &lt;&lt;SYS&gt;&gt; tags</li>
+                <li><strong>Llama 3:</strong> &lt;|start_header_id|&gt; header format</li>
+                <li><strong>Mistral/Mixtral:</strong> [INST] format without system tags</li>
+                <li><strong>Vicuna:</strong> USER: / ASSISTANT: simple format</li>
+                <li><strong>Command-R:</strong> Cohere's token-based format</li>
+              </ul>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px;">
+              <button type="button" id="save-instruct-settings" class="btn-primary">
+                Save Instruct Settings
+              </button>
+            </div>
+
+            <div id="instruct-save-message" style="margin-top: 12px; display: none;"></div>
           </div>
         </div>
 
