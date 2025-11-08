@@ -4,7 +4,7 @@ mod backends;
 
 use serde::{Deserialize, Serialize};
 use error::{AppError, Result};
-use backends::{BackendType, SamplingParams, BackendPreset};
+use backends::{BackendType, SamplingParams, BackendPreset, SamplingPreset};
 use std::fs;
 use std::path::PathBuf;
 use std::io::BufWriter;
@@ -6397,6 +6397,97 @@ fn apply_backend_preset(preset_name: String) -> Result<(), String> {
     Ok(())
 }
 
+// ============================================================================
+// SAMPLING PRESET MANAGEMENT
+// ============================================================================
+
+fn get_sampling_presets_dir() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/sampling_presets")
+}
+
+fn get_sampling_preset_path(preset_id: &str) -> PathBuf {
+    get_sampling_presets_dir().join(format!("{}.json", preset_id))
+}
+
+fn load_custom_sampling_presets() -> Vec<SamplingPreset> {
+    let mut presets = Vec::new();
+    let dir = get_sampling_presets_dir();
+
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            if let Ok(content) = fs::read_to_string(entry.path()) {
+                if let Ok(preset) = serde_json::from_str::<SamplingPreset>(&content) {
+                    presets.push(preset);
+                }
+            }
+        }
+    }
+
+    presets
+}
+
+/// Get all sampling presets (built-in + custom)
+#[tauri::command]
+fn get_sampling_presets() -> Vec<SamplingPreset> {
+    let mut presets = SamplingPreset::builtin_presets();
+    presets.extend(load_custom_sampling_presets());
+    presets
+}
+
+/// Apply a sampling preset by ID
+#[tauri::command]
+fn apply_sampling_preset(preset_id: String) -> Result<(), String> {
+    let presets = get_sampling_presets();
+    let preset = presets
+        .iter()
+        .find(|p| p.id == preset_id)
+        .ok_or("Preset not found")?;
+
+    let config_path = get_config_path();
+    let mut config = load_config_internal().unwrap_or_default();
+    config.sampling = preset.params.clone();
+    save_config_internal(&config, &config_path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Save a custom sampling preset
+#[tauri::command]
+fn save_sampling_preset(preset: SamplingPreset) -> Result<(), String> {
+    // Don't allow overwriting built-in presets
+    if preset.is_builtin {
+        return Err("Cannot modify built-in presets".to_string());
+    }
+
+    let dir = get_sampling_presets_dir();
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let path = get_sampling_preset_path(&preset.id);
+    let contents = serde_json::to_string_pretty(&preset).map_err(|e| e.to_string())?;
+    fs::write(&path, contents).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Delete a custom sampling preset
+#[tauri::command]
+fn delete_sampling_preset(preset_id: String) -> Result<(), String> {
+    // Don't allow deleting built-in presets
+    let builtin_ids: Vec<String> = SamplingPreset::builtin_presets()
+        .iter()
+        .map(|p| p.id.clone())
+        .collect();
+
+    if builtin_ids.contains(&preset_id) {
+        return Err("Cannot delete built-in presets".to_string());
+    }
+
+    let path = get_sampling_preset_path(&preset_id);
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -6524,7 +6615,12 @@ pub fn run() {
             get_backend_presets,
             update_sampling_params,
             get_sampling_params,
-            apply_backend_preset
+            apply_backend_preset,
+            // Sampling preset management
+            get_sampling_presets,
+            apply_sampling_preset,
+            save_sampling_preset,
+            delete_sampling_preset
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

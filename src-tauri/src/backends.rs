@@ -274,6 +274,129 @@ impl SamplingParams {
     }
 }
 
+/// Sampling preset - predefined sampling parameter configurations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SamplingPreset {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub params: SamplingParams,
+    #[serde(default)]
+    pub is_builtin: bool,
+}
+
+impl SamplingPreset {
+    /// Get built-in sampling presets
+    pub fn builtin_presets() -> Vec<SamplingPreset> {
+        vec![
+            // Balanced - Default settings
+            SamplingPreset {
+                id: "balanced".to_string(),
+                name: "Balanced".to_string(),
+                description: "Balanced settings for general use".to_string(),
+                params: SamplingParams {
+                    temperature: 1.0,
+                    top_p: 1.0,
+                    top_k: 0,
+                    max_tokens: 2048,
+                    min_p: None,
+                    top_a: None,
+                    typical_p: None,
+                    tfs: None,
+                    repetition_penalty: None,
+                    frequency_penalty: None,
+                    presence_penalty: None,
+                    repetition_penalty_range: None,
+                    mirostat_mode: None,
+                    mirostat_tau: None,
+                    mirostat_eta: None,
+                    stop_sequences: Vec::new(),
+                    seed: None,
+                },
+                is_builtin: true,
+            },
+            // Creative - High temperature for creative writing
+            SamplingPreset {
+                id: "creative".to_string(),
+                name: "Creative".to_string(),
+                description: "Higher temperature for creative and varied responses".to_string(),
+                params: SamplingParams {
+                    temperature: 1.2,
+                    top_p: 0.95,
+                    top_k: 0,
+                    max_tokens: 2048,
+                    min_p: Some(0.05),
+                    top_a: None,
+                    typical_p: None,
+                    tfs: None,
+                    repetition_penalty: Some(1.1),
+                    frequency_penalty: Some(0.3),
+                    presence_penalty: Some(0.3),
+                    repetition_penalty_range: None,
+                    mirostat_mode: None,
+                    mirostat_tau: None,
+                    mirostat_eta: None,
+                    stop_sequences: Vec::new(),
+                    seed: None,
+                },
+                is_builtin: true,
+            },
+            // Precise - Low temperature for factual responses
+            SamplingPreset {
+                id: "precise".to_string(),
+                name: "Precise".to_string(),
+                description: "Lower temperature for focused and deterministic responses".to_string(),
+                params: SamplingParams {
+                    temperature: 0.7,
+                    top_p: 0.9,
+                    top_k: 40,
+                    max_tokens: 2048,
+                    min_p: None,
+                    top_a: None,
+                    typical_p: None,
+                    tfs: None,
+                    repetition_penalty: None,
+                    frequency_penalty: None,
+                    presence_penalty: None,
+                    repetition_penalty_range: None,
+                    mirostat_mode: None,
+                    mirostat_tau: None,
+                    mirostat_eta: None,
+                    stop_sequences: Vec::new(),
+                    seed: None,
+                },
+                is_builtin: true,
+            },
+            // Roleplay - Optimized for character roleplay
+            SamplingPreset {
+                id: "roleplay".to_string(),
+                name: "Roleplay".to_string(),
+                description: "Optimized for immersive character roleplay".to_string(),
+                params: SamplingParams {
+                    temperature: 0.9,
+                    top_p: 0.95,
+                    top_k: 0,
+                    max_tokens: 2048,
+                    min_p: Some(0.05),
+                    top_a: None,
+                    typical_p: None,
+                    tfs: None,
+                    repetition_penalty: Some(1.15),
+                    frequency_penalty: Some(0.2),
+                    presence_penalty: Some(0.4),
+                    repetition_penalty_range: None,
+                    mirostat_mode: None,
+                    mirostat_tau: None,
+                    mirostat_eta: None,
+                    stop_sequences: Vec::new(),
+                    seed: None,
+                },
+                is_builtin: true,
+            },
+        ]
+    }
+}
+
 /// Backend preset - predefined configurations
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BackendPreset {

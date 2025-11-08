@@ -7975,6 +7975,7 @@ async function loadExistingConfig() {
     // Load backend presets and sampling parameters
     await loadBackendPresets();
     await loadSamplingParameters();
+    await loadSamplingPresets();
 
     // Load characters
     await loadCharacters();
@@ -8136,6 +8137,177 @@ async function saveSamplingParameters() {
   }
 }
 
+// ============================================================================
+// SAMPLING PRESET MANAGEMENT
+// ============================================================================
+
+// Load all sampling presets (built-in + custom)
+async function loadSamplingPresets() {
+  try {
+    const presets = await invoke('get_sampling_presets');
+    const select = document.getElementById('sampling-preset-select');
+
+    // Clear existing options except "Custom Configuration"
+    select.innerHTML = '<option value="">Custom Configuration</option>';
+
+    // Add built-in presets first
+    const builtinPresets = presets.filter(p => p.is_builtin);
+    if (builtinPresets.length > 0) {
+      const builtinGroup = document.createElement('optgroup');
+      builtinGroup.label = 'Built-in Presets';
+      builtinPresets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset.id;
+        option.textContent = `${preset.name} - ${preset.description}`;
+        option.dataset.isBuiltin = 'true';
+        builtinGroup.appendChild(option);
+      });
+      select.appendChild(builtinGroup);
+    }
+
+    // Add custom presets
+    const customPresets = presets.filter(p => !p.is_builtin);
+    if (customPresets.length > 0) {
+      const customGroup = document.createElement('optgroup');
+      customGroup.label = 'Custom Presets';
+      customPresets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset.id;
+        option.textContent = `${preset.name} - ${preset.description}`;
+        option.dataset.isBuiltin = 'false';
+        customGroup.appendChild(option);
+      });
+      select.appendChild(customGroup);
+    }
+
+    // Store presets for later use
+    window.samplingPresets = presets;
+
+  } catch (error) {
+    console.error('Failed to load sampling presets:', error);
+  }
+}
+
+// Handle sampling preset selection
+async function handleSamplingPresetChange() {
+  const select = document.getElementById('sampling-preset-select');
+  const deleteBtn = document.getElementById('delete-sampling-preset-btn');
+  const presetId = select.value;
+
+  // Show/hide delete button based on whether it's a custom preset
+  if (presetId && select.selectedOptions[0]?.dataset.isBuiltin === 'false') {
+    deleteBtn.style.display = 'block';
+  } else {
+    deleteBtn.style.display = 'none';
+  }
+
+  if (!presetId) {
+    // Custom configuration selected, don't change anything
+    return;
+  }
+
+  try {
+    // Apply the preset
+    await invoke('apply_sampling_preset', { presetId });
+
+    // Reload the sampling parameters to update the UI
+    await loadSamplingParameters();
+
+    showToast('Sampling preset applied successfully', 'success');
+  } catch (error) {
+    console.error('Failed to apply sampling preset:', error);
+    showToast('Failed to apply preset: ' + error, 'error');
+  }
+}
+
+// Handle saving current settings as a new preset
+async function handleSaveSamplingPreset() {
+  const name = prompt('Enter a name for this preset:');
+  if (!name || name.trim() === '') {
+    return;
+  }
+
+  const description = prompt('Enter a description (optional):') || 'Custom sampling configuration';
+
+  // Generate ID from name
+  const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+  // Get current sampling parameters
+  const params = {
+    temperature: parseFloat(document.getElementById('temperature-slider').value),
+    top_p: parseFloat(document.getElementById('top-p-slider').value),
+    top_k: parseInt(document.getElementById('top-k-input').value),
+    max_tokens: parseInt(document.getElementById('max-tokens-input').value),
+    min_p: parseFloat(document.getElementById('min-p-slider').value) || null,
+    repetition_penalty: parseFloat(document.getElementById('repetition-penalty-slider').value) || null,
+    frequency_penalty: parseFloat(document.getElementById('frequency-penalty-slider').value) || null,
+    presence_penalty: parseFloat(document.getElementById('presence-penalty-slider').value) || null,
+    top_a: null,
+    typical_p: null,
+    tfs: null,
+    repetition_penalty_range: null,
+    mirostat_mode: null,
+    mirostat_tau: null,
+    mirostat_eta: null,
+    stop_sequences: [],
+    seed: null,
+  };
+
+  const preset = {
+    id,
+    name: name.trim(),
+    description: description.trim(),
+    params,
+    is_builtin: false,
+  };
+
+  try {
+    await invoke('save_sampling_preset', { preset });
+    showToast('Sampling preset saved successfully', 'success');
+
+    // Reload presets and select the new one
+    await loadSamplingPresets();
+    document.getElementById('sampling-preset-select').value = id;
+    await handleSamplingPresetChange();
+  } catch (error) {
+    console.error('Failed to save sampling preset:', error);
+    showToast('Failed to save preset: ' + error, 'error');
+  }
+}
+
+// Handle deleting a custom preset
+async function handleDeleteSamplingPreset() {
+  const select = document.getElementById('sampling-preset-select');
+  const presetId = select.value;
+
+  if (!presetId) {
+    return;
+  }
+
+  // Find the preset to get its name
+  const preset = window.samplingPresets?.find(p => p.id === presetId);
+  if (!preset) {
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to delete the preset "${preset.name}"?`)) {
+    return;
+  }
+
+  try {
+    await invoke('delete_sampling_preset', { presetId });
+    showToast('Sampling preset deleted successfully', 'success');
+
+    // Reload presets and reset to custom
+    await loadSamplingPresets();
+    select.value = '';
+    await handleSamplingPresetChange();
+  } catch (error) {
+    console.error('Failed to delete sampling preset:', error);
+    showToast('Failed to delete preset: ' + error, 'error');
+  }
+}
+
 // Initialize sampling parameter event listeners
 function initializeSamplingControls() {
   // Temperature slider
@@ -8197,6 +8369,18 @@ function initializeSamplingControls() {
   // Backend preset selector
   const backendPresetSelect = document.getElementById('backend-preset-select');
   backendPresetSelect.addEventListener('change', handleBackendPresetChange);
+
+  // Sampling preset selector
+  const samplingPresetSelect = document.getElementById('sampling-preset-select');
+  samplingPresetSelect.addEventListener('change', handleSamplingPresetChange);
+
+  // Save sampling preset button
+  const saveSamplingPresetBtn = document.getElementById('save-sampling-preset-btn');
+  saveSamplingPresetBtn.addEventListener('click', handleSaveSamplingPreset);
+
+  // Delete sampling preset button
+  const deleteSamplingPresetBtn = document.getElementById('delete-sampling-preset-btn');
+  deleteSamplingPresetBtn.addEventListener('click', handleDeleteSamplingPreset);
 }
 
 // Failsafe: Remove loading overlay after 5 seconds no matter what
