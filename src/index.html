@@ -577,6 +577,39 @@
               <small style="color: var(--text-secondary); margin-top: 4px; display: block;">Quick-load predefined sampling configurations</small>
             </div>
 
+            <!-- SillyTavern Chat Completion Presets -->
+            <div class="form-group" style="margin-top: 24px; padding: 16px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border-color);">
+              <h4 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600;">SillyTavern Chat Completion Presets</h4>
+
+              <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <select id="st-preset-select" style="flex: 1;">
+                  <option value="">No preset selected</option>
+                </select>
+                <button type="button" id="import-st-preset-btn" class="button button-primary" style="padding: 6px 12px; white-space: nowrap;">
+                  Import
+                </button>
+                <button type="button" id="export-st-preset-btn" class="button button-secondary" style="padding: 6px 12px; white-space: nowrap; display: none;">
+                  Export
+                </button>
+                <button type="button" id="delete-st-preset-btn" class="button button-danger" style="padding: 6px 12px; white-space: nowrap; display: none;">
+                  Delete
+                </button>
+              </div>
+
+              <div id="st-preset-info" style="display: none; padding: 12px; background: var(--bg-primary); border-radius: 6px; border: 1px solid var(--border-color);">
+                <div style="font-size: 12px; color: var(--text-secondary);">
+                  <div><strong>Temperature:</strong> <span id="st-preset-temp">-</span></div>
+                  <div><strong>Max Context:</strong> <span id="st-preset-context">-</span></div>
+                  <div><strong>Max Tokens:</strong> <span id="st-preset-tokens">-</span></div>
+                  <div><strong>Prompt Blocks:</strong> <span id="st-preset-prompts">-</span></div>
+                </div>
+              </div>
+
+              <small style="color: var(--text-secondary); margin-top: 8px; display: block;">
+                Import and manage full SillyTavern-compatible chat completion presets with sampling parameters, prompt templates, and injection blocks
+              </small>
+            </div>
+
             <!-- Sampling Parameters Section -->
             <details class="form-details" open>
               <summary style="font-weight: 600; margin: 16px 0 12px 0; cursor: pointer;">Sampling Parameters</summary>

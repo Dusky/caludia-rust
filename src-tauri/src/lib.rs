@@ -740,6 +740,108 @@ fn get_builtin_presets() -> Vec<PromptPreset> {
     ]
 }
 
+// ===== SillyTavern Chat Completion Preset Support =====
+
+/// SillyTavern-compatible prompt injection block
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct STPromptBlock {
+    identifier: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    #[serde(default)]
+    system_prompt: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    content: Option<String>,
+    #[serde(default)]
+    marker: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enabled: Option<bool>,
+    #[serde(default)]
+    injection_position: i32,
+    #[serde(default)]
+    injection_depth: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    injection_order: Option<i32>,
+    #[serde(default)]
+    forbid_overrides: bool,
+    #[serde(default)]
+    injection_trigger: Vec<String>,
+}
+
+/// Full SillyTavern Chat Completion Preset
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct STChatCompletionPreset {
+    // Preset metadata (not part of ST spec, but useful for management)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    preset_name: Option<String>,
+
+    // Sampling parameters
+    #[serde(default)]
+    temperature: f32,
+    #[serde(default)]
+    frequency_penalty: f32,
+    #[serde(default)]
+    presence_penalty: f32,
+    #[serde(default)]
+    top_p: f32,
+    #[serde(default)]
+    top_k: i32,
+    #[serde(default)]
+    top_a: f32,
+    #[serde(default)]
+    min_p: f32,
+    #[serde(default)]
+    repetition_penalty: f32,
+
+    // Context/token limits
+    #[serde(default)]
+    openai_max_context: i32,
+    #[serde(default)]
+    openai_max_tokens: i32,
+
+    // Prompt templates
+    #[serde(default)]
+    impersonation_prompt: String,
+    #[serde(default)]
+    new_chat_prompt: String,
+    #[serde(default)]
+    new_group_chat_prompt: String,
+    #[serde(default)]
+    new_example_chat_prompt: String,
+    #[serde(default)]
+    continue_nudge_prompt: String,
+    #[serde(default)]
+    group_nudge_prompt: String,
+
+    // Format strings
+    #[serde(default)]
+    wi_format: String,
+    #[serde(default)]
+    scenario_format: String,
+    #[serde(default)]
+    personality_format: String,
+
+    // Other settings
+    #[serde(default)]
+    wrap_in_quotes: bool,
+    #[serde(default)]
+    names_behavior: i32,
+    #[serde(default)]
+    send_if_empty: String,
+    #[serde(default)]
+    bias_preset_selected: String,
+    #[serde(default)]
+    max_context_unlocked: bool,
+    #[serde(default)]
+    stream_openai: bool,
+
+    // Modular prompts array
+    #[serde(default)]
+    prompts: Vec<STPromptBlock>,
+}
+
 // Old simple history format (for backward compatibility with non-branched chat)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChatHistory {
@@ -4587,6 +4689,145 @@ fn is_builtin_preset_modified(preset_id: String) -> bool {
     path.exists()
 }
 
+// ===== SillyTavern Chat Completion Preset Commands =====
+
+fn get_st_presets_dir() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home).join(".config/claudia/st_presets")
+}
+
+fn get_st_preset_path(preset_name: &str) -> PathBuf {
+    // Sanitize filename
+    let safe_name = preset_name.replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_");
+    get_st_presets_dir().join(format!("{}.json", safe_name))
+}
+
+#[tauri::command]
+async fn import_st_preset(app_handle: tauri::AppHandle, file_path: String) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Read and parse the preset file
+    let content = fs::read_to_string(&file_path)
+        .map_err(|e| format!("Failed to read file: {}", e))?;
+
+    let mut preset: STChatCompletionPreset = serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse preset: {}", e))?;
+
+    // Ask user for preset name if not specified
+    if preset.preset_name.is_none() {
+        // Extract filename without extension as default name
+        let path = std::path::Path::new(&file_path);
+        let default_name = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Imported Preset")
+            .to_string();
+        preset.preset_name = Some(default_name);
+    }
+
+    let preset_name = preset.preset_name.clone().unwrap();
+
+    // Create presets directory if it doesn't exist
+    let dir = get_st_presets_dir();
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create presets directory: {}", e))?;
+
+    // Save the preset
+    let save_path = get_st_preset_path(&preset_name);
+    let json = serde_json::to_string_pretty(&preset)
+        .map_err(|e| format!("Failed to serialize preset: {}", e))?;
+    fs::write(&save_path, json)
+        .map_err(|e| format!("Failed to save preset: {}", e))?;
+
+    Ok(preset_name)
+}
+
+#[tauri::command]
+fn list_st_presets() -> Result<Vec<String>, String> {
+    let dir = get_st_presets_dir();
+
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let entries = fs::read_dir(&dir)
+        .map_err(|e| format!("Failed to read presets directory: {}", e))?;
+
+    let mut preset_names = Vec::new();
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+                    preset_names.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    preset_names.sort();
+    Ok(preset_names)
+}
+
+#[tauri::command]
+fn get_st_preset(preset_name: String) -> Result<STChatCompletionPreset, String> {
+    let path = get_st_preset_path(&preset_name);
+    let content = fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read preset '{}': {}", preset_name, e))?;
+
+    serde_json::from_str(&content)
+        .map_err(|e| format!("Failed to parse preset '{}': {}", preset_name, e))
+}
+
+#[tauri::command]
+async fn export_st_preset(app_handle: tauri::AppHandle, preset_name: String) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let preset = get_st_preset(preset_name.clone())?;
+
+    // Show save dialog
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .set_file_name(&format!("{}.json", preset_name))
+        .blocking_save_file();
+
+    if let Some(path) = file_path {
+        let json = serde_json::to_string_pretty(&preset)
+            .map_err(|e| format!("Failed to serialize preset: {}", e))?;
+        fs::write(&path, json)
+            .map_err(|e| format!("Failed to write file: {}", e))?;
+        Ok(path.to_string_lossy().to_string())
+    } else {
+        Err("Export cancelled".to_string())
+    }
+}
+
+#[tauri::command]
+fn delete_st_preset(preset_name: String) -> Result<(), String> {
+    let path = get_st_preset_path(&preset_name);
+    fs::remove_file(path)
+        .map_err(|e| format!("Failed to delete preset '{}': {}", preset_name, e))
+}
+
+#[tauri::command]
+async fn select_and_import_st_preset(app_handle: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Show file picker
+    let file_path = app_handle
+        .dialog()
+        .file()
+        .add_filter("JSON", &["json"])
+        .blocking_pick_file();
+
+    if let Some(path) = file_path {
+        import_st_preset(app_handle, path.to_string_lossy().to_string()).await
+    } else {
+        Err("Import cancelled".to_string())
+    }
+}
+
 // Quick Replies Commands
 
 fn get_quick_replies_path() -> PathBuf {
@@ -6620,7 +6861,14 @@ pub fn run() {
             get_sampling_presets,
             apply_sampling_preset,
             save_sampling_preset,
-            delete_sampling_preset
+            delete_sampling_preset,
+            // SillyTavern Chat Completion Preset management
+            import_st_preset,
+            list_st_presets,
+            get_st_preset,
+            export_st_preset,
+            delete_st_preset,
+            select_and_import_st_preset
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

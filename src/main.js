@@ -7976,6 +7976,7 @@ async function loadExistingConfig() {
     await loadBackendPresets();
     await loadSamplingParameters();
     await loadSamplingPresets();
+    await loadSTPresets();
 
     // Load characters
     await loadCharacters();
@@ -8308,6 +8309,130 @@ async function handleDeleteSamplingPreset() {
   }
 }
 
+// ===== SillyTavern Chat Completion Preset Functions =====
+
+async function loadSTPresets() {
+  try {
+    const presets = await invoke('list_st_presets');
+    const select = document.getElementById('st-preset-select');
+
+    // Clear existing options except the first one
+    select.innerHTML = '<option value="">No preset selected</option>';
+
+    // Add presets
+    presets.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+
+    // Store for later use
+    window.stPresets = presets;
+  } catch (error) {
+    console.error('Failed to load ST presets:', error);
+  }
+}
+
+async function handleSTPresetChange() {
+  const select = document.getElementById('st-preset-select');
+  const presetName = select.value;
+  const exportBtn = document.getElementById('export-st-preset-btn');
+  const deleteBtn = document.getElementById('delete-st-preset-btn');
+  const infoDiv = document.getElementById('st-preset-info');
+
+  if (!presetName) {
+    // No preset selected
+    exportBtn.style.display = 'none';
+    deleteBtn.style.display = 'none';
+    infoDiv.style.display = 'none';
+    return;
+  }
+
+  // Show buttons
+  exportBtn.style.display = '';
+  deleteBtn.style.display = '';
+
+  try {
+    const preset = await invoke('get_st_preset', { presetName });
+
+    // Update info display
+    document.getElementById('st-preset-temp').textContent = preset.temperature || '-';
+    document.getElementById('st-preset-context').textContent = preset.openai_max_context || '-';
+    document.getElementById('st-preset-tokens').textContent = preset.openai_max_tokens || '-';
+    document.getElementById('st-preset-prompts').textContent = preset.prompts ? preset.prompts.length : '0';
+    infoDiv.style.display = '';
+  } catch (error) {
+    console.error('Failed to load ST preset:', error);
+    infoDiv.style.display = 'none';
+  }
+}
+
+async function handleImportSTPreset() {
+  try {
+    const presetName = await invoke('select_and_import_st_preset');
+    showToast(`Preset "${presetName}" imported successfully`, 'success');
+
+    // Reload preset list
+    await loadSTPresets();
+
+    // Select the newly imported preset
+    const select = document.getElementById('st-preset-select');
+    select.value = presetName;
+    await handleSTPresetChange();
+  } catch (error) {
+    if (error !== 'Import cancelled') {
+      console.error('Failed to import ST preset:', error);
+      showToast('Failed to import preset: ' + error, 'error');
+    }
+  }
+}
+
+async function handleExportSTPreset() {
+  const select = document.getElementById('st-preset-select');
+  const presetName = select.value;
+
+  if (!presetName) {
+    return;
+  }
+
+  try {
+    const path = await invoke('export_st_preset', { presetName });
+    showToast(`Preset exported to ${path}`, 'success');
+  } catch (error) {
+    if (error !== 'Export cancelled') {
+      console.error('Failed to export ST preset:', error);
+      showToast('Failed to export preset: ' + error, 'error');
+    }
+  }
+}
+
+async function handleDeleteSTPreset() {
+  const select = document.getElementById('st-preset-select');
+  const presetName = select.value;
+
+  if (!presetName) {
+    return;
+  }
+
+  if (!confirm(`Are you sure you want to delete the preset "${presetName}"?`)) {
+    return;
+  }
+
+  try {
+    await invoke('delete_st_preset', { presetName });
+    showToast('Preset deleted successfully', 'success');
+
+    // Reload presets and reset selection
+    await loadSTPresets();
+    select.value = '';
+    await handleSTPresetChange();
+  } catch (error) {
+    console.error('Failed to delete ST preset:', error);
+    showToast('Failed to delete preset: ' + error, 'error');
+  }
+}
+
 // Initialize sampling parameter event listeners
 function initializeSamplingControls() {
   // Temperature slider
@@ -8381,6 +8506,22 @@ function initializeSamplingControls() {
   // Delete sampling preset button
   const deleteSamplingPresetBtn = document.getElementById('delete-sampling-preset-btn');
   deleteSamplingPresetBtn.addEventListener('click', handleDeleteSamplingPreset);
+
+  // ST preset selector
+  const stPresetSelect = document.getElementById('st-preset-select');
+  stPresetSelect.addEventListener('change', handleSTPresetChange);
+
+  // Import ST preset button
+  const importSTPresetBtn = document.getElementById('import-st-preset-btn');
+  importSTPresetBtn.addEventListener('click', handleImportSTPreset);
+
+  // Export ST preset button
+  const exportSTPresetBtn = document.getElementById('export-st-preset-btn');
+  exportSTPresetBtn.addEventListener('click', handleExportSTPreset);
+
+  // Delete ST preset button
+  const deleteSTPresetBtn = document.getElementById('delete-st-preset-btn');
+  deleteSTPresetBtn.addEventListener('click', handleDeleteSTPreset);
 }
 
 // Failsafe: Remove loading overlay after 5 seconds no matter what
